@@ -8,10 +8,10 @@
 /* ─── HJ Capital Design Tokens ─────────────────────────────────────────────── */
 /*
   PALETTE PHILOSOPHY:
-  Deep, calm navy-slate backgrounds — like a quiet trading floor at midnight.
-  Soft teal-cyan accent — intelligent, precise, trustworthy (not aggressive blue).
-  Warm off-white text — easy on the eyes, never harsh white.
-  Muted sage green for profit, muted rose for loss — calm signals, not alarming.
+  Warm charcoal backgrounds — like aged leather and dark walnut wood.
+  Soft sage-green accent — calm, intelligent, growth-oriented (no blue at all).
+  Warm cream text — comfortable and inviting, never harsh.
+  Muted green for profit, muted rose for loss — calm signals, not alarming.
   Subtle gold for premium touches — ownership, exclusivity.
 */
 
@@ -30,27 +30,27 @@
 
   /* ── Core Palette (OKLCH) ── */
 
-  /* Backgrounds — deep navy slate */
-  --color-bg-base:        oklch(0.115 0.018 252);   /* #0d1117 — deepest */
-  --color-bg-surface:     oklch(0.145 0.020 252);   /* #131a24 — cards */
-  --color-bg-elevated:    oklch(0.175 0.022 252);   /* #1a2333 — hover/elevated */
-  --color-bg-overlay:     oklch(0.205 0.022 252);   /* #202d3f — modals */
+  /* Backgrounds — warm charcoal (no blue) */
+  --color-bg-base:        oklch(0.118 0.006 60);    /* deep warm charcoal */
+  --color-bg-surface:     oklch(0.150 0.007 60);    /* card surface */
+  --color-bg-elevated:    oklch(0.185 0.008 60);    /* hover/elevated */
+  --color-bg-overlay:     oklch(0.215 0.009 60);    /* modals/overlays */
 
   /* Borders */
-  --color-border-subtle:  oklch(0.255 0.022 252);   /* soft border */
-  --color-border-default: oklch(0.295 0.025 252);   /* default border */
-  --color-border-strong:  oklch(0.360 0.030 252);   /* focus/active */
+  --color-border-subtle:  oklch(0.265 0.010 60);    /* soft border */
+  --color-border-default: oklch(0.310 0.012 60);    /* default border */
+  --color-border-strong:  oklch(0.380 0.016 60);    /* focus/active */
 
-  /* Text */
-  --color-text-primary:   oklch(0.940 0.008 252);   /* warm off-white */
-  --color-text-secondary: oklch(0.680 0.018 252);   /* muted */
-  --color-text-tertiary:  oklch(0.480 0.018 252);   /* very muted */
+  /* Text — warm cream tones */
+  --color-text-primary:   oklch(0.935 0.012 75);    /* warm cream white */
+  --color-text-secondary: oklch(0.670 0.018 70);    /* warm muted */
+  --color-text-tertiary:  oklch(0.470 0.014 70);    /* very muted warm */
 
-  /* Accent — Soft Teal (intelligent, calm, precise) */
-  --color-accent:         oklch(0.720 0.130 196);   /* #4ec9b0 style teal */
-  --color-accent-dim:     oklch(0.720 0.130 196 / 0.12);
-  --color-accent-glow:    oklch(0.720 0.130 196 / 0.25);
-  --color-accent-hover:   oklch(0.760 0.135 196);
+  /* Accent — Soft Sage Green (calm, intelligent, growth) */
+  --color-accent:         oklch(0.700 0.120 152);   /* sage green */
+  --color-accent-dim:     oklch(0.700 0.120 152 / 0.12);
+  --color-accent-glow:    oklch(0.700 0.120 152 / 0.25);
+  --color-accent-hover:   oklch(0.740 0.125 152);
 
   /* Profit — calm sage green */
   --color-profit:         oklch(0.720 0.130 155);
@@ -80,7 +80,7 @@
   --color-popover-foreground: var(--color-text-primary);
 
   --color-primary:        var(--color-accent);
-  --color-primary-foreground: oklch(0.115 0.018 252);
+  --color-primary-foreground: oklch(0.118 0.006 60);
 
   --color-secondary:      var(--color-bg-elevated);
   --color-secondary-foreground: var(--color-text-secondary);
@@ -341,7 +341,7 @@
 
   .hj-btn-primary {
     background: var(--color-accent);
-    color: oklch(0.115 0.018 252);
+    color: oklch(0.118 0.006 60);
   }
 
   .hj-btn-primary:hover {
