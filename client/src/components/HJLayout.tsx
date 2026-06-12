@@ -90,11 +90,13 @@ export default function HJLayout({ children }: { children: React.ReactNode }) {
         {/* Logo */}
         <div className="flex items-center justify-between px-5 py-5">
           <div className="flex items-center gap-3">
-            <div className="hj-logo-mark animate-glow">
-              <span style={{ color: "var(--color-accent)", fontWeight: 700, fontSize: "0.8125rem", fontFamily: "var(--font-display)" }}>HJ</span>
-            </div>
+            <img
+              src="https://d2xsxph8kpxj0f.cloudfront.net/111908166/jFhH8npJoz2jTjiimeA2CG/hj-logo-hd-S6Q6fHscfpH44tUAJbNk6c.webp"
+              alt="HJ Capital"
+              style={{ width: 40, height: 40, objectFit: "contain", borderRadius: 8 }}
+            />
             <div>
-              <p style={{ fontWeight: 600, fontSize: "0.9375rem", color: "var(--color-text-primary)", letterSpacing: "-0.01em" }}>
+              <p style={{ fontWeight: 700, fontSize: "1rem", color: "var(--color-text-primary)", letterSpacing: "-0.01em", fontFamily: "var(--font-display)" }}>
                 HJ Capital
               </p>
               <p style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)", letterSpacing: "0.04em", textTransform: "uppercase" }}>

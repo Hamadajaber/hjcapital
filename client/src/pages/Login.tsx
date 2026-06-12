@@ -31,17 +31,12 @@ export default function Login() {
 
         {/* Logo mark */}
         <div className="text-center mb-10">
-          <div
-            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-5 animate-glow"
-            style={{
-              background: "linear-gradient(135deg, var(--color-accent-dim), var(--color-bg-elevated))",
-              border: "1px solid var(--color-accent)",
-              boxShadow: "0 0 32px oklch(0.55 0.14 252 / 0.20)",
-            }}
-          >
-            <span style={{ fontWeight: 800, fontSize: "1.25rem", color: "var(--color-accent)", fontFamily: "var(--font-display)", letterSpacing: "-0.02em" }}>
-              HJ
-            </span>
+          <div className="inline-flex items-center justify-center mb-5">
+            <img
+              src="https://d2xsxph8kpxj0f.cloudfront.net/111908166/jFhH8npJoz2jTjiimeA2CG/hj-logo-hd-S6Q6fHscfpH44tUAJbNk6c.webp"
+              alt="HJ Capital"
+              style={{ width: 80, height: 80, objectFit: "contain" }}
+            />
           </div>
           <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--color-text-primary)", letterSpacing: "-0.02em", marginBottom: "0.375rem" }}>
             HJ Capital
