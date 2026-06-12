@@ -131,19 +131,19 @@ export default function HJLayout({ children }: { children: React.ReactNode }) {
           {NAV_ITEMS.map(({ path, label, icon: Icon }) => {
             const isActive = location === path;
             return (
-              <Link key={path} href={path}>
-                <a
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
-                    isActive
-                      ? "nav-active"
-                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
-                  )}
-                  onClick={() => setSidebarOpen(false)}
-                >
-                  <Icon size={16} className={isActive ? "text-primary" : ""} />
-                  {label}
-                </a>
+              <Link
+                key={path}
+                href={path}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
+                  isActive
+                    ? "nav-active"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+                )}
+                onClick={() => setSidebarOpen(false)}
+              >
+                <Icon size={16} className={isActive ? "text-primary" : ""} />
+                {label}
               </Link>
             );
           })}
