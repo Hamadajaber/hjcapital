@@ -77,7 +77,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
       style={{
         background: "var(--color-bg-overlay)",
         border: "1px solid var(--color-border-default)",
-        boxShadow: "0 8px 32px oklch(0 0 0 / 0.4)",
+        boxShadow: "0 8px 32px oklch(0.220 0.018 60 / 0.12)",
       }}
     >
       <p style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)", marginBottom: "0.25rem" }}>{label}</p>

@@ -79,8 +79,9 @@ export default function HJLayout({ children }: { children: React.ReactNode }) {
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
         style={{
-          background: "var(--color-bg-surface)",
-          borderRight: "1px solid var(--color-border-subtle)",
+          background: "var(--color-sidebar-bg)",
+          borderRight: "1px solid var(--color-sidebar-border)",
+          boxShadow: "2px 0 16px oklch(0.220 0.018 60 / 0.06)",
         }}
       >
         {/* Accent line at top */}

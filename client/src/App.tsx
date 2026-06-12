@@ -51,15 +51,15 @@ function ProtectedRoutes() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="dark">
+      <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster
-            theme="dark"
+            theme="light"
             toastOptions={{
               style: {
-                background: "oklch(0.13 0.006 240)",
-                border: "1px solid oklch(0.22 0.008 240)",
-                color: "oklch(0.95 0.005 240)",
+                background: "oklch(0.990 0.005 75)",
+                border: "1px solid oklch(0.880 0.018 70)",
+                color: "oklch(0.220 0.018 60)",
               },
             }}
           />
