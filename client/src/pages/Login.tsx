@@ -1,58 +1,118 @@
 import { getLoginUrl } from "@/const";
-import { TrendingUp, Shield, Zap } from "lucide-react";
+import { TrendingUp, Shield, Zap, Sparkles } from "lucide-react";
 
 export default function Login() {
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      {/* Background gradient */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-chart-2/5 rounded-full blur-3xl" />
+    <div
+      className="min-h-screen flex items-center justify-center p-4"
+      style={{ background: "var(--color-bg-base)" }}
+    >
+      {/* Ambient background glows */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div
+          className="absolute"
+          style={{
+            top: "15%", left: "20%", width: "28rem", height: "28rem",
+            background: "radial-gradient(circle, oklch(0.55 0.14 252 / 0.07) 0%, transparent 70%)",
+            filter: "blur(40px)",
+          }}
+        />
+        <div
+          className="absolute"
+          style={{
+            bottom: "20%", right: "15%", width: "20rem", height: "20rem",
+            background: "radial-gradient(circle, oklch(0.55 0.14 252 / 0.05) 0%, transparent 70%)",
+            filter: "blur(40px)",
+          }}
+        />
       </div>
 
-      <div className="relative w-full max-w-md">
-        {/* Logo */}
+      <div className="relative w-full max-w-sm">
+
+        {/* Logo mark */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 mb-4">
-            <span className="text-primary font-bold text-2xl">HJ</span>
+          <div
+            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-5 animate-glow"
+            style={{
+              background: "linear-gradient(135deg, var(--color-accent-dim), var(--color-bg-elevated))",
+              border: "1px solid var(--color-accent)",
+              boxShadow: "0 0 32px oklch(0.55 0.14 252 / 0.20)",
+            }}
+          >
+            <span style={{ fontWeight: 800, fontSize: "1.25rem", color: "var(--color-accent)", fontFamily: "var(--font-display)", letterSpacing: "-0.02em" }}>
+              HJ
+            </span>
           </div>
-          <h1 className="text-2xl font-bold text-foreground">HJ Capital</h1>
-          <p className="text-muted-foreground text-sm mt-1">Private Investment Platform</p>
+          <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--color-text-primary)", letterSpacing: "-0.02em", marginBottom: "0.375rem" }}>
+            HJ Capital
+          </h1>
+          <p style={{ fontSize: "0.8125rem", color: "var(--color-text-tertiary)" }}>
+            Private Investment Platform
+          </p>
         </div>
 
         {/* Card */}
-        <div className="bg-card border border-border rounded-2xl p-8 shadow-2xl">
-          <h2 className="text-lg font-semibold text-foreground mb-1">Welcome back, Hamada</h2>
-          <p className="text-muted-foreground text-sm mb-6">
+        <div
+          className="rounded-2xl p-8"
+          style={{
+            background: "var(--color-bg-surface)",
+            border: "1px solid var(--color-border-default)",
+            boxShadow: "0 24px 64px oklch(0 0 0 / 0.35)",
+          }}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles size={14} style={{ color: "var(--color-accent)" }} />
+            <h2 style={{ fontSize: "1rem", fontWeight: 600, color: "var(--color-text-primary)" }}>
+              Welcome back, Hamada
+            </h2>
+          </div>
+          <p style={{ fontSize: "0.8125rem", color: "var(--color-text-secondary)", marginBottom: "1.5rem", lineHeight: 1.5 }}>
             Sign in to access your personal trading dashboard.
           </p>
 
           <a
             href={getLoginUrl()}
-            className="flex items-center justify-center gap-2 w-full py-3 px-4 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors duration-150"
+            className="flex items-center justify-center gap-2 w-full py-3 px-4 rounded-xl font-semibold transition-all duration-150"
+            style={{
+              background: "var(--color-accent)",
+              color: "oklch(0.115 0.018 252)",
+              fontSize: "0.875rem",
+              textDecoration: "none",
+              boxShadow: "0 4px 16px oklch(0.55 0.14 252 / 0.30)",
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = "var(--color-accent-hover)")}
+            onMouseLeave={e => (e.currentTarget.style.background = "var(--color-accent)")}
           >
-            <Shield size={16} />
+            <Shield size={15} />
             Sign In Securely
           </a>
 
-          <div className="mt-6 pt-6 border-t border-border">
-            <p className="text-xs text-muted-foreground text-center mb-4">Platform Features</p>
-            <div className="space-y-3">
-              {[
-                { icon: TrendingUp, text: "AI-powered trading signals for 5 instruments" },
-                { icon: Zap, text: "Real-time portfolio tracking & P&L monitoring" },
-                { icon: Shield, text: "Advanced risk management & capital protection" },
-              ].map(({ icon: Icon, text }) => (
-                <div key={text} className="flex items-center gap-3 text-xs text-muted-foreground">
-                  <Icon size={14} className="text-primary shrink-0" />
-                  <span>{text}</span>
+          <div
+            className="mt-6 pt-6 space-y-3"
+            style={{ borderTop: "1px solid var(--color-border-subtle)" }}
+          >
+            <p style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)", textAlign: "center", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.75rem" }}>
+              Platform Features
+            </p>
+            {[
+              { icon: TrendingUp, text: "AI-powered trading signals for 5 instruments" },
+              { icon: Zap, text: "Real-time portfolio tracking & P&L monitoring" },
+              { icon: Shield, text: "Advanced risk management & capital protection" },
+            ].map(({ icon: Icon, text }) => (
+              <div key={text} className="flex items-center gap-3">
+                <div
+                  className="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
+                  style={{ background: "var(--color-accent-dim)", border: "1px solid var(--color-accent)" }}
+                >
+                  <Icon size={11} style={{ color: "var(--color-accent)" }} />
                 </div>
-              ))}
-            </div>
+                <span style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)" }}>{text}</span>
+              </div>
+            ))}
           </div>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground mt-4">
+        <p style={{ textAlign: "center", fontSize: "0.6875rem", color: "var(--color-text-tertiary)", marginTop: "1.25rem" }}>
           This platform is exclusively for Hamada Jaber
         </p>
       </div>

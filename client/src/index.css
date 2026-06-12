@@ -1,173 +1,498 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:wght@500;600&display=swap');
+
 @import "tailwindcss";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
-/* ─── Premium Dark Financial Theme ─────────────────────────────────────────── */
-@theme inline {
-  --color-background: oklch(0.10 0.005 240);
-  --color-foreground: oklch(0.95 0.005 240);
-  --color-card: oklch(0.13 0.006 240);
-  --color-card-foreground: oklch(0.95 0.005 240);
-  --color-popover: oklch(0.13 0.006 240);
-  --color-popover-foreground: oklch(0.95 0.005 240);
-  --color-primary: oklch(0.65 0.18 250);
-  --color-primary-foreground: oklch(0.98 0.002 240);
-  --color-secondary: oklch(0.18 0.008 240);
-  --color-secondary-foreground: oklch(0.85 0.005 240);
-  --color-muted: oklch(0.17 0.007 240);
-  --color-muted-foreground: oklch(0.55 0.01 240);
-  --color-accent: oklch(0.20 0.01 240);
-  --color-accent-foreground: oklch(0.90 0.005 240);
-  --color-destructive: oklch(0.55 0.22 25);
-  --color-destructive-foreground: oklch(0.98 0.002 240);
-  --color-border: oklch(0.22 0.008 240);
-  --color-input: oklch(0.18 0.008 240);
-  --color-ring: oklch(0.65 0.18 250);
-  --color-chart-1: oklch(0.65 0.18 250);
-  --color-chart-2: oklch(0.65 0.18 145);
-  --color-chart-3: oklch(0.65 0.18 55);
-  --color-chart-4: oklch(0.65 0.18 310);
-  --color-chart-5: oklch(0.65 0.18 25);
-  --radius: 0.5rem;
-  --font-sans: 'Inter', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+/* ─── HJ Capital Design Tokens ─────────────────────────────────────────────── */
+/*
+  PALETTE PHILOSOPHY:
+  Deep, calm navy-slate backgrounds — like a quiet trading floor at midnight.
+  Soft teal-cyan accent — intelligent, precise, trustworthy (not aggressive blue).
+  Warm off-white text — easy on the eyes, never harsh white.
+  Muted sage green for profit, muted rose for loss — calm signals, not alarming.
+  Subtle gold for premium touches — ownership, exclusivity.
+*/
 
-  /* Custom financial colors */
-  --color-profit: oklch(0.65 0.18 145);
-  --color-loss: oklch(0.60 0.22 25);
-  --color-signal-buy: oklch(0.65 0.18 145);
-  --color-signal-sell: oklch(0.60 0.22 25);
-  --color-signal-hold: oklch(0.65 0.18 55);
-  --color-paper-mode: oklch(0.65 0.18 55);
-  --color-live-mode: oklch(0.60 0.22 25);
-  --color-gold: oklch(0.75 0.15 75);
+@theme inline {
+  /* ── Radius ── */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+  --radius: 0.625rem;
+
+  /* ── Fonts ── */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-display: 'Playfair Display', Georgia, serif;
+
+  /* ── Core Palette (OKLCH) ── */
+
+  /* Backgrounds — deep navy slate */
+  --color-bg-base:        oklch(0.115 0.018 252);   /* #0d1117 — deepest */
+  --color-bg-surface:     oklch(0.145 0.020 252);   /* #131a24 — cards */
+  --color-bg-elevated:    oklch(0.175 0.022 252);   /* #1a2333 — hover/elevated */
+  --color-bg-overlay:     oklch(0.205 0.022 252);   /* #202d3f — modals */
+
+  /* Borders */
+  --color-border-subtle:  oklch(0.255 0.022 252);   /* soft border */
+  --color-border-default: oklch(0.295 0.025 252);   /* default border */
+  --color-border-strong:  oklch(0.360 0.030 252);   /* focus/active */
+
+  /* Text */
+  --color-text-primary:   oklch(0.940 0.008 252);   /* warm off-white */
+  --color-text-secondary: oklch(0.680 0.018 252);   /* muted */
+  --color-text-tertiary:  oklch(0.480 0.018 252);   /* very muted */
+
+  /* Accent — Soft Teal (intelligent, calm, precise) */
+  --color-accent:         oklch(0.720 0.130 196);   /* #4ec9b0 style teal */
+  --color-accent-dim:     oklch(0.720 0.130 196 / 0.12);
+  --color-accent-glow:    oklch(0.720 0.130 196 / 0.25);
+  --color-accent-hover:   oklch(0.760 0.135 196);
+
+  /* Profit — calm sage green */
+  --color-profit:         oklch(0.720 0.130 155);
+  --color-profit-dim:     oklch(0.720 0.130 155 / 0.12);
+
+  /* Loss — muted rose */
+  --color-loss:           oklch(0.660 0.155 20);
+  --color-loss-dim:       oklch(0.660 0.155 20 / 0.12);
+
+  /* Gold — premium touch */
+  --color-gold:           oklch(0.820 0.120 80);
+  --color-gold-dim:       oklch(0.820 0.120 80 / 0.12);
+
+  /* Signal colors */
+  --color-buy:            oklch(0.720 0.130 155);
+  --color-sell:           oklch(0.660 0.155 20);
+  --color-hold:           oklch(0.820 0.120 80);
+
+  /* ── shadcn/ui token mapping ── */
+  --color-background:     var(--color-bg-base);
+  --color-foreground:     var(--color-text-primary);
+
+  --color-card:           var(--color-bg-surface);
+  --color-card-foreground: var(--color-text-primary);
+
+  --color-popover:        var(--color-bg-overlay);
+  --color-popover-foreground: var(--color-text-primary);
+
+  --color-primary:        var(--color-accent);
+  --color-primary-foreground: oklch(0.115 0.018 252);
+
+  --color-secondary:      var(--color-bg-elevated);
+  --color-secondary-foreground: var(--color-text-secondary);
+
+  --color-muted:          var(--color-bg-elevated);
+  --color-muted-foreground: var(--color-text-tertiary);
+
+  --color-accent-color:   var(--color-bg-elevated);
+  --color-accent-foreground: var(--color-text-primary);
+
+  --color-destructive:    var(--color-loss);
+  --color-destructive-foreground: var(--color-text-primary);
+
+  --color-border:         var(--color-border-subtle);
+  --color-input:          var(--color-border-default);
+  --color-ring:           var(--color-accent);
+
+  --color-profit-color:   var(--color-profit);
+  --color-loss-color:     var(--color-loss);
 }
 
-/* ─── Base Styles ────────────────────────────────────────────────────────────── */
+/* ─── Base Layer ────────────────────────────────────────────────────────────── */
 @layer base {
-  * {
-    @apply border-border;
+  *, *::before, *::after {
     box-sizing: border-box;
+    border-color: var(--color-border-subtle);
   }
 
   html {
-    @apply antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
   body {
-    @apply bg-background text-foreground font-sans;
-    background-image:
-      radial-gradient(ellipse at 20% 50%, oklch(0.65 0.18 250 / 0.04) 0%, transparent 50%),
-      radial-gradient(ellipse at 80% 20%, oklch(0.65 0.18 145 / 0.03) 0%, transparent 40%);
+    background-color: var(--color-bg-base);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-size: 0.9375rem;
+    line-height: 1.6;
     min-height: 100vh;
   }
 
   /* Scrollbar */
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
-  ::-webkit-scrollbar-thumb:hover { @apply bg-muted-foreground; }
-}
+  ::-webkit-scrollbar-thumb { background: var(--color-border-default); border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-border-strong); }
 
-/* ─── Utility Classes ────────────────────────────────────────────────────────── */
-@layer utilities {
-  .container {
-    @apply mx-auto px-4;
-    max-width: 1400px;
+  /* Selection */
+  ::selection {
+    background: var(--color-accent-glow);
+    color: var(--color-text-primary);
   }
 
-  .flex { min-width: 0; min-height: 0; }
+  /* Focus ring */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
 
-  /* Financial number display */
+  /* Headings */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--color-text-primary);
+  }
+
+  /* Mono numbers */
   .tabular-nums { font-variant-numeric: tabular-nums; }
 
-  /* Profit / Loss colors */
-  .text-profit { color: var(--color-profit); }
-  .text-loss { color: var(--color-loss); }
-  .text-gold { color: var(--color-gold); }
+  /* Links */
+  a { color: var(--color-accent); text-decoration: none; }
+  a:hover { color: var(--color-accent-hover); }
+}
 
-  /* Signal badges */
-  .signal-buy {
-    background: oklch(0.65 0.18 145 / 0.15);
-    color: var(--color-signal-buy);
-    border: 1px solid oklch(0.65 0.18 145 / 0.3);
-  }
-  .signal-sell {
-    background: oklch(0.60 0.22 25 / 0.15);
-    color: var(--color-signal-sell);
-    border: 1px solid oklch(0.60 0.22 25 / 0.3);
-  }
-  .signal-hold {
-    background: oklch(0.65 0.18 55 / 0.15);
-    color: var(--color-signal-hold);
-    border: 1px solid oklch(0.65 0.18 55 / 0.3);
+/* ─── Component Utilities ───────────────────────────────────────────────────── */
+@layer components {
+
+  /* ── Cards ── */
+  .hj-card {
+    background-color: var(--color-bg-surface);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-xl);
+    transition: border-color 200ms ease, box-shadow 200ms ease;
   }
 
-  /* Mode indicators */
-  .mode-paper {
-    background: oklch(0.65 0.18 55 / 0.15);
-    color: var(--color-paper-mode);
-    border: 1px solid oklch(0.65 0.18 55 / 0.4);
-  }
-  .mode-live {
-    background: oklch(0.60 0.22 25 / 0.15);
-    color: var(--color-live-mode);
-    border: 1px solid oklch(0.60 0.22 25 / 0.4);
-    animation: pulse-live 2s infinite;
+  .hj-card:hover {
+    border-color: var(--color-border-default);
   }
 
-  @keyframes pulse-live {
-    0%, 100% { box-shadow: 0 0 0 0 oklch(0.60 0.22 25 / 0.4); }
-    50% { box-shadow: 0 0 0 4px oklch(0.60 0.22 25 / 0); }
+  .hj-card-glow {
+    background-color: var(--color-bg-surface);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 0 0 1px var(--color-accent-dim), 0 4px 24px oklch(0 0 0 / 0.3);
   }
 
-  /* Glass card */
-  .glass-card {
-    background: oklch(0.13 0.006 240 / 0.8);
-    backdrop-filter: blur(12px);
-    border: 1px solid oklch(0.22 0.008 240 / 0.6);
-  }
-
-  /* Glow effects */
-  .glow-blue { box-shadow: 0 0 20px oklch(0.65 0.18 250 / 0.15); }
-  .glow-green { box-shadow: 0 0 20px oklch(0.65 0.18 145 / 0.15); }
-  .glow-red { box-shadow: 0 0 20px oklch(0.60 0.22 25 / 0.15); }
-
-  /* Stat card */
+  /* ── Stat card ── */
   .stat-card {
-    background: oklch(0.13 0.006 240 / 0.8);
-    backdrop-filter: blur(12px);
-    border: 1px solid oklch(0.22 0.008 240 / 0.6);
-    border-radius: var(--radius);
+    background: linear-gradient(
+      135deg,
+      var(--color-bg-surface) 0%,
+      var(--color-bg-elevated) 100%
+    );
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-xl);
     padding: 1.25rem;
-    transition: all 200ms;
+    transition: all 220ms cubic-bezier(0.23, 1, 0.32, 1);
   }
+
   .stat-card:hover {
-    border-color: oklch(0.65 0.18 250 / 0.4);
-    box-shadow: 0 4px 24px oklch(0.65 0.18 250 / 0.1);
+    border-color: var(--color-border-default);
     transform: translateY(-1px);
+    box-shadow: 0 8px 32px oklch(0 0 0 / 0.25);
   }
 
-  /* Sidebar active item */
+  /* ── Navigation ── */
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 0.875rem;
+    border-radius: var(--radius-lg);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    transition: all 160ms cubic-bezier(0.23, 1, 0.32, 1);
+    position: relative;
+  }
+
+  .nav-item:hover {
+    color: var(--color-text-primary);
+    background-color: var(--color-bg-elevated);
+  }
+
   .nav-active {
-    background: oklch(0.65 0.18 250 / 0.12);
-    color: oklch(0.75 0.18 250);
-    border-left: 2px solid oklch(0.65 0.18 250);
+    color: var(--color-accent) !important;
+    background: linear-gradient(
+      90deg,
+      var(--color-accent-dim) 0%,
+      transparent 100%
+    ) !important;
+    border-left: 2px solid var(--color-accent);
+    padding-left: calc(0.875rem - 2px);
   }
 
-  /* Confidence bar */
+  /* ── Mode badges ── */
+  .mode-paper {
+    background: linear-gradient(135deg, oklch(0.820 0.120 80 / 0.12), oklch(0.820 0.120 80 / 0.06));
+    border: 1px solid oklch(0.820 0.120 80 / 0.35);
+    color: var(--color-gold);
+    border-radius: var(--radius-lg);
+  }
+
+  .mode-live {
+    background: linear-gradient(135deg, oklch(0.660 0.155 20 / 0.15), oklch(0.660 0.155 20 / 0.06));
+    border: 1px solid oklch(0.660 0.155 20 / 0.40);
+    color: var(--color-loss);
+    border-radius: var(--radius-lg);
+  }
+
+  /* ── Signal badges ── */
+  .signal-buy {
+    background: var(--color-profit-dim);
+    color: var(--color-profit);
+    border: 1px solid oklch(0.720 0.130 155 / 0.30);
+    border-radius: var(--radius-sm);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 0.125rem 0.5rem;
+  }
+
+  .signal-sell {
+    background: var(--color-loss-dim);
+    color: var(--color-loss);
+    border: 1px solid oklch(0.660 0.155 20 / 0.30);
+    border-radius: var(--radius-sm);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 0.125rem 0.5rem;
+  }
+
+  .signal-hold {
+    background: var(--color-gold-dim);
+    color: var(--color-gold);
+    border: 1px solid oklch(0.820 0.120 80 / 0.30);
+    border-radius: var(--radius-sm);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 0.125rem 0.5rem;
+  }
+
+  /* ── Profit / Loss text ── */
+  .text-profit { color: var(--color-profit); }
+  .text-loss   { color: var(--color-loss); }
+  .text-gold   { color: var(--color-gold); }
+  .text-accent { color: var(--color-accent); }
+
+  /* ── Confidence bar ── */
   .confidence-bar {
     height: 4px;
-    border-radius: 2px;
-    background: oklch(0.22 0.008 240);
+    border-radius: 99px;
+    background: var(--color-bg-elevated);
     overflow: hidden;
   }
+
   .confidence-fill {
     height: 100%;
-    border-radius: 2px;
-    transition: width 0.6s ease;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--color-accent), var(--color-profit));
+    transition: width 600ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  /* ── Input ── */
+  .hj-input {
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-md);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    padding: 0.5rem 0.875rem;
+    transition: border-color 160ms ease, box-shadow 160ms ease;
+    outline: none;
+    width: 100%;
+  }
+
+  .hj-input:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px var(--color-accent-dim);
+  }
+
+  .hj-input::placeholder { color: var(--color-text-tertiary); }
+
+  /* ── Button primary ── */
+  .hj-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1.125rem;
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 160ms cubic-bezier(0.23, 1, 0.32, 1);
+    cursor: pointer;
+    border: none;
+    outline: none;
+  }
+
+  .hj-btn:active { transform: scale(0.97); }
+
+  .hj-btn-primary {
+    background: var(--color-accent);
+    color: oklch(0.115 0.018 252);
+  }
+
+  .hj-btn-primary:hover {
+    background: var(--color-accent-hover);
+    box-shadow: 0 4px 16px var(--color-accent-glow);
+  }
+
+  .hj-btn-ghost {
+    background: transparent;
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border-subtle);
+  }
+
+  .hj-btn-ghost:hover {
+    background: var(--color-bg-elevated);
+    color: var(--color-text-primary);
+    border-color: var(--color-border-default);
+  }
+
+  /* ── Divider ── */
+  .hj-divider {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--color-border-subtle) 20%,
+      var(--color-border-subtle) 80%,
+      transparent
+    );
+  }
+
+  /* ── Glow accent line (sidebar top) ── */
+  .accent-glow-line {
+    height: 2px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--color-accent) 40%,
+      var(--color-profit) 60%,
+      transparent
+    );
+    opacity: 0.6;
+  }
+
+  /* ── Logo mark ── */
+  .hj-logo-mark {
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--radius-md);
+    background: linear-gradient(135deg, var(--color-accent-dim), var(--color-bg-elevated));
+    border: 1px solid var(--color-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 12px var(--color-accent-dim);
+  }
+
+  /* ── Tooltip / badge ── */
+  .hj-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.1875rem 0.625rem;
+    border-radius: 99px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+  }
+
+  /* ── Skeleton ── */
+  .hj-skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--color-bg-elevated) 25%,
+      var(--color-bg-overlay) 50%,
+      var(--color-bg-elevated) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.8s infinite;
+    border-radius: var(--radius-md);
+  }
+
+  /* ── Chat bubble ── */
+  .chat-user {
+    background: linear-gradient(135deg, var(--color-accent-dim), var(--color-bg-elevated));
+    border: 1px solid var(--color-accent-dim);
+    border-radius: var(--radius-xl) var(--radius-xl) var(--radius-sm) var(--radius-xl);
+    color: var(--color-text-primary);
+  }
+
+  .chat-ai {
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-xl) var(--radius-xl) var(--radius-xl) var(--radius-sm);
+    color: var(--color-text-primary);
+  }
+}
+
+/* ─── Animations ────────────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.85); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px var(--color-accent-dim); }
+  50%       { box-shadow: 0 0 20px var(--color-accent-glow); }
+}
+
+.animate-fade-up   { animation: fade-up 280ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+.animate-fade-in   { animation: fade-in 220ms ease both; }
+.animate-pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+.animate-glow      { animation: glow-pulse 3s ease-in-out infinite; }
+
+/* ─── Recharts overrides ────────────────────────────────────────────────────── */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: var(--color-border-subtle) !important;
+  stroke-opacity: 0.5 !important;
+}
+
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: var(--color-bg-overlay) !important;
+  border: 1px solid var(--color-border-default) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: 0 8px 32px oklch(0 0 0 / 0.4) !important;
+}
+
+.recharts-text { fill: var(--color-text-tertiary) !important; font-size: 0.75rem !important; }
+
+/* ─── shadcn/ui base overrides ──────────────────────────────────────────────── */
+@layer base {
+  * { border-color: var(--color-border); }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
   }
 }

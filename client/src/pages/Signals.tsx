@@ -1,114 +1,136 @@
-import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { RefreshCw, TrendingUp, TrendingDown, Minus, Clock, Target, AlertCircle } from "lucide-react";
+import { RefreshCw, TrendingUp, TrendingDown, Minus, Clock, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 const INSTRUMENTS = ["EURUSD", "GBPUSD", "GOLD", "US500", "BTC"];
 
 function SignalBadge({ signal }: { signal: "BUY" | "SELL" | "HOLD" }) {
-  const config = {
-    BUY: { icon: TrendingUp, label: "BUY", cls: "signal-buy" },
-    SELL: { icon: TrendingDown, label: "SELL", cls: "signal-sell" },
-    HOLD: { icon: Minus, label: "HOLD", cls: "signal-hold" },
-  };
-  const { icon: Icon, label, cls } = config[signal];
   return (
-    <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold", cls)}>
-      <Icon size={12} />
-      {label}
+    <span className={cn(
+      "inline-flex items-center gap-1.5 text-xs font-bold",
+      signal === "BUY" ? "signal-buy" : signal === "SELL" ? "signal-sell" : "signal-hold"
+    )}>
+      {signal === "BUY" ? <TrendingUp size={11} /> : signal === "SELL" ? <TrendingDown size={11} /> : <Minus size={11} />}
+      {signal}
     </span>
   );
 }
 
-function ConfidenceBar({ value }: { value: number }) {
-  const color = value >= 80 ? "bg-profit" : value >= 65 ? "bg-primary" : "bg-yellow-500";
-  return (
-    <div className="confidence-bar w-full">
-      <div
-        className={cn("confidence-fill", color)}
-        style={{ width: `${value}%` }}
-      />
-    </div>
-  );
-}
-
-function InstrumentCard({ instrument, signal }: {
+function InstrumentCard({ instrument, signal, onRefresh, loading }: {
   instrument: string;
   signal?: {
-    id: number;
-    signal: "BUY" | "SELL" | "HOLD";
-    confidence: number;
-    reasoning: string;
-    currentPrice: string | null;
-    targetPrice: string | null;
-    stopLoss: string | null;
-    indicators: unknown;
-    createdAt: Date;
+    id: number; signal: "BUY" | "SELL" | "HOLD"; confidence: number;
+    reasoning: string; currentPrice: string | null; targetPrice: string | null;
+    stopLoss: string | null; indicators: unknown; createdAt: Date;
   };
+  onRefresh: () => void; loading: boolean;
 }) {
   const indicators = signal?.indicators as { rsi?: number; trend?: string; volatility?: string } | null;
+  const borderColor = signal?.signal === "BUY"
+    ? "oklch(0.720 0.130 155 / 0.30)"
+    : signal?.signal === "SELL"
+    ? "oklch(0.660 0.155 20 / 0.30)"
+    : "var(--color-border-subtle)";
 
   return (
-    <div className={cn(
-      "bg-card border rounded-xl p-5 transition-all duration-200 hover:border-primary/30",
-      signal?.signal === "BUY" ? "border-[oklch(0.65_0.18_145/0.3)]" :
-      signal?.signal === "SELL" ? "border-[oklch(0.60_0.22_25/0.3)]" :
-      "border-border"
-    )}>
+    <div
+      className="rounded-2xl p-5 transition-all duration-200 animate-fade-up"
+      style={{
+        background: "var(--color-bg-surface)",
+        border: `1px solid ${borderColor}`,
+      }}
+    >
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-secondary/60 flex items-center justify-center">
-            <span className="text-xs font-bold text-foreground">
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center"
+            style={{
+              background: "var(--color-bg-elevated)",
+              border: "1px solid var(--color-border-subtle)",
+            }}
+          >
+            <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--color-accent)", fontFamily: "var(--font-mono)" }}>
               {instrument.slice(0, 2)}
             </span>
           </div>
           <div>
-            <p className="font-semibold text-foreground text-sm">{instrument}</p>
+            <p style={{ fontWeight: 600, fontSize: "0.9375rem", color: "var(--color-text-primary)" }}>{instrument}</p>
             {signal?.currentPrice && (
-              <p className="text-xs font-mono text-muted-foreground">
+              <p style={{ fontSize: "0.6875rem", fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)" }}>
                 ${parseFloat(signal.currentPrice).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 5 })}
               </p>
             )}
           </div>
         </div>
-        {signal ? <SignalBadge signal={signal.signal} /> : (
-          <span className="text-xs text-muted-foreground px-2 py-1 rounded-lg bg-secondary/40">No signal</span>
-        )}
+        <div className="flex items-center gap-2">
+          {signal ? <SignalBadge signal={signal.signal} /> : (
+            <span style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)", padding: "0.125rem 0.5rem",
+              background: "var(--color-bg-elevated)", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border-subtle)" }}>
+              No signal
+            </span>
+          )}
+          <button
+            onClick={onRefresh}
+            disabled={loading}
+            className="p-1.5 rounded-lg transition-colors"
+            style={{ color: "var(--color-text-tertiary)", background: "var(--color-bg-elevated)", border: "1px solid var(--color-border-subtle)" }}
+            title="Refresh signal"
+          >
+            <RefreshCw size={11} className={loading ? "animate-spin" : ""} />
+          </button>
+        </div>
       </div>
 
       {signal && (
         <>
           {/* Confidence */}
-          <div className="mb-3">
+          <div className="mb-4">
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs text-muted-foreground">Confidence</span>
-              <span className={cn(
-                "text-xs font-bold font-mono",
-                signal.confidence >= 80 ? "text-profit" : signal.confidence >= 65 ? "text-primary" : "text-yellow-500"
-              )}>
+              <span style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                AI Confidence
+              </span>
+              <span
+                className="tabular-nums"
+                style={{
+                  fontSize: "0.75rem", fontWeight: 700, fontFamily: "var(--font-mono)",
+                  color: signal.confidence >= 80 ? "var(--color-profit)" : signal.confidence >= 65 ? "var(--color-accent)" : "var(--color-gold)",
+                }}
+              >
                 {signal.confidence}%
               </span>
             </div>
-            <ConfidenceBar value={signal.confidence} />
+            <div className="confidence-bar">
+              <div
+                className="confidence-fill"
+                style={{
+                  width: `${signal.confidence}%`,
+                  background: signal.confidence >= 80
+                    ? "linear-gradient(90deg, var(--color-accent), var(--color-profit))"
+                    : signal.confidence >= 65
+                    ? "linear-gradient(90deg, var(--color-accent), var(--color-accent-hover))"
+                    : "linear-gradient(90deg, var(--color-gold), var(--color-accent))",
+                }}
+              />
+            </div>
           </div>
 
           {/* Price targets */}
           {(signal.targetPrice || signal.stopLoss) && (
-            <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="grid grid-cols-2 gap-2 mb-4">
               {signal.targetPrice && (
-                <div className="bg-[oklch(0.65_0.18_145/0.08)] rounded-lg p-2">
-                  <p className="text-xs text-muted-foreground mb-0.5">Target</p>
-                  <p className="text-xs font-mono font-bold text-profit">
+                <div className="rounded-lg p-2.5" style={{ background: "var(--color-profit-dim)", border: "1px solid oklch(0.720 0.130 155 / 0.20)" }}>
+                  <p style={{ fontSize: "0.625rem", color: "var(--color-text-tertiary)", marginBottom: "0.25rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Target</p>
+                  <p style={{ fontSize: "0.75rem", fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-profit)" }}>
                     ${parseFloat(signal.targetPrice).toFixed(4)}
                   </p>
                 </div>
               )}
               {signal.stopLoss && (
-                <div className="bg-[oklch(0.60_0.22_25/0.08)] rounded-lg p-2">
-                  <p className="text-xs text-muted-foreground mb-0.5">Stop Loss</p>
-                  <p className="text-xs font-mono font-bold text-loss">
+                <div className="rounded-lg p-2.5" style={{ background: "var(--color-loss-dim)", border: "1px solid oklch(0.660 0.155 20 / 0.20)" }}>
+                  <p style={{ fontSize: "0.625rem", color: "var(--color-text-tertiary)", marginBottom: "0.25rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Stop Loss</p>
+                  <p style={{ fontSize: "0.75rem", fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-loss)" }}>
                     ${parseFloat(signal.stopLoss).toFixed(4)}
                   </p>
                 </div>
@@ -118,24 +140,24 @@ function InstrumentCard({ instrument, signal }: {
 
           {/* Indicators */}
           {indicators && (
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex flex-wrap items-center gap-1.5 mb-3">
               {indicators.rsi !== undefined && (
-                <span className="text-xs px-2 py-0.5 rounded bg-secondary/60 text-muted-foreground">
+                <span className="hj-badge" style={{ background: "var(--color-bg-elevated)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-subtle)" }}>
                   RSI {indicators.rsi}
                 </span>
               )}
               {indicators.trend && (
-                <span className={cn(
-                  "text-xs px-2 py-0.5 rounded capitalize",
-                  indicators.trend === "bullish" ? "bg-[oklch(0.65_0.18_145/0.12)] text-profit" :
-                  indicators.trend === "bearish" ? "bg-[oklch(0.60_0.22_25/0.12)] text-loss" :
-                  "bg-secondary/60 text-muted-foreground"
-                )}>
+                <span className="hj-badge" style={{
+                  background: indicators.trend === "bullish" ? "var(--color-profit-dim)" : indicators.trend === "bearish" ? "var(--color-loss-dim)" : "var(--color-bg-elevated)",
+                  color: indicators.trend === "bullish" ? "var(--color-profit)" : indicators.trend === "bearish" ? "var(--color-loss)" : "var(--color-text-secondary)",
+                  border: "1px solid transparent",
+                  textTransform: "capitalize",
+                }}>
                   {indicators.trend}
                 </span>
               )}
               {indicators.volatility && (
-                <span className="text-xs px-2 py-0.5 rounded bg-secondary/60 text-muted-foreground capitalize">
+                <span className="hj-badge" style={{ background: "var(--color-bg-elevated)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-subtle)", textTransform: "capitalize" }}>
                   {indicators.volatility} vol
                 </span>
               )}
@@ -143,14 +165,14 @@ function InstrumentCard({ instrument, signal }: {
           )}
 
           {/* Reasoning */}
-          <div className="bg-secondary/30 rounded-lg p-3">
-            <p className="text-xs text-muted-foreground leading-relaxed">{signal.reasoning}</p>
+          <div className="rounded-xl p-3" style={{ background: "var(--color-bg-elevated)", border: "1px solid var(--color-border-subtle)" }}>
+            <p style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>{signal.reasoning}</p>
           </div>
 
           {/* Time */}
           <div className="flex items-center gap-1.5 mt-3">
-            <Clock size={11} className="text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">
+            <Clock size={11} style={{ color: "var(--color-text-tertiary)" }} />
+            <span style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)" }}>
               {new Date(signal.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
             </span>
           </div>
@@ -163,75 +185,68 @@ function InstrumentCard({ instrument, signal }: {
 export default function Signals() {
   const signalsQuery = trpc.signals.list.useQuery();
   const generateAllMutation = trpc.signals.generateAll.useMutation({
-    onSuccess: () => {
-      signalsQuery.refetch();
-      toast.success("All signals refreshed successfully");
-    },
+    onSuccess: () => { signalsQuery.refetch(); toast.success("All signals refreshed"); },
     onError: () => toast.error("Failed to generate signals"),
   });
-
   const generateOneMutation = trpc.signals.generate.useMutation({
-    onSuccess: () => {
-      signalsQuery.refetch();
-      toast.success("Signal generated");
-    },
+    onSuccess: () => { signalsQuery.refetch(); toast.success("Signal generated"); },
     onError: () => toast.error("Failed to generate signal"),
   });
 
-  // Get latest signal per instrument
-  const latestByInstrument: Record<string, typeof signalsQuery.data extends (infer T)[] | undefined ? T : never> = {};
+  const latestByInstrument: Record<string, any> = {};
   for (const signal of (signalsQuery.data ?? [])) {
-    if (!latestByInstrument[signal.instrument]) {
-      latestByInstrument[signal.instrument] = signal as any;
-    }
+    if (!latestByInstrument[signal.instrument]) latestByInstrument[signal.instrument] = signal;
   }
 
-  const buyCount = Object.values(latestByInstrument).filter((s: any) => s.signal === "BUY").length;
+  const buyCount  = Object.values(latestByInstrument).filter((s: any) => s.signal === "BUY").length;
   const sellCount = Object.values(latestByInstrument).filter((s: any) => s.signal === "SELL").length;
   const holdCount = Object.values(latestByInstrument).filter((s: any) => s.signal === "HOLD").length;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-fade-in">
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">AI Trading Signals</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
+          <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--color-text-primary)", letterSpacing: "-0.02em" }}>
+            AI Trading Signals
+          </h1>
+          <p style={{ fontSize: "0.8125rem", color: "var(--color-text-tertiary)", marginTop: "0.125rem" }}>
             Real-time AI analysis for your watched instruments
           </p>
         </div>
         <button
           onClick={() => generateAllMutation.mutate()}
           disabled={generateAllMutation.isPending}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-60"
+          className="hj-btn hj-btn-primary"
         >
-          <RefreshCw size={14} className={generateAllMutation.isPending ? "animate-spin" : ""} />
+          <RefreshCw size={13} className={generateAllMutation.isPending ? "animate-spin" : ""} />
           {generateAllMutation.isPending ? "Analyzing..." : "Refresh All"}
         </button>
       </div>
 
       {/* Summary bar */}
-      <div className="flex items-center gap-4 bg-card border border-border rounded-xl px-5 py-3">
-        <div className="flex items-center gap-2">
-          <TrendingUp size={14} className="text-profit" />
-          <span className="text-sm text-muted-foreground">BUY:</span>
-          <span className="text-sm font-bold text-profit">{buyCount}</span>
-        </div>
-        <div className="w-px h-4 bg-border" />
-        <div className="flex items-center gap-2">
-          <TrendingDown size={14} className="text-loss" />
-          <span className="text-sm text-muted-foreground">SELL:</span>
-          <span className="text-sm font-bold text-loss">{sellCount}</span>
-        </div>
-        <div className="w-px h-4 bg-border" />
-        <div className="flex items-center gap-2">
-          <Minus size={14} className="text-yellow-500" />
-          <span className="text-sm text-muted-foreground">HOLD:</span>
-          <span className="text-sm font-bold text-yellow-500">{holdCount}</span>
-        </div>
-        <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
-          <AlertCircle size={12} />
-          Signals are AI-generated. Always apply your own judgment.
+      <div
+        className="flex flex-wrap items-center gap-4 rounded-2xl px-5 py-3.5"
+        style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)" }}
+      >
+        {[
+          { label: "BUY", count: buyCount, color: "var(--color-profit)", icon: TrendingUp },
+          { label: "SELL", count: sellCount, color: "var(--color-loss)", icon: TrendingDown },
+          { label: "HOLD", count: holdCount, color: "var(--color-gold)", icon: Minus },
+        ].map(({ label, count, color, icon: Icon }, i) => (
+          <div key={label} className="flex items-center gap-2">
+            {i > 0 && <div style={{ width: 1, height: 16, background: "var(--color-border-subtle)" }} />}
+            <Icon size={13} style={{ color }} />
+            <span style={{ fontSize: "0.8125rem", color: "var(--color-text-tertiary)" }}>{label}:</span>
+            <span style={{ fontSize: "0.8125rem", fontWeight: 700, fontFamily: "var(--font-mono)", color }}>{count}</span>
+          </div>
+        ))}
+        <div className="ml-auto flex items-center gap-1.5">
+          <AlertCircle size={11} style={{ color: "var(--color-text-tertiary)" }} />
+          <span style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)" }}>
+            AI-generated. Always apply your own judgment.
+          </span>
         </div>
       </div>
 
@@ -241,7 +256,9 @@ export default function Signals() {
           <InstrumentCard
             key={instrument}
             instrument={instrument}
-            signal={latestByInstrument[instrument] as any}
+            signal={latestByInstrument[instrument]}
+            onRefresh={() => generateOneMutation.mutate({ instrument })}
+            loading={generateOneMutation.isPending && generateOneMutation.variables?.instrument === instrument}
           />
         ))}
       </div>
