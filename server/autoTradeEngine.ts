@@ -32,6 +32,7 @@ import {
   INSTRUMENT_EPICS,
   isMarketOpen,
   getOpenMarkets,
+  checkMarketTradeable,
 } from "./capitalcom";
 import { getDb } from "./db";
 import {
@@ -55,6 +56,10 @@ export interface TradeDecision {
   takeProfit?: number;
   size?: number;
   closeDealId?: string; // for CLOSE action
+  // Position metadata for accurate close notifications
+  positionDirection?: "BUY" | "SELL";
+  positionOpenLevel?: number;
+  positionCurrentLevel?: number;
 }
 
 export interface EngineState {
@@ -446,12 +451,20 @@ Respond in JSON:
   const content = response.choices?.[0]?.message?.content ?? "{}";
   const parsed = JSON.parse(typeof content === "string" ? content : JSON.stringify(content));
 
+  // Compute current price for close notification
+  const currentLevel = posPrice
+    ? (posPrice.bid + posPrice.ask) / 2
+    : position.openLevel;
+
   return {
     instrument: position.epic,
     action: parsed.action ?? "HOLD",
     confidence: parsed.confidence ?? 0,
     reasoning: parsed.reasoning ?? "",
     closeDealId: position.dealId,
+    positionDirection: position.direction as "BUY" | "SELL",
+    positionOpenLevel: position.openLevel,
+    positionCurrentLevel: currentLevel,
   };
 }
 
@@ -482,9 +495,11 @@ async function executeDecision(
     if (decision.action === "CLOSE" && decision.closeDealId) {
       // Close existing position
       let pnl = 0;
+      let confirmedCloseLevel: number | undefined;
       if (mode === "live") {
         const result = await closePosition(decision.closeDealId);
         pnl = result.pnl ?? 0;
+        confirmedCloseLevel = result.closeLevel;
       }
 
       // Update trade record
@@ -506,12 +521,12 @@ async function executeDecision(
         content: `${decision.instrument} position closed. P&L: $${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}. Reason: ${decision.reasoning}`,
       }).catch(() => {});
 
-      // Telegram notification
+      // Telegram notification — use broker-confirmed close level if available, else current market level
       await notifyTradeClosed({
         instrument: decision.instrument,
-        direction: "BUY", // direction stored in decision context
-        entryPrice: decision.entryPrice ?? 0,
-        closePrice: decision.entryPrice ?? 0,
+        direction: decision.positionDirection ?? "BUY",
+        entryPrice: decision.positionOpenLevel ?? decision.entryPrice ?? 0,
+        closePrice: confirmedCloseLevel ?? decision.positionCurrentLevel ?? decision.entryPrice ?? 0,
         pnl,
         reason: decision.reasoning,
         mode,
@@ -528,6 +543,16 @@ async function executeDecision(
 
       if (mode === "live") {
         const epic = INSTRUMENT_EPICS[decision.instrument] ?? decision.instrument;
+        // Secondary live market-status check via Capital.com API before placing order
+        const tradeable = await checkMarketTradeable(epic).catch(() => isMarketOpen(decision.instrument));
+        if (!tradeable) {
+          await logDecision(sessionId, {
+            ...decision,
+            action: "SKIP",
+            reasoning: `Live market check: ${decision.instrument} is not tradeable right now. ${decision.reasoning}`,
+          }, "skipped", `Live market check: ${decision.instrument} not tradeable`);
+          return;
+        }
         const result = await placeOrder({
           epic,
           direction: decision.action,

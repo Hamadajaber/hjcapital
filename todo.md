@@ -80,5 +80,5 @@
 
 ## Round 6 — Engine Accuracy Fixes
 
-- [ ] Fix Telegram trade-close alert: use actual trade direction, real entry price, and real close price (not hardcoded values from decision object)
-- [ ] Add live Capital.com market-status check inside executeDecision() / placeOrder() as a secondary guard (in addition to hardcoded timetable)
+- [x] Fix Telegram trade-close alert: use actual trade direction, real entry price, and real close price (positionDirection, positionOpenLevel, positionCurrentLevel from position object)
+- [x] Add live Capital.com market-status check inside executeDecision() / placeOrder() as a secondary guard (checkMarketTradeable() calls /api/v1/markets/:epic, falls back to hardcoded schedule)

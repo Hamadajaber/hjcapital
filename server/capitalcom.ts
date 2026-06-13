@@ -185,6 +185,32 @@ export async function getMarketPrice(epic: string): Promise<MarketPrice> {
   };
 }
 
+/**
+ * Check if a market is currently tradeable by fetching live market details from Capital.com.
+ * Returns true if the market is open and dealing is enabled.
+ * Falls back to the hardcoded schedule check if the API call fails.
+ */
+export async function checkMarketTradeable(epic: string): Promise<boolean> {
+  try {
+    const data = await capitalRequest<{
+      snapshot: {
+        bid: number;
+        offer: number;
+        marketStatus: string; // e.g. "TRADEABLE", "CLOSED", "OFFLINE"
+      };
+      dealingRules?: {
+        minDealSize?: { value: number };
+      };
+    }>(`/api/v1/markets/${epic}`);
+    const status = data.snapshot?.marketStatus ?? "";
+    return status === "TRADEABLE";
+  } catch {
+    // Fallback to hardcoded schedule
+    const friendlyName = Object.entries(INSTRUMENT_EPICS).find(([, e]) => e === epic)?.[0] ?? epic;
+    return isMarketOpen(friendlyName);
+  }
+}
+
 export async function getAllMarketPrices(): Promise<MarketPrice[]> {
   const results = await Promise.allSettled(
     Object.entries(INSTRUMENT_EPICS).map(async ([name, epic]) => {
@@ -360,7 +386,7 @@ export async function placeOrder(params: {
 
 // ─── Close Position ───────────────────────────────────────────────────────────
 
-export async function closePosition(dealId: string): Promise<{ status: string; pnl?: number }> {
+export async function closePosition(dealId: string): Promise<{ status: string; pnl?: number; closeLevel?: number }> {
   const data = await capitalRequest<{
     dealReference: string;
   }>(`/api/v1/positions/${dealId}`, {
@@ -371,9 +397,10 @@ export async function closePosition(dealId: string): Promise<{ status: string; p
     const confirm = await capitalRequest<{
       status: string;
       profit: number;
+      level?: number; // broker-confirmed close/fill level
     }>(`/api/v1/confirms/${data.dealReference}`);
 
-    return { status: confirm.status, pnl: confirm.profit };
+    return { status: confirm.status, pnl: confirm.profit, closeLevel: confirm.level };
   } catch {
     return { status: "CLOSED" };
   }
