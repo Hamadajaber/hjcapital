@@ -96,6 +96,10 @@ export default function Dashboard() {
   const dailyStatsQuery = trpc.portfolio.dailyStats.useQuery();
   const tradesQuery     = trpc.trades.list.useQuery({ status: "open" });
   const signalsQuery    = trpc.signals.list.useQuery();
+  const liveBalanceQuery = trpc.capitalcom.liveBalance.useQuery(undefined, {
+    refetchInterval: 30000,
+    retry: false,
+  });
 
   const generateAllMutation = trpc.signals.generateAll.useMutation({
     onSuccess: () => { signalsQuery.refetch(); toast.success("AI signals refreshed"); },
@@ -114,6 +118,9 @@ export default function Dashboard() {
   const latestSignals = signalsQuery.data?.slice(0, 5) ?? [];
   const balanceHistory = generateBalanceHistory(balance);
   const dailyPnl      = stats?.totalPnl ?? 0;
+  const liveBalance   = liveBalanceQuery.data?.balance;
+  const livePnl       = liveBalanceQuery.data?.profitLoss;
+  const liveAvailable = liveBalanceQuery.data?.available;
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
@@ -174,6 +181,44 @@ export default function Dashboard() {
           icon={Activity}
         />
       </div>
+
+      {/* Live Capital.com Balance Strip */}
+      {liveBalance !== null && liveBalance !== undefined && (
+        <div
+          className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-2xl px-5 py-3"
+          style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)" }}
+        >
+          <div className="flex items-center gap-1.5">
+            <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "var(--color-profit)" }} />
+            <span style={{ fontSize: "0.625rem", color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Capital.com Live</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>Balance</span>
+            <span style={{ fontSize: "0.875rem", fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-text-primary)" }}>
+              ${parseFloat(String(liveBalance)).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+          {liveAvailable !== null && liveAvailable !== undefined && (
+            <div className="flex items-center gap-1.5">
+              <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>Available</span>
+              <span style={{ fontSize: "0.875rem", fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-accent)" }}>
+                ${parseFloat(String(liveAvailable)).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          )}
+          {livePnl !== null && livePnl !== undefined && (
+            <div className="flex items-center gap-1.5">
+              <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>Open P&L</span>
+              <span style={{
+                fontSize: "0.875rem", fontFamily: "var(--font-mono)", fontWeight: 700,
+                color: parseFloat(String(livePnl)) >= 0 ? "var(--color-profit)" : "var(--color-loss)"
+              }}>
+                {parseFloat(String(livePnl)) >= 0 ? "+" : ""}${parseFloat(String(livePnl)).toFixed(2)}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Chart + Signals */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">

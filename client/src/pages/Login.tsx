@@ -5,24 +5,22 @@ export default function Login() {
   return (
     <div
       className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: "var(--color-bg-base)" }}
+      style={{
+        backgroundImage: `linear-gradient(to bottom, oklch(0.975 0.008 75 / 0.80) 0%, oklch(0.975 0.008 75 / 0.72) 50%, oklch(0.975 0.008 75 / 0.80) 100%), url('https://d2xsxph8kpxj0f.cloudfront.net/111908166/jFhH8npJoz2jTjiimeA2CG/hj-nature-bg-hf268toW5gM8ECw9d4e9DW.webp')`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundAttachment: "fixed",
+      }}
     >
-      {/* Ambient background glows */}
+      {/* Soft ambient glow */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div
           className="absolute"
           style={{
-            top: "15%", left: "20%", width: "28rem", height: "28rem",
-            background: "radial-gradient(circle, oklch(0.55 0.14 252 / 0.07) 0%, transparent 70%)",
-            filter: "blur(40px)",
-          }}
-        />
-        <div
-          className="absolute"
-          style={{
-            bottom: "20%", right: "15%", width: "20rem", height: "20rem",
-            background: "radial-gradient(circle, oklch(0.55 0.14 252 / 0.05) 0%, transparent 70%)",
-            filter: "blur(40px)",
+            top: "10%", left: "50%", transform: "translateX(-50%)",
+            width: "40rem", height: "20rem",
+            background: "radial-gradient(ellipse, oklch(0.520 0.110 152 / 0.06) 0%, transparent 70%)",
+            filter: "blur(60px)",
           }}
         />
       </div>
