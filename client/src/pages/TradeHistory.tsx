@@ -76,7 +76,7 @@ function TradeRow({ trade }: { trade: {
                 : <TrendingDown size={12} style={{ color: "var(--color-loss)" }} />
               }
               <span className="tabular-nums" style={{
-                fontSize: "0.875rem", fontWeight: 700, fontFamily: "var(--font-mono)",
+                fontSize: "0.875rem", fontWeight: 600, fontFamily: "var(--font-serif)",
                 color: isProfit ? "var(--color-profit)" : pnl < 0 ? "var(--color-loss)" : "var(--color-text-secondary)",
               }}>
                 {isProfit ? "+" : ""}${pnl.toFixed(2)}
@@ -87,7 +87,7 @@ function TradeRow({ trade }: { trade: {
           )}
         </td>
         <td className="px-4 py-3 tabular-nums" style={{
-          fontSize: "0.8125rem", fontFamily: "var(--font-mono)", fontWeight: 600,
+          fontSize: "0.8125rem", fontFamily: "var(--font-serif)", fontWeight: 600,
           color: trade.aiConfidence && trade.aiConfidence >= 80 ? "var(--color-profit)"
             : trade.aiConfidence && trade.aiConfidence >= 65 ? "var(--color-accent)"
             : "var(--color-gold)",
@@ -150,7 +150,7 @@ export default function TradeHistory() {
 
       {/* Header */}
       <div>
-        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--color-text-primary)", letterSpacing: "-0.02em" }}>
+        <h1 style={{ fontSize: "1.5rem", fontWeight: 600, color: "var(--color-text-primary)", letterSpacing: "-0.02em", fontFamily: "var(--font-serif)" }}>
           Trade History
         </h1>
         <p style={{ fontSize: "0.8125rem", color: "var(--color-text-tertiary)", marginTop: "0.125rem" }}>
@@ -172,7 +172,7 @@ export default function TradeHistory() {
               {label}
             </p>
             <p className="tabular-nums"
-              style={{ fontSize: "1.25rem", fontWeight: 700, fontFamily: "var(--font-mono)", color: color ?? "var(--color-text-primary)" }}>
+              style={{ fontSize: "1.25rem", fontWeight: 600, fontFamily: "var(--font-serif)", color: color ?? "var(--color-text-primary)" }}>
               {value}
             </p>
           </div>

@@ -1,62 +1,61 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
 @import "tailwindcss";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
-/* ─── HJ Capital Design Tokens — Warm Light Theme ──────────────────────────── */
-/*
-  PALETTE PHILOSOPHY:
-  Warm cream/sand backgrounds — like fine writing paper in morning light.
-  Deep warm charcoal text — easy to read, never harsh black.
-  Soft sage green accent — calm, intelligent, growth-oriented.
-  Muted green for profit, muted rose for loss — gentle signals.
-  Warm stone borders — barely visible, just enough structure.
-*/
+/* ============================================================
+   HJ CAPITAL — Heritage Ledger Visual Identity System
+   "Quiet Luxury" — Private Wealth Management Aesthetic
+   Fonts: Playfair Display (headlines/numbers) + Montserrat (UI)
+   ============================================================ */
 
 @theme inline {
-  /* ── Radius ── */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.625rem;
-  --radius-lg: 0.875rem;
-  --radius-xl: 1.125rem;
-  --radius: 0.625rem;
+  /* ── Radius — Architectural precision ── */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius: 0.375rem;
 
-  /* ── Fonts ── */
-  --font-sans: 'Inter', system-ui, sans-serif;
+  /* ── Fonts — Heritage Ledger Typography ── */
+  --font-sans: 'Montserrat', system-ui, sans-serif;
+  --font-serif: 'Playfair Display', Georgia, serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-  --font-display: 'Inter', Georgia, serif;
+  --font-display: 'Playfair Display', Georgia, serif;
 
-  /* ── Core Palette (OKLCH) — Warm Light ── */
+  /* ── Core Palette (OKLCH) — Warm Cream + Sage Green ── */
 
-  /* Backgrounds — warm cream/sand */
-  --color-bg-base:        oklch(0.975 0.008 75);    /* warm off-white #faf6f0 */
-  --color-bg-surface:     oklch(0.990 0.005 75);    /* pure warm white for cards */
-  --color-bg-elevated:    oklch(0.962 0.010 72);    /* slightly deeper cream */
-  --color-bg-overlay:     oklch(0.950 0.012 70);    /* modal/overlay */
+  /* Backgrounds — premium stationery quality */
+  --color-bg-base:        oklch(0.975 0.008 85);
+  --color-bg-surface:     oklch(0.990 0.005 85);
+  --color-bg-elevated:    oklch(0.962 0.010 82);
+  --color-bg-overlay:     oklch(0.950 0.012 80);
 
-  /* Borders — warm stone, barely visible */
-  --color-border-subtle:  oklch(0.880 0.018 70);    /* very soft warm border */
-  --color-border-default: oklch(0.840 0.022 68);    /* default border */
-  --color-border-strong:  oklch(0.780 0.028 65);    /* focus/active */
+  /* Borders — low-contrast, barely visible structure */
+  --color-border-subtle:  oklch(0.880 0.018 120);
+  --color-border-default: oklch(0.840 0.022 118);
+  --color-border-strong:  oklch(0.780 0.028 115);
 
-  /* Text — warm charcoal tones */
-  --color-text-primary:   oklch(0.220 0.018 60);    /* deep warm charcoal */
-  --color-text-secondary: oklch(0.430 0.022 65);    /* medium warm grey */
-  --color-text-tertiary:  oklch(0.600 0.018 68);    /* light warm grey */
+  /* Text — deep charcoal, authoritative */
+  --color-text-primary:   oklch(0.180 0.020 145);
+  --color-text-secondary: oklch(0.420 0.025 145);
+  --color-text-tertiary:  oklch(0.600 0.018 140);
 
-  /* Accent — Soft Sage Green */
-  --color-accent:         oklch(0.520 0.110 152);   /* deep sage green */
-  --color-accent-dim:     oklch(0.520 0.110 152 / 0.10);
-  --color-accent-glow:    oklch(0.520 0.110 152 / 0.20);
-  --color-accent-hover:   oklch(0.470 0.115 152);
-  --color-accent-light:   oklch(0.920 0.040 152);   /* very light sage tint */
+  /* Accent — Warm Sage Green (primary brand) */
+  --color-accent:         oklch(0.440 0.080 145);
+  --color-accent-dim:     oklch(0.440 0.080 145 / 0.12);
+  --color-accent-glow:    oklch(0.440 0.080 145 / 0.22);
+  --color-accent-hover:   oklch(0.380 0.085 148);
+  --color-accent-light:   oklch(0.930 0.035 145);
+
+  /* Forest Green — secondary brand */
+  --color-forest:         oklch(0.350 0.090 148);
+  --color-forest-dim:     oklch(0.350 0.090 148 / 0.12);
 
   /* Profit — calm sage green */
-  --color-profit:         oklch(0.480 0.130 148);
-  --color-profit-dim:     oklch(0.480 0.130 148 / 0.10);
-  --color-profit-bg:      oklch(0.940 0.040 148);
+  --color-profit:         oklch(0.440 0.080 145);
+  --color-profit-dim:     oklch(0.440 0.080 145 / 0.10);
+  --color-profit-bg:      oklch(0.940 0.035 145);
 
   /* Loss — muted rose */
   --color-loss:           oklch(0.500 0.140 20);
@@ -73,9 +72,9 @@
   --color-sell:           var(--color-loss);
   --color-hold:           var(--color-gold);
 
-  /* Sidebar — slightly warmer than base */
-  --color-sidebar-bg:     oklch(0.955 0.014 72);
-  --color-sidebar-border: oklch(0.870 0.020 70);
+  /* Sidebar — slightly deeper cream with green tint */
+  --color-sidebar-bg:     oklch(0.955 0.014 115);
+  --color-sidebar-border: oklch(0.870 0.020 118);
 
   /* ── shadcn/ui token mapping ── */
   --color-background:     var(--color-bg-base);
@@ -88,7 +87,7 @@
   --color-popover-foreground: var(--color-text-primary);
 
   --color-primary:        var(--color-accent);
-  --color-primary-foreground: oklch(0.990 0.005 75);
+  --color-primary-foreground: oklch(0.990 0.005 85);
 
   --color-secondary:      var(--color-bg-elevated);
   --color-secondary-foreground: var(--color-text-secondary);
@@ -100,7 +99,7 @@
   --color-accent-foreground: var(--color-text-primary);
 
   --color-destructive:    var(--color-loss);
-  --color-destructive-foreground: oklch(0.990 0.005 75);
+  --color-destructive-foreground: oklch(0.990 0.005 85);
 
   --color-border:         var(--color-border-subtle);
   --color-input:          var(--color-border-default);
@@ -110,7 +109,7 @@
   --color-loss-color:     var(--color-loss);
 }
 
-/* ─── Base Layer ────────────────────────────────────────────────────────────── */
+/* ─── Base Layer ─────────────────────────────────────────────────────────── */
 @layer base {
   *, *::before, *::after {
     box-sizing: border-box;
@@ -121,7 +120,7 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-feature-settings: "kern", "liga", "calt";
   }
 
   body {
@@ -129,9 +128,9 @@
     background-image:
       linear-gradient(
         to bottom,
-        oklch(0.975 0.008 75 / 0.82) 0%,
-        oklch(0.975 0.008 75 / 0.75) 40%,
-        oklch(0.975 0.008 75 / 0.82) 100%
+        oklch(0.975 0.008 85 / 0.82) 0%,
+        oklch(0.975 0.008 85 / 0.75) 40%,
+        oklch(0.975 0.008 85 / 0.82) 100%
       ),
       url('https://d2xsxph8kpxj0f.cloudfront.net/111908166/jFhH8npJoz2jTjiimeA2CG/hj-nature-bg-hf268toW5gM8ECw9d4e9DW.webp');
     background-size: cover;
@@ -163,12 +162,22 @@
     border-radius: var(--radius-sm);
   }
 
-  /* Headings */
-  h1, h2, h3, h4, h5, h6 {
+  /* Heritage Ledger Typography Hierarchy */
+  h1, h2, h3 {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    color: var(--color-text-primary);
+  }
+
+  h4, h5, h6 {
     font-family: var(--font-sans);
     font-weight: 600;
-    letter-spacing: -0.015em;
-    color: var(--color-text-primary);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 0.6875rem;
+    color: var(--color-text-secondary);
   }
 
   /* Mono numbers */
@@ -179,44 +188,73 @@
   a:hover { color: var(--color-accent-hover); }
 }
 
-/* ─── Component Utilities ───────────────────────────────────────────────────── */
+/* ─── Component Utilities ─────────────────────────────────────────────────── */
 @layer components {
 
   /* ── Cards ── */
   .hj-card {
     background-color: var(--color-bg-surface);
     border: 1px solid var(--color-border-subtle);
-    border-radius: var(--radius-xl);
-    box-shadow: 0 1px 4px oklch(0.220 0.018 60 / 0.06), 0 4px 16px oklch(0.220 0.018 60 / 0.04);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 1px 4px oklch(0.180 0.020 145 / 0.05), 0 4px 16px oklch(0.180 0.020 145 / 0.03);
     transition: border-color 200ms ease, box-shadow 200ms ease;
   }
 
   .hj-card:hover {
     border-color: var(--color-border-default);
-    box-shadow: 0 2px 8px oklch(0.220 0.018 60 / 0.08), 0 8px 24px oklch(0.220 0.018 60 / 0.06);
+    box-shadow: 0 2px 8px oklch(0.180 0.020 145 / 0.07), 0 8px 24px oklch(0.180 0.020 145 / 0.05);
   }
 
   .hj-card-glow {
     background-color: var(--color-bg-surface);
     border: 1px solid var(--color-accent-dim);
-    border-radius: var(--radius-xl);
-    box-shadow: 0 0 0 1px var(--color-accent-dim), 0 4px 24px oklch(0.220 0.018 60 / 0.08);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 0 0 1px var(--color-accent-dim), 0 4px 24px oklch(0.180 0.020 145 / 0.07);
   }
 
   /* ── Stat card ── */
   .stat-card {
     background: var(--color-bg-surface);
     border: 1px solid var(--color-border-subtle);
-    border-radius: var(--radius-xl);
-    padding: 1.25rem;
-    box-shadow: 0 1px 3px oklch(0.220 0.018 60 / 0.06);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px oklch(0.180 0.020 145 / 0.05);
     transition: all 220ms cubic-bezier(0.23, 1, 0.32, 1);
   }
 
   .stat-card:hover {
     border-color: var(--color-border-default);
     transform: translateY(-1px);
-    box-shadow: 0 4px 16px oklch(0.220 0.018 60 / 0.10);
+    box-shadow: 0 4px 16px oklch(0.180 0.020 145 / 0.09);
+  }
+
+  /* Stat number — Playfair Display for prestige feel */
+  .stat-number {
+    font-family: var(--font-serif);
+    font-size: 2rem;
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--color-text-primary);
+  }
+
+  .stat-number-lg {
+    font-family: var(--font-serif);
+    font-size: 2.5rem;
+    font-weight: 600;
+    line-height: 1.0;
+    letter-spacing: -0.03em;
+    color: var(--color-text-primary);
+  }
+
+  /* Section label — uppercase tracked Montserrat */
+  .section-label {
+    font-family: var(--font-sans);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--color-text-tertiary);
   }
 
   /* ── Navigation ── */
@@ -225,9 +263,10 @@
     align-items: center;
     gap: 0.75rem;
     padding: 0.625rem 0.875rem;
-    border-radius: var(--radius-lg);
-    font-size: 0.875rem;
+    border-radius: var(--radius-md);
+    font-size: 0.8125rem;
     font-weight: 500;
+    letter-spacing: 0.01em;
     color: var(--color-text-secondary);
     transition: all 160ms cubic-bezier(0.23, 1, 0.32, 1);
     position: relative;
@@ -235,18 +274,15 @@
 
   .nav-item:hover {
     color: var(--color-text-primary);
-    background-color: var(--color-bg-elevated);
+    background-color: var(--color-accent-dim);
   }
 
   .nav-active {
     color: var(--color-accent) !important;
-    background: linear-gradient(
-      90deg,
-      var(--color-accent-dim) 0%,
-      transparent 100%
-    ) !important;
+    background: var(--color-accent-dim) !important;
     border-left: 2px solid var(--color-accent);
     padding-left: calc(0.875rem - 2px);
+    font-weight: 600;
   }
 
   /* ── Mode badges ── */
@@ -254,26 +290,37 @@
     background: var(--color-gold-bg);
     border: 1px solid oklch(0.620 0.130 72 / 0.30);
     color: var(--color-gold);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-sm);
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.625rem;
   }
 
   .mode-live {
     background: var(--color-loss-bg);
     border: 1px solid oklch(0.500 0.140 20 / 0.30);
     color: var(--color-loss);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-sm);
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.625rem;
   }
 
   /* ── Signal badges ── */
   .signal-buy {
     background: var(--color-profit-bg);
     color: var(--color-profit);
-    border: 1px solid oklch(0.480 0.130 148 / 0.25);
+    border: 1px solid oklch(0.440 0.080 145 / 0.25);
     border-radius: var(--radius-sm);
-    font-size: 0.6875rem;
+    font-size: 0.625rem;
     font-weight: 700;
-    letter-spacing: 0.04em;
-    padding: 0.125rem 0.5rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
   }
 
   .signal-sell {
@@ -281,10 +328,11 @@
     color: var(--color-loss);
     border: 1px solid oklch(0.500 0.140 20 / 0.25);
     border-radius: var(--radius-sm);
-    font-size: 0.6875rem;
+    font-size: 0.625rem;
     font-weight: 700;
-    letter-spacing: 0.04em;
-    padding: 0.125rem 0.5rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
   }
 
   .signal-hold {
@@ -292,10 +340,11 @@
     color: var(--color-gold);
     border: 1px solid oklch(0.620 0.130 72 / 0.25);
     border-radius: var(--radius-sm);
-    font-size: 0.6875rem;
+    font-size: 0.625rem;
     font-weight: 700;
-    letter-spacing: 0.04em;
-    padding: 0.125rem 0.5rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
   }
 
   /* ── Profit / Loss text ── */
@@ -306,7 +355,7 @@
 
   /* ── Confidence bar ── */
   .confidence-bar {
-    height: 4px;
+    height: 3px;
     border-radius: 99px;
     background: var(--color-bg-elevated);
     overflow: hidden;
@@ -315,7 +364,7 @@
   .confidence-fill {
     height: 100%;
     border-radius: 99px;
-    background: linear-gradient(90deg, var(--color-accent), var(--color-profit));
+    background: linear-gradient(90deg, var(--color-accent), var(--color-forest));
     transition: width 600ms cubic-bezier(0.23, 1, 0.32, 1);
   }
 
@@ -347,8 +396,11 @@
     gap: 0.5rem;
     padding: 0.5rem 1.125rem;
     border-radius: var(--radius-md);
-    font-size: 0.875rem;
-    font-weight: 500;
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
     transition: all 160ms cubic-bezier(0.23, 1, 0.32, 1);
     cursor: pointer;
     border: none;
@@ -359,7 +411,7 @@
 
   .hj-btn-primary {
     background: var(--color-accent);
-    color: oklch(0.990 0.005 75);
+    color: oklch(0.990 0.005 85);
   }
 
   .hj-btn-primary:hover {
@@ -398,10 +450,10 @@
       90deg,
       transparent,
       var(--color-accent) 40%,
-      var(--color-profit) 60%,
+      var(--color-forest) 60%,
       transparent
     );
-    opacity: 0.4;
+    opacity: 0.35;
   }
 
   /* ── Logo mark ── */
@@ -417,16 +469,17 @@
     box-shadow: 0 2px 8px var(--color-accent-dim);
   }
 
-  /* ── Tooltip / badge ── */
+  /* ── Badge ── */
   .hj-badge {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
     padding: 0.1875rem 0.625rem;
     border-radius: 99px;
-    font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.03em;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
 
   /* ── Skeleton ── */
@@ -446,20 +499,20 @@
   .chat-user {
     background: linear-gradient(135deg, var(--color-accent-light), var(--color-bg-elevated));
     border: 1px solid var(--color-accent-dim);
-    border-radius: var(--radius-xl) var(--radius-xl) var(--radius-sm) var(--radius-xl);
+    border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
     color: var(--color-text-primary);
   }
 
   .chat-ai {
     background: var(--color-bg-surface);
     border: 1px solid var(--color-border-subtle);
-    border-radius: var(--radius-xl) var(--radius-xl) var(--radius-xl) var(--radius-sm);
+    border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-sm);
     color: var(--color-text-primary);
-    box-shadow: 0 1px 4px oklch(0.220 0.018 60 / 0.06);
+    box-shadow: 0 1px 4px oklch(0.180 0.020 145 / 0.05);
   }
 }
 
-/* ─── Animations ────────────────────────────────────────────────────────────── */
+/* ─── Animations ──────────────────────────────────────────────────────────── */
 @keyframes shimmer {
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
@@ -490,7 +543,7 @@
 .animate-pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
 .animate-glow      { animation: glow-pulse 3s ease-in-out infinite; }
 
-/* ─── Recharts overrides ────────────────────────────────────────────────────── */
+/* ─── Recharts overrides ──────────────────────────────────────────────────── */
 .recharts-cartesian-grid-horizontal line,
 .recharts-cartesian-grid-vertical line {
   stroke: var(--color-border-subtle) !important;
@@ -501,12 +554,12 @@
   background: var(--color-bg-surface) !important;
   border: 1px solid var(--color-border-default) !important;
   border-radius: var(--radius-lg) !important;
-  box-shadow: 0 8px 32px oklch(0.220 0.018 60 / 0.12) !important;
+  box-shadow: 0 8px 32px oklch(0.180 0.020 145 / 0.12) !important;
 }
 
 .recharts-text { fill: var(--color-text-tertiary) !important; font-size: 0.75rem !important; }
 
-/* ─── shadcn/ui base overrides ──────────────────────────────────────────────── */
+/* ─── shadcn/ui base overrides ────────────────────────────────────────────── */
 @layer base {
   * { border-color: var(--color-border); }
 

@@ -91,12 +91,12 @@ export default function HJLayout({ children }: { children: React.ReactNode }) {
         <div className="flex items-center justify-between px-5 py-5">
           <div className="flex items-center gap-3">
             <img
-              src="https://d2xsxph8kpxj0f.cloudfront.net/111908166/jFhH8npJoz2jTjiimeA2CG/hj-logo-hd-S6Q6fHscfpH44tUAJbNk6c.webp"
+              src="/manus-storage/hj-logo-shield_56c87b67.png"
               alt="HJ Capital"
-              style={{ width: 40, height: 40, objectFit: "contain", borderRadius: 8 }}
+              style={{ width: 40, height: 40, objectFit: "contain", borderRadius: 4 }}
             />
             <div>
-              <p style={{ fontWeight: 700, fontSize: "1rem", color: "var(--color-text-primary)", letterSpacing: "-0.01em", fontFamily: "var(--font-display)" }}>
+              <p style={{ fontWeight: 700, fontSize: "1rem", color: "var(--color-text-primary)", letterSpacing: "-0.02em", fontFamily: "var(--font-serif)" }}>
                 HJ Capital
               </p>
               <p style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
@@ -130,7 +130,7 @@ export default function HJLayout({ children }: { children: React.ReactNode }) {
               style={{
                 fontSize: "1.5rem",
                 fontWeight: 700,
-                fontFamily: "var(--font-mono)",
+                fontFamily: "var(--font-serif)",
                 color: "var(--color-text-primary)",
                 letterSpacing: "-0.02em",
               }}
@@ -255,9 +255,7 @@ export default function HJLayout({ children }: { children: React.ReactNode }) {
             <Menu size={20} />
           </button>
           <div className="flex items-center gap-2">
-            <div className="hj-logo-mark" style={{ width: "1.75rem", height: "1.75rem" }}>
-              <span style={{ color: "var(--color-accent)", fontWeight: 700, fontSize: "0.75rem" }}>HJ</span>
-            </div>
+            <img src="/manus-storage/hj-logo-shield_56c87b67.png" alt="HJ Capital" style={{ width: 28, height: 28, objectFit: "contain" }} />
             <span style={{ fontWeight: 600, fontSize: "0.9375rem", color: "var(--color-text-primary)" }}>HJ Capital</span>
           </div>
           <div className={cn("hj-badge", mode === "paper" ? "mode-paper" : "mode-live")} style={{ fontSize: "0.625rem" }}>

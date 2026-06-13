@@ -53,8 +53,8 @@ function StatCard({
       <p
         className="tabular-nums"
         style={{
-          fontSize: "1.5rem", fontWeight: 700,
-          fontFamily: "var(--font-mono)", letterSpacing: "-0.02em",
+          fontSize: "1.5rem", fontWeight: 600,
+          fontFamily: "var(--font-serif)", letterSpacing: "-0.02em",
           color: valueColor ?? "var(--color-text-primary)",
         }}
       >
@@ -83,7 +83,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
       <p style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)", marginBottom: "0.25rem" }}>{label}</p>
       <p
         className="tabular-nums"
-        style={{ fontSize: "1rem", fontWeight: 700, fontFamily: "var(--font-mono)", color: "var(--color-accent)" }}
+        style={{ fontSize: "1rem", fontWeight: 600, fontFamily: "var(--font-serif)", color: "var(--color-accent)" }}
       >
         ${parseFloat(payload[0].value).toFixed(2)}
       </p>
@@ -128,7 +128,7 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--color-text-primary)", letterSpacing: "-0.02em" }}>
+          <h1 style={{ fontSize: "1.5rem", fontWeight: 600, color: "var(--color-text-primary)", letterSpacing: "-0.02em", fontFamily: "var(--font-serif)" }}>
             Dashboard
           </h1>
           <p style={{ fontSize: "0.8125rem", color: "var(--color-text-tertiary)", marginTop: "0.125rem" }}>
@@ -194,14 +194,14 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-1.5">
             <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>Balance</span>
-            <span style={{ fontSize: "0.875rem", fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-text-primary)" }}>
+            <span             style={{ fontSize: "0.875rem", fontFamily: "var(--font-serif)", fontWeight: 600, color: "var(--color-text-primary)" }}>
               ${parseFloat(String(liveBalance)).toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </span>
           </div>
           {liveAvailable !== null && liveAvailable !== undefined && (
             <div className="flex items-center gap-1.5">
               <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>Available</span>
-              <span style={{ fontSize: "0.875rem", fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-accent)" }}>
+              <span             style={{ fontSize: "0.875rem", fontFamily: "var(--font-serif)", fontWeight: 600, color: "var(--color-accent)" }}>
                 ${parseFloat(String(liveAvailable)).toLocaleString("en-US", { minimumFractionDigits: 2 })}
               </span>
             </div>
@@ -210,7 +210,7 @@ export default function Dashboard() {
             <div className="flex items-center gap-1.5">
               <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>Open P&L</span>
               <span style={{
-                fontSize: "0.875rem", fontFamily: "var(--font-mono)", fontWeight: 700,
+                fontSize: "0.875rem", fontFamily: "var(--font-serif)", fontWeight: 600,
                 color: parseFloat(String(livePnl)) >= 0 ? "var(--color-profit)" : "var(--color-loss)"
               }}>
                 {parseFloat(String(livePnl)) >= 0 ? "+" : ""}${parseFloat(String(livePnl)).toFixed(2)}
@@ -333,7 +333,7 @@ export default function Dashboard() {
                 {label}
               </p>
               <p className="tabular-nums"
-                style={{ fontSize: "1.25rem", fontWeight: 700, fontFamily: "var(--font-mono)", color: color ?? "var(--color-text-primary)" }}>
+                style={{ fontSize: "1.25rem", fontWeight: 600, fontFamily: "var(--font-serif)", color: color ?? "var(--color-text-primary)" }}>
                 {value}
               </p>
             </div>

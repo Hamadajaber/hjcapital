@@ -71,7 +71,7 @@ export default function Advisor() {
             <Sparkles size={16} style={{ color: "var(--color-accent)" }} />
           </div>
           <div>
-            <h1 style={{ fontSize: "0.9375rem", fontWeight: 600, color: "var(--color-text-primary)" }}>
+            <h1 style={{ fontSize: "0.9375rem", fontWeight: 600, color: "var(--color-text-primary)", fontFamily: "var(--font-serif)", letterSpacing: "-0.01em" }}>
               HJ Capital AI Advisor
             </h1>
             <p style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>

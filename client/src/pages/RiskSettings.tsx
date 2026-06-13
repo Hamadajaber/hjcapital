@@ -27,7 +27,7 @@ function SettingRow({
           onChange={(e) => onChange(e.target.value)}
           min={min} max={max} step={step}
           className="hj-input tabular-nums text-right"
-          style={{ width: "6rem", fontFamily: "var(--font-mono)", fontSize: "0.875rem" }}
+          style={{ width: "6rem", fontFamily: "var(--font-serif)", fontSize: "0.875rem" }}
         />
         {suffix && <span style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>{suffix}</span>}
       </div>
@@ -85,7 +85,7 @@ export default function RiskSettings() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--color-text-primary)", letterSpacing: "-0.02em" }}>
+          <h1 style={{ fontSize: "1.5rem", fontWeight: 600, color: "var(--color-text-primary)", letterSpacing: "-0.02em", fontFamily: "var(--font-serif)" }}>
             Risk Management
           </h1>
           <p style={{ fontSize: "0.8125rem", color: "var(--color-text-tertiary)", marginTop: "0.125rem" }}>

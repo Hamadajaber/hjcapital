@@ -94,7 +94,7 @@ function InstrumentCard({ instrument, signal, onRefresh, loading }: {
               <span
                 className="tabular-nums"
                 style={{
-                  fontSize: "0.75rem", fontWeight: 700, fontFamily: "var(--font-mono)",
+                  fontSize: "0.75rem", fontWeight: 600, fontFamily: "var(--font-serif)",
                   color: signal.confidence >= 80 ? "var(--color-profit)" : signal.confidence >= 65 ? "var(--color-accent)" : "var(--color-gold)",
                 }}
               >
@@ -122,7 +122,7 @@ function InstrumentCard({ instrument, signal, onRefresh, loading }: {
               {signal.targetPrice && (
                 <div className="rounded-lg p-2.5" style={{ background: "var(--color-profit-dim)", border: "1px solid oklch(0.720 0.130 155 / 0.20)" }}>
                   <p style={{ fontSize: "0.625rem", color: "var(--color-text-tertiary)", marginBottom: "0.25rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Target</p>
-                  <p style={{ fontSize: "0.75rem", fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-profit)" }}>
+                  <p style={{ fontSize: "0.75rem", fontFamily: "var(--font-serif)", fontWeight: 600, color: "var(--color-profit)" }}>
                     ${parseFloat(signal.targetPrice).toFixed(4)}
                   </p>
                 </div>
@@ -130,7 +130,7 @@ function InstrumentCard({ instrument, signal, onRefresh, loading }: {
               {signal.stopLoss && (
                 <div className="rounded-lg p-2.5" style={{ background: "var(--color-loss-dim)", border: "1px solid oklch(0.660 0.155 20 / 0.20)" }}>
                   <p style={{ fontSize: "0.625rem", color: "var(--color-text-tertiary)", marginBottom: "0.25rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Stop Loss</p>
-                  <p style={{ fontSize: "0.75rem", fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-loss)" }}>
+                  <p style={{ fontSize: "0.75rem", fontFamily: "var(--font-serif)", fontWeight: 600, color: "var(--color-loss)" }}>
                     ${parseFloat(signal.stopLoss).toFixed(4)}
                   </p>
                 </div>
@@ -216,7 +216,7 @@ export default function Signals() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--color-text-primary)", letterSpacing: "-0.02em" }}>
+          <h1 style={{ fontSize: "1.5rem", fontWeight: 600, color: "var(--color-text-primary)", letterSpacing: "-0.02em", fontFamily: "var(--font-serif)" }}>
             AI Trading Signals
           </h1>
           <p style={{ fontSize: "0.8125rem", color: "var(--color-text-tertiary)", marginTop: "0.125rem" }}>
@@ -246,7 +246,7 @@ export default function Signals() {
           {livePrices.map((p) => (
             <div key={p.epic} className="flex items-center gap-2">
               <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--color-text-secondary)" }}>{p.epic}</span>
-              <span style={{ fontSize: "0.75rem", fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-text-primary)" }}>
+              <span style={{ fontSize: "0.75rem", fontFamily: "var(--font-serif)", fontWeight: 600, color: "var(--color-text-primary)" }}>
                 {p.mid.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 5 })}
               </span>
               <span style={{
@@ -274,7 +274,7 @@ export default function Signals() {
             {i > 0 && <div style={{ width: 1, height: 16, background: "var(--color-border-subtle)" }} />}
             <Icon size={13} style={{ color }} />
             <span style={{ fontSize: "0.8125rem", color: "var(--color-text-tertiary)" }}>{label}:</span>
-            <span style={{ fontSize: "0.8125rem", fontWeight: 700, fontFamily: "var(--font-mono)", color }}>{count}</span>
+              <span style={{ fontSize: "0.8125rem", fontWeight: 600, fontFamily: "var(--font-serif)", color }}>{count}</span>
           </div>
         ))}
         <div className="ml-auto flex items-center gap-1.5">

@@ -20,10 +20,15 @@ function ProtectedRoutes() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-          <p className="text-muted-foreground text-sm">Loading HJ Capital...</p>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--color-bg-base)" }}>
+        <div className="flex flex-col items-center gap-5">
+          <img
+            src="/manus-storage/hj-logo-shield_56c87b67.png"
+            alt="HJ Capital"
+            style={{ width: 56, height: 56, objectFit: "contain", opacity: 0.85 }}
+          />
+          <div className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: "var(--color-accent)", borderTopColor: "transparent" }} />
+          <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.75rem", color: "var(--color-text-tertiary)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Loading HJ Capital...</p>
         </div>
       </div>
     );
@@ -57,9 +62,12 @@ function App() {
             theme="light"
             toastOptions={{
               style: {
-                background: "oklch(0.990 0.005 75)",
-                border: "1px solid oklch(0.880 0.018 70)",
-                color: "oklch(0.220 0.018 60)",
+                background: "var(--color-bg-surface)",
+                border: "1px solid var(--color-border-default)",
+                color: "var(--color-text-primary)",
+                fontFamily: "var(--font-sans)",
+                fontSize: "0.8125rem",
+                boxShadow: "0 8px 32px oklch(0.180 0.020 145 / 0.10)",
               },
             }}
           />

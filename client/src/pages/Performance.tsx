@@ -13,7 +13,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
       <p style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)", marginBottom: "0.25rem" }}>{label}</p>
       {payload.map((p: any) => (
         <p key={p.name} className="tabular-nums"
-          style={{ fontSize: "0.875rem", fontWeight: 700, fontFamily: "var(--font-mono)", color: p.color }}>
+          style={{ fontSize: "0.875rem", fontWeight: 600, fontFamily: "var(--font-serif)", color: p.color }}>
           {p.name}: {p.value > 0 ? "+" : ""}${p.value.toFixed(2)}
         </p>
       ))}
@@ -34,7 +34,7 @@ function MetricCard({ label, value, sub, icon: Icon, valueColor }: {
         </div>
       </div>
       <p className="tabular-nums"
-        style={{ fontSize: "1.5rem", fontWeight: 700, fontFamily: "var(--font-mono)", letterSpacing: "-0.02em", color: valueColor ?? "var(--color-text-primary)" }}>
+        style={{ fontSize: "1.5rem", fontWeight: 600, fontFamily: "var(--font-serif)", letterSpacing: "-0.02em", color: valueColor ?? "var(--color-text-primary)" }}>
         {value}
       </p>
       {sub && <p style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", marginTop: "0.25rem" }}>{sub}</p>}
@@ -100,7 +100,7 @@ export default function Performance() {
 
       {/* Header */}
       <div>
-        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--color-text-primary)", letterSpacing: "-0.02em" }}>
+        <h1 style={{ fontSize: "1.5rem", fontWeight: 600, color: "var(--color-text-primary)", letterSpacing: "-0.02em", fontFamily: "var(--font-serif)" }}>
           Performance Analytics
         </h1>
         <p style={{ fontSize: "0.8125rem", color: "var(--color-text-tertiary)", marginTop: "0.125rem" }}>
@@ -216,12 +216,12 @@ export default function Performance() {
                     <td className="px-4 py-3" style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--color-text-primary)" }}>{row.name}</td>
                     <td className="px-4 py-3" style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>{row.count}</td>
                     <td className="px-4 py-3 tabular-nums"
-                      style={{ fontSize: "0.875rem", fontFamily: "var(--font-mono)", fontWeight: 600,
+                      style={{ fontSize: "0.875rem", fontFamily: "var(--font-serif)", fontWeight: 600,
                         color: parseInt(row.winRate) >= 50 ? "var(--color-profit)" : "var(--color-loss)" }}>
                       {row.winRate}%
                     </td>
                     <td className="px-4 py-3 tabular-nums"
-                      style={{ fontSize: "0.875rem", fontFamily: "var(--font-mono)", fontWeight: 700,
+                      style={{ fontSize: "0.875rem", fontFamily: "var(--font-serif)", fontWeight: 600,
                         color: row.pnl >= 0 ? "var(--color-profit)" : "var(--color-loss)" }}>
                       {row.pnl >= 0 ? "+" : ""}${row.pnl.toFixed(2)}
                     </td>
