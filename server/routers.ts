@@ -12,6 +12,14 @@ import {
   getChatHistory, insertChatMessage,
 } from "./db";
 import { ENV } from "./_core/env";
+import {
+  getAccountBalance,
+  getAllMarketPrices,
+  getOpenPositions,
+  testConnection,
+  INSTRUMENT_EPICS,
+  getMarketPrice,
+} from "./capitalcom";
 
 // ─── Owner-only guard ─────────────────────────────────────────────────────────
 const ownerProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -236,6 +244,54 @@ export const appRouter = router({
         await updateRiskSettings(input);
         return { success: true };
       }),
+  }),
+
+  // ─── Capital.com Live Data ──────────────────────────────────────────────────
+  capitalcom: router({
+    // Test connection to Capital.com
+    testConnection: ownerProcedure.query(async () => {
+      return await testConnection();
+    }),
+
+    // Fetch live account balance from Capital.com
+    liveBalance: ownerProcedure.query(async () => {
+      try {
+        return await getAccountBalance();
+      } catch (err) {
+        return { balance: null, available: null, profitLoss: null, currency: "USD", error: String(err) };
+      }
+    }),
+
+    // Fetch live prices for all watched instruments
+    livePrices: ownerProcedure.query(async () => {
+      try {
+        return await getAllMarketPrices();
+      } catch (err) {
+        return [];
+      }
+    }),
+
+    // Fetch live price for a single instrument
+    livePrice: ownerProcedure
+      .input(z.object({ instrument: z.string() }))
+      .query(async ({ input }) => {
+        try {
+          const epic = INSTRUMENT_EPICS[input.instrument] ?? input.instrument;
+          const price = await getMarketPrice(epic);
+          return { ...price, epic: input.instrument };
+        } catch (err) {
+          return null;
+        }
+      }),
+
+    // Fetch open positions from Capital.com
+    openPositions: ownerProcedure.query(async () => {
+      try {
+        return await getOpenPositions();
+      } catch (err) {
+        return [];
+      }
+    }),
   }),
 
   // ─── AI Advisor ──────────────────────────────────────────────────────────────

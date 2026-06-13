@@ -28,3 +28,10 @@
 
 ## Testing
 - [x] Vitest tests for routers (12/12 passing)
+
+## Round 2 — Live Integration & Visual Polish
+- [ ] Capital.com API credentials stored securely as env secrets
+- [ ] Capital.com live price feed on Signals page (EURUSD, GBPUSD, GOLD, US500, BTC)
+- [ ] Capital.com account balance sync on Dashboard
+- [ ] Natural background image — calm nature scene
+- [ ] Apply background image to Login page and main layout

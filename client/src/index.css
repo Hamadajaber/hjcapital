@@ -126,7 +126,14 @@
 
   body {
     background-color: var(--color-bg-base);
-    background-image: url('https://d2xsxph8kpxj0f.cloudfront.net/111908166/jFhH8npJoz2jTjiimeA2CG/hj-bg-texture-iCQmCZrJ3WFrC8XnXpD3WJ.webp');
+    background-image:
+      linear-gradient(
+        to bottom,
+        oklch(0.975 0.008 75 / 0.82) 0%,
+        oklch(0.975 0.008 75 / 0.75) 40%,
+        oklch(0.975 0.008 75 / 0.82) 100%
+      ),
+      url('https://d2xsxph8kpxj0f.cloudfront.net/111908166/jFhH8npJoz2jTjiimeA2CG/hj-nature-bg-hf268toW5gM8ECw9d4e9DW.webp');
     background-size: cover;
     background-attachment: fixed;
     background-position: center;

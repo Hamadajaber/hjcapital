@@ -1,5 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import { RefreshCw, TrendingUp, TrendingDown, Minus, Clock, AlertCircle } from "lucide-react";
+import { RefreshCw, TrendingUp, TrendingDown, Minus, Clock, AlertCircle, Wifi } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -184,6 +184,10 @@ function InstrumentCard({ instrument, signal, onRefresh, loading }: {
 
 export default function Signals() {
   const signalsQuery = trpc.signals.list.useQuery();
+  const livePricesQuery = trpc.capitalcom.livePrices.useQuery(undefined, {
+    refetchInterval: 15000, // refresh every 15 seconds
+    retry: false,
+  });
   const generateAllMutation = trpc.signals.generateAll.useMutation({
     onSuccess: () => { signalsQuery.refetch(); toast.success("All signals refreshed"); },
     onError: () => toast.error("Failed to generate signals"),
@@ -201,6 +205,10 @@ export default function Signals() {
   const buyCount  = Object.values(latestByInstrument).filter((s: any) => s.signal === "BUY").length;
   const sellCount = Object.values(latestByInstrument).filter((s: any) => s.signal === "SELL").length;
   const holdCount = Object.values(latestByInstrument).filter((s: any) => s.signal === "HOLD").length;
+
+  const livePrices = livePricesQuery.data ?? [];
+  const livePriceMap: Record<string, typeof livePrices[0]> = {};
+  for (const p of livePrices) { livePriceMap[p.epic] = p; }
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
@@ -224,6 +232,33 @@ export default function Signals() {
           {generateAllMutation.isPending ? "Analyzing..." : "Refresh All"}
         </button>
       </div>
+
+      {/* Live Price Ticker */}
+      {livePrices.length > 0 && (
+        <div
+          className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-2xl px-5 py-3"
+          style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)" }}
+        >
+          <div className="flex items-center gap-1.5">
+            <Wifi size={11} style={{ color: "var(--color-profit)" }} />
+            <span style={{ fontSize: "0.625rem", color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Live Prices</span>
+          </div>
+          {livePrices.map((p) => (
+            <div key={p.epic} className="flex items-center gap-2">
+              <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--color-text-secondary)" }}>{p.epic}</span>
+              <span style={{ fontSize: "0.75rem", fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-text-primary)" }}>
+                {p.mid.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 5 })}
+              </span>
+              <span style={{
+                fontSize: "0.6875rem", fontFamily: "var(--font-mono)",
+                color: p.pctChange >= 0 ? "var(--color-profit)" : "var(--color-loss)"
+              }}>
+                {p.pctChange >= 0 ? "+" : ""}{p.pctChange.toFixed(2)}%
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Summary bar */}
       <div
