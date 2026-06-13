@@ -20,6 +20,14 @@ import {
   INSTRUMENT_EPICS,
   getMarketPrice,
 } from "./capitalcom";
+import {
+  startAutoTrade,
+  stopAutoTrade,
+  getEngineState,
+  getActiveSession,
+  getSessionLogs,
+  getRecentSessions,
+} from "./autoTradeEngine";
 
 // ─── Owner-only guard ─────────────────────────────────────────────────────────
 const ownerProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -324,6 +332,58 @@ export const appRouter = router({
         return { reply };
       }),
   }),
+
+  // ─── HJ Auto Trade Mode ──────────────────────────────────────────────────────
+  autoTrade: router({
+    // Get current engine status
+    status: ownerProcedure.query(async () => {
+      const state = getEngineState();
+      const activeSession = await getActiveSession();
+      return {
+        isRunning: state?.isRunning ?? false,
+        sessionId: state?.sessionId ?? null,
+        mode: state?.mode ?? null,
+        cycleCount: state?.cycleCount ?? 0,
+        lastCycleAt: state?.lastCycleAt ?? null,
+        session: activeSession,
+      };
+    }),
+
+    // Start auto trade engine
+    start: ownerProcedure
+      .input(z.object({
+        mode: z.enum(["paper", "live"]),
+        cycleIntervalMinutes: z.number().min(5).max(60).default(15),
+      }))
+      .mutation(async ({ input }) => {
+        const state = await startAutoTrade(input.mode, input.cycleIntervalMinutes);
+        return { success: true, sessionId: state.sessionId, mode: state.mode };
+      }),
+
+    // Stop auto trade engine
+    stop: ownerProcedure
+      .input(z.object({ reason: z.string().optional() }))
+      .mutation(async ({ input }) => {
+        await stopAutoTrade(input.reason ?? "Manual stop by owner");
+        return { success: true };
+      }),
+
+    // Get logs for a session
+    getLogs: ownerProcedure
+      .input(z.object({
+        sessionId: z.number(),
+        limit: z.number().min(1).max(100).default(50),
+      }))
+      .query(async ({ input }) => {
+        return getSessionLogs(input.sessionId, input.limit);
+      }),
+
+    // Get recent sessions
+    getSessions: ownerProcedure.query(async () => {
+      return getRecentSessions(10);
+    }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
+

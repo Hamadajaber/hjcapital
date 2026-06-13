@@ -15,6 +15,7 @@ import {
   Zap,
   FlaskConical,
   ChevronRight,
+  Brain,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -22,6 +23,7 @@ import { toast } from "sonner";
 const NAV_ITEMS = [
   { path: "/",            label: "Dashboard",    icon: LayoutDashboard },
   { path: "/signals",     label: "AI Signals",   icon: TrendingUp },
+  { path: "/auto-trade",  label: "HJ Auto Trade", icon: Brain, highlight: true },
   { path: "/advisor",     label: "AI Advisor",   icon: MessageSquare },
   { path: "/history",     label: "Trade History",icon: History },
   { path: "/performance", label: "Performance",  icon: BarChart3 },
@@ -184,7 +186,7 @@ export default function HJLayout({ children }: { children: React.ReactNode }) {
           <p style={{ fontSize: "0.625rem", color: "var(--color-text-tertiary)", letterSpacing: "0.08em", textTransform: "uppercase", padding: "0.25rem 0.875rem 0.5rem" }}>
             Navigation
           </p>
-          {NAV_ITEMS.map(({ path, label, icon: Icon }) => {
+          {NAV_ITEMS.map(({ path, label, icon: Icon, highlight }) => {
             const isActive = location === path;
             return (
               <Link
@@ -192,9 +194,16 @@ export default function HJLayout({ children }: { children: React.ReactNode }) {
                 href={path}
                 className={cn("nav-item", isActive && "nav-active")}
                 onClick={() => setSidebarOpen(false)}
+                style={highlight && !isActive ? {
+                  background: "linear-gradient(135deg, oklch(0.65 0.18 55 / 0.12), oklch(0.6 0.2 40 / 0.08))",
+                  border: "1px solid oklch(0.65 0.18 55 / 0.3)",
+                } : undefined}
               >
-                <Icon size={15} style={{ color: isActive ? "var(--color-accent)" : "var(--color-text-tertiary)", flexShrink: 0 }} />
-                <span style={{ flex: 1 }}>{label}</span>
+                <Icon size={15} style={{ color: isActive ? "var(--color-accent)" : highlight ? "oklch(0.75 0.18 55)" : "var(--color-text-tertiary)", flexShrink: 0 }} />
+                <span style={{ flex: 1, color: highlight && !isActive ? "oklch(0.85 0.12 55)" : undefined }}>{label}</span>
+                {highlight && !isActive && (
+                  <span style={{ fontSize: "0.55rem", padding: "0.1rem 0.4rem", borderRadius: "9999px", background: "oklch(0.65 0.18 55 / 0.2)", color: "oklch(0.75 0.18 55)", fontWeight: 700, letterSpacing: "0.05em" }}>AI</span>
+                )}
                 {isActive && <ChevronRight size={12} style={{ color: "var(--color-accent)", opacity: 0.6 }} />}
               </Link>
             );

@@ -4,7 +4,7 @@
  */
 import { ENV } from "./_core/env";
 
-const BASE_URL = "https://api-capital.backend.gbksoft.net";
+const BASE_URL = "https://api-capital.backend-capital.com";
 
 interface CapitalSession {
   cst: string;
@@ -304,5 +304,77 @@ export async function testConnection(): Promise<{
     };
   } catch (err) {
     return { ok: false, error: String(err) };
+  }
+}
+
+// ─── Place Order ──────────────────────────────────────────────────────────────
+
+export interface PlaceOrderResult {
+  dealId: string;
+  dealReference: string;
+  status: string;
+  level: number;
+}
+
+export async function placeOrder(params: {
+  epic: string;
+  direction: "BUY" | "SELL";
+  size: number;
+  stopLoss?: number;
+  takeProfit?: number;
+}): Promise<PlaceOrderResult> {
+  const body: Record<string, unknown> = {
+    epic: params.epic,
+    direction: params.direction,
+    size: params.size,
+    orderType: "MARKET",
+    guaranteedStop: false,
+    forceOpen: true,
+  };
+
+  if (params.stopLoss) body.stopLevel = params.stopLoss;
+  if (params.takeProfit) body.profitLevel = params.takeProfit;
+
+  const data = await capitalRequest<{
+    dealReference: string;
+  }>("/api/v1/positions", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+  // Confirm the deal
+  const confirm = await capitalRequest<{
+    dealId: string;
+    dealReference: string;
+    status: string;
+    level: number;
+  }>(`/api/v1/confirms/${data.dealReference}`);
+
+  return {
+    dealId: confirm.dealId,
+    dealReference: confirm.dealReference,
+    status: confirm.status,
+    level: confirm.level,
+  };
+}
+
+// ─── Close Position ───────────────────────────────────────────────────────────
+
+export async function closePosition(dealId: string): Promise<{ status: string; pnl?: number }> {
+  const data = await capitalRequest<{
+    dealReference: string;
+  }>(`/api/v1/positions/${dealId}`, {
+    method: "DELETE",
+  });
+
+  try {
+    const confirm = await capitalRequest<{
+      status: string;
+      profit: number;
+    }>(`/api/v1/confirms/${data.dealReference}`);
+
+    return { status: confirm.status, pnl: confirm.profit };
+  } catch {
+    return { status: "CLOSED" };
   }
 }

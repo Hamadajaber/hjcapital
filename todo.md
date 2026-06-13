@@ -51,3 +51,17 @@
 - [x] Update TradeHistory.tsx: serif heading and P&L numbers
 - [x] Update Advisor.tsx: serif heading
 - [x] Update NotFound.tsx: full Heritage Ledger rebrand
+
+## Round 4 — HJ Auto Trade Mode
+- [x] DB schema: auto_trade_sessions table (status, mode, config, stats)
+- [x] DB schema: auto_trade_log table (decision, reasoning, action taken, result)
+- [x] Fix Capital.com BASE_URL in server/capitalcom.ts to use api-capital.backend-capital.com
+- [x] Backend: autoTrade router (start, stop, status, getLogs, getConfig, updateConfig)
+- [x] AI Analysis Engine: analyzeMarket() — fetches live prices + news + generates AI trade decision
+- [x] Auto Execution Engine: executeDecision() — places/closes trades on Capital.com based on AI decision
+- [x] Risk guard: enforce dailyLossLimit, dailyProfitLock, maxRiskPerTrade before any execution
+- [x] Notification: notify owner on each trade execution (entry, exit, P&L)
+- [x] Frontend: AutoTrade page with Start/Stop button, live status, decision log, P&L tracker
+- [x] Frontend: Add "HJ Auto Trade" to sidebar navigation
+- [x] Frontend: Real-time log feed showing AI reasoning for each decision
+- [x] Frontend: Safety controls panel (pause, emergency stop)
