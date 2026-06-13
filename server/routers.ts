@@ -30,11 +30,16 @@ import {
 } from "./autoTradeEngine";
 
 // ─── Owner-only guard ─────────────────────────────────────────────────────────
+// Uses role-based check (admin) as primary guard.
+// Falls back to openId match so the owner can always access even if role hasn't
+// been promoted yet (e.g. first login before DB is seeded).
 const ownerProcedure = protectedProcedure.use(({ ctx, next }) => {
   const userOpenId = ctx.user.openId;
   const ownerOpenId = ENV.ownerOpenId;
-  if (userOpenId !== ownerOpenId) {
-    console.warn(`[Auth] Access denied: user=${userOpenId} owner=${ownerOpenId}`);
+  const isAdmin = ctx.user.role === "admin";
+  const isOwnerById = ownerOpenId && userOpenId === ownerOpenId;
+  if (!isAdmin && !isOwnerById) {
+    console.warn(`[Auth] Access denied: user=${userOpenId} owner=${ownerOpenId} role=${ctx.user.role}`);
     throw new Error("Access denied — this platform is private.");
   }
   return next({ ctx });
