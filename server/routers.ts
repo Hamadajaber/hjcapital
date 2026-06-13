@@ -31,7 +31,10 @@ import {
 
 // ─── Owner-only guard ─────────────────────────────────────────────────────────
 const ownerProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.openId !== ENV.ownerOpenId) {
+  const userOpenId = ctx.user.openId;
+  const ownerOpenId = ENV.ownerOpenId;
+  if (userOpenId !== ownerOpenId) {
+    console.warn(`[Auth] Access denied: user=${userOpenId} owner=${ownerOpenId}`);
     throw new Error("Access denied — this platform is private.");
   }
   return next({ ctx });
