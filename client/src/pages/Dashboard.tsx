@@ -94,6 +94,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function Dashboard() {
   const portfolioQuery  = trpc.portfolio.get.useQuery();
   const dailyStatsQuery = trpc.portfolio.dailyStats.useQuery();
+  const overallStatsQuery = trpc.portfolio.overallStats.useQuery();
   const tradesQuery     = trpc.trades.list.useQuery({ status: "open" });
   const signalsQuery    = trpc.signals.list.useQuery();
   const liveBalanceQuery = trpc.capitalcom.liveBalance.useQuery(undefined, {
@@ -112,8 +113,10 @@ export default function Dashboard() {
   const totalReturnPct = ((totalReturn / initialBal) * 100).toFixed(2);
   const mode          = portfolioQuery.data?.mode ?? "paper";
   const stats         = dailyStatsQuery.data;
+  const overall       = overallStatsQuery.data;
   const winRate       = stats && stats.tradeCount > 0
     ? ((stats.wins / stats.tradeCount) * 100).toFixed(0) : "0";
+  const overallWinRate = overall?.winRate ?? 0;
   const openPositions = tradesQuery.data?.length ?? 0;
   const latestSignals = signalsQuery.data?.slice(0, 5) ?? [];
   const balanceHistory = generateBalanceHistory(balance);
@@ -169,10 +172,10 @@ export default function Dashboard() {
         />
         <StatCard
           label="Win Rate"
-          value={`${winRate}%`}
-          sub={`${stats?.wins ?? 0}W / ${stats?.losses ?? 0}L today`}
+          value={`${overallWinRate}%`}
+          sub={`${overall?.wins ?? 0}W / ${overall?.losses ?? 0}L all-time`}
           icon={Target}
-          valueColor={parseInt(winRate) >= 50 ? "var(--color-profit)" : parseInt(winRate) > 0 ? "var(--color-loss)" : undefined}
+          valueColor={overallWinRate >= 50 ? "var(--color-profit)" : overallWinRate > 0 ? "var(--color-loss)" : undefined}
         />
         <StatCard
           label="Open Positions"

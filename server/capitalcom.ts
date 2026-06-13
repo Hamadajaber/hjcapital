@@ -378,3 +378,66 @@ export async function closePosition(dealId: string): Promise<{ status: string; p
     return { status: "CLOSED" };
   }
 }
+
+// ─── Market Hours Check ───────────────────────────────────────────────────────
+
+/**
+ * Check if a given instrument is currently tradeable based on its known schedule.
+ * All times are in UTC. Returns true if the market is open right now.
+ *
+ * Schedules (UTC):
+ *   EURUSD / GBPUSD  — Forex: Mon 00:00 – Fri 22:00 (24h weekdays)
+ *   GOLD             — Mon 22:00 – Fri 17:00 (with 1h daily break 20:59-22:00)
+ *   US500            — Mon 21:05 – Fri 21:00 (with 5-min break 21:00-21:05)
+ *   BITCOIN          — 24/7 (always open)
+ */
+export function isMarketOpen(instrument: string): boolean {
+  const now = new Date();
+  const day = now.getUTCDay(); // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
+  const hour = now.getUTCHours();
+  const minute = now.getUTCMinutes();
+  const timeMinutes = hour * 60 + minute; // minutes since midnight UTC
+
+  const epic = (INSTRUMENT_EPICS[instrument] ?? instrument).toUpperCase();
+
+  // Weekend check — most markets closed Sat/Sun
+  if (day === 6) return false; // Saturday — all markets closed
+
+  if (epic === "BITCOIN") return true; // Crypto is 24/7
+
+  if (epic === "EURUSD" || epic === "GBPUSD") {
+    // Forex: Mon 00:00 – Fri 22:00
+    if (day === 0) return false; // Sunday closed
+    if (day === 5 && timeMinutes >= 22 * 60) return false; // Fri after 22:00 UTC
+    return true;
+  }
+
+  if (epic === "GOLD") {
+    // Mon 22:00 – Fri 17:00, with daily break 20:59–22:00
+    if (day === 0 && timeMinutes < 22 * 60) return false; // Sun before 22:00
+    if (day === 5 && timeMinutes >= 17 * 60) return false; // Fri after 17:00
+    // Daily maintenance break: 20:59 – 22:00 UTC
+    if (timeMinutes >= 20 * 60 + 59 && timeMinutes < 22 * 60) return false;
+    return true;
+  }
+
+  if (epic === "US500") {
+    // Mon 21:05 – Fri 21:00, with 5-min break 21:00–21:05
+    if (day === 0) return false; // Sunday closed
+    if (day === 5 && timeMinutes >= 21 * 60) return false; // Fri after 21:00
+    // Daily maintenance break: 21:00 – 21:05 UTC
+    if (timeMinutes >= 21 * 60 && timeMinutes < 21 * 60 + 5) return false;
+    if (day === 1 && timeMinutes < 21 * 60 + 5) return false; // Mon before 21:05
+    return true;
+  }
+
+  // Default: assume open on weekdays
+  return day >= 1 && day <= 5;
+}
+
+/**
+ * Filter a list of instruments to only those currently tradeable.
+ */
+export function getOpenMarkets(instruments: string[]): string[] {
+  return instruments.filter((inst) => isMarketOpen(inst));
+}

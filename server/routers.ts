@@ -6,7 +6,7 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
 import {
   getPortfolio, updatePortfolioMode,
-  getTrades, insertTrade, closeTrade, getDailyStats,
+  getTrades, insertTrade, closeTrade, getDailyStats, getOverallStats,
   getLatestSignals, insertSignal,
   getRiskSettings, updateRiskSettings,
   getChatHistory, insertChatMessage,
@@ -145,6 +145,10 @@ export const appRouter = router({
 
     dailyStats: ownerProcedure.query(async () => {
       return await getDailyStats();
+    }),
+
+    overallStats: ownerProcedure.query(async () => {
+      return await getOverallStats();
     }),
   }),
 

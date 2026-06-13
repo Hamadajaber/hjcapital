@@ -15,6 +15,13 @@
 import { invokeLLM } from "./_core/llm";
 import { notifyOwner } from "./_core/notification";
 import {
+  notifyTradeOpened,
+  notifyTradeClosed,
+  notifyEngineStarted,
+  notifyEngineStopped,
+  notifyRiskAlert,
+} from "./telegram";
+import {
   getAllMarketPrices,
   getMarketPrice,
   getPriceHistory,
@@ -23,6 +30,8 @@ import {
   placeOrder,
   closePosition,
   INSTRUMENT_EPICS,
+  isMarketOpen,
+  getOpenMarkets,
 } from "./capitalcom";
 import { getDb } from "./db";
 import {
@@ -107,6 +116,9 @@ export async function startAutoTrade(mode: "paper" | "live", cycleIntervalMinute
     content: `Auto trade engine activated in ${mode.toUpperCase()} mode. Starting balance: $${startBalance.toFixed(2)}. Cycle interval: ${cycleIntervalMinutes} minutes.`,
   }).catch(() => {});
 
+  // Telegram notification
+  await notifyEngineStarted(mode, startBalance).catch(() => {});
+
   // Run first cycle immediately, then schedule
   runCycle().catch(console.error);
   scheduleCycle(cycleIntervalMinutes);
@@ -143,6 +155,13 @@ export async function stopAutoTrade(reason = "Manual stop"): Promise<void> {
     title: "🛑 HJ Auto Trade Stopped",
     content: `Auto trade engine stopped. Reason: ${reason}. Session P&L: $${session?.sessionPnl ?? "0.00"}. Trades: ${session?.totalTrades ?? 0} (${session?.winningTrades ?? 0} wins).`,
   }).catch(() => {});
+
+  // Telegram notification
+  const totalTrades = session?.totalTrades ?? 0;
+  const winningTrades = session?.winningTrades ?? 0;
+  const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0;
+  const totalPnl = parseFloat(session?.sessionPnl ?? "0");
+  await notifyEngineStopped({ totalTrades, winRate, totalPnl }).catch(() => {});
 
   _engineState = null;
 }
@@ -182,6 +201,9 @@ async function runCycle() {
         reasoning: `Risk limit reached: ${riskCheck.reason}`,
       }, "blocked_risk", riskCheck.reason);
 
+      // Telegram risk alert
+      await notifyRiskAlert(`🛑 تم إيقاف الـ Engine تلقائياً\n${riskCheck.reason}`).catch(() => {});
+
       await stopAutoTrade(`Risk limit: ${riskCheck.reason}`);
       return;
     }
@@ -208,7 +230,16 @@ async function runCycle() {
     if (openCount < risk.maxOpenPositions) {
       const decision = await analyzeMarket(marketContext, risk);
       if (decision.action !== "HOLD" && decision.action !== "SKIP") {
-        await executeDecision(decision, _engineState.sessionId, _engineState.mode);
+        // Final market-hours guard before execution
+        if (decision.instrument !== "NONE" && !isMarketOpen(decision.instrument)) {
+          await logDecision(_engineState.sessionId, {
+            ...decision,
+            action: "SKIP",
+            reasoning: `Market closed: ${decision.instrument} is not tradeable right now. ${decision.reasoning}`,
+          }, "skipped", `Market closed: ${decision.instrument}`);
+        } else {
+          await executeDecision(decision, _engineState.sessionId, _engineState.mode);
+        }
       } else {
         await logDecision(_engineState.sessionId, decision, "skipped", decision.reasoning);
       }
@@ -240,9 +271,10 @@ async function gatherMarketContext(): Promise<Record<string, unknown>> {
     fetchNewsHeadlines(),
   ]);
 
-  // Fetch recent candles for top instruments
+  // Fetch recent candles for top instruments — only open markets
   const candleData: Record<string, unknown> = {};
-  const topInstruments = ["EURUSD", "GOLD", "US500"];
+  const allTopInstruments = ["EURUSD", "GOLD", "US500"];
+  const topInstruments = getOpenMarkets(allTopInstruments);
 
   await Promise.allSettled(
     topInstruments.map(async (inst) => {
@@ -324,11 +356,14 @@ ${candleSummary}
 LATEST NEWS:
 ${news.slice(0, 5).join("\n")}
 
+CURRENTLY OPEN MARKETS (only trade these):
+${getOpenMarkets(["EURUSD", "GBPUSD", "GOLD", "US500", "BTC"]).join(", ") || "No markets open right now"}
+
 TRADING RULES:
+- ONLY trade instruments listed in CURRENTLY OPEN MARKETS above — never trade closed markets
 - Only recommend a trade if confidence is ${risk.minConfidenceThreshold}% or higher
 - Max risk per trade: ${risk.maxRiskPerTrade}% of account
 - Prefer small, consistent profits over large risky gains
-- Focus on: EURUSD, GBPUSD, GOLD, US500, BTC
 - Always include stop loss and take profit levels
 
 Respond in this EXACT JSON format (no markdown, no explanation outside JSON):
@@ -471,6 +506,17 @@ async function executeDecision(
         content: `${decision.instrument} position closed. P&L: $${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}. Reason: ${decision.reasoning}`,
       }).catch(() => {});
 
+      // Telegram notification
+      await notifyTradeClosed({
+        instrument: decision.instrument,
+        direction: "BUY", // direction stored in decision context
+        entryPrice: decision.entryPrice ?? 0,
+        closePrice: decision.entryPrice ?? 0,
+        pnl,
+        reason: decision.reasoning,
+        mode,
+      }).catch(() => {});
+
     } else if (decision.action === "BUY" || decision.action === "SELL") {
       // Calculate size based on risk
       const balance = await getCurrentBalance(mode);
@@ -522,6 +568,19 @@ async function executeDecision(
       await notifyOwner({
         title: `🤖 Auto Trade: ${decision.action} ${decision.instrument}`,
         content: `Entry: ${actualEntry.toFixed(5)} | Stop: ${decision.stopLoss?.toFixed(5) ?? "N/A"} | Target: ${decision.takeProfit?.toFixed(5) ?? "N/A"} | Confidence: ${decision.confidence}%\n\nReasoning: ${decision.reasoning}`,
+      }).catch(() => {});
+
+      // Telegram notification
+      await notifyTradeOpened({
+        instrument: decision.instrument,
+        direction: decision.action as "BUY" | "SELL",
+        size,
+        entryPrice: actualEntry,
+        stopLoss: decision.stopLoss ?? actualEntry * 0.999,
+        takeProfit: decision.takeProfit ?? actualEntry * 1.002,
+        confidence: decision.confidence,
+        reasoning: decision.reasoning,
+        mode,
       }).catch(() => {});
     }
 

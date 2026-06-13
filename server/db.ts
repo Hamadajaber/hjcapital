@@ -159,6 +159,22 @@ export async function getDailyStats() {
   return { totalPnl, tradeCount: todayTrades.length, wins, losses, bestTrade, worstTrade };
 }
 
+export async function getOverallStats() {
+  const db = await getDb();
+  if (!db) return { totalPnl: 0, tradeCount: 0, wins: 0, losses: 0, winRate: 0, bestTrade: 0, worstTrade: 0 };
+  const closedTrades = await db.select().from(trades).where(eq(trades.status, "closed"));
+  let totalPnl = 0, wins = 0, losses = 0, bestTrade = 0, worstTrade = 0;
+  for (const t of closedTrades) {
+    const p = parseFloat(t.pnl ?? "0");
+    totalPnl += p;
+    if (p > 0) { wins++; if (p > bestTrade) bestTrade = p; }
+    else if (p < 0) { losses++; if (p < worstTrade) worstTrade = p; }
+  }
+  const tradeCount = closedTrades.length;
+  const winRate = tradeCount > 0 ? Math.round((wins / tradeCount) * 100) : 0;
+  return { totalPnl, tradeCount, wins, losses, winRate, bestTrade, worstTrade };
+}
+
 // ─── Signals ─────────────────────────────────────────────────────────────────
 
 export async function getLatestSignals(): Promise<Signal[]> {

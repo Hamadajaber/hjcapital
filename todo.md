@@ -65,3 +65,20 @@
 - [x] Frontend: Add "HJ Auto Trade" to sidebar navigation
 - [x] Frontend: Real-time log feed showing AI reasoning for each decision
 - [x] Frontend: Safety controls panel (pause, emergency stop)
+
+## Round 5 — Engine Fixes + Telegram + Win Rate
+
+- [x] Auto Trade Engine: add market hours filter — skip instruments closed on weekends/outside trading hours
+- [x] Auto Trade Engine: check Capital.com market status before placing order
+- [x] Telegram Bot: add TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID secrets
+- [x] Telegram Bot: create server/telegram.ts helper with sendTelegramMessage()
+- [x] Telegram Bot: notify on trade open (entry price, direction, size, instrument)
+- [x] Telegram Bot: notify on trade close (exit price, P&L, reason)
+- [x] Telegram Bot: notify on engine start/stop
+- [x] Dashboard: add all-time Win Rate % card (getOverallStats — wins / total closed trades * 100)
+- [x] Dashboard: Win Rate card shows all-time W/L count in sub-label
+
+## Round 6 — Engine Accuracy Fixes
+
+- [ ] Fix Telegram trade-close alert: use actual trade direction, real entry price, and real close price (not hardcoded values from decision object)
+- [ ] Add live Capital.com market-status check inside executeDecision() / placeOrder() as a secondary guard (in addition to hardcoded timetable)
