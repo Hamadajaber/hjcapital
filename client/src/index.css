@@ -217,9 +217,15 @@
     background: var(--color-bg-surface);
     border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-lg);
-    padding: 1.5rem;
+    padding: 1rem;
     box-shadow: 0 1px 3px oklch(0.180 0.020 145 / 0.05);
     transition: all 220ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  @media (min-width: 1024px) {
+    .stat-card {
+      padding: 1.5rem;
+    }
   }
 
   .stat-card:hover {
@@ -542,6 +548,19 @@
 .animate-fade-in   { animation: fade-in 220ms ease both; }
 .animate-pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
 .animate-glow      { animation: glow-pulse 3s ease-in-out infinite; }
+
+/* ─── Mobile utilities ───────────────────────────────────────────────────── */
+/* Extra bottom padding on mobile so content isn't hidden behind bottom nav */
+.pb-safe-mobile {
+  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Compact page padding on mobile */
+@media (max-width: 1023px) {
+  .p-6 { padding: 1rem !important; }
+  .p-8 { padding: 1rem !important; }
+  .md\:p-8 { padding: 1rem !important; }
+}
 
 /* ─── Recharts overrides ──────────────────────────────────────────────────── */
 .recharts-cartesian-grid-horizontal line,

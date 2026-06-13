@@ -22,6 +22,79 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
   );
 }
 
+// Mobile card view for a single trade
+function TradeMobileCard({ trade }: { trade: {
+  id: number; instrument: string; direction: "BUY" | "SELL";
+  openPrice: string; closePrice: string | null; size: string;
+  pnl: string | null; status: "open" | "closed" | "cancelled";
+  aiReasoning: string | null; aiConfidence: number | null;
+  openedAt: Date; closedAt: Date | null; mode: "paper" | "live";
+}}) {
+  const [expanded, setExpanded] = useState(false);
+  const pnl = parseFloat(trade.pnl ?? "0");
+  const isProfit = pnl > 0;
+  return (
+    <div
+      className="rounded-xl p-3.5 cursor-pointer transition-colors"
+      style={{ background: "var(--color-bg-elevated)", border: "1px solid var(--color-border-subtle)" }}
+      onClick={() => setExpanded(!expanded)}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span className={trade.direction === "BUY" ? "signal-buy" : "signal-sell"}>{trade.direction}</span>
+          <span style={{ fontSize: "0.9375rem", fontWeight: 600, color: "var(--color-text-primary)" }}>{trade.instrument}</span>
+          <span className={trade.mode === "paper" ? "mode-paper" : "mode-live"} style={{ fontSize: "0.5625rem" }}>{trade.mode.toUpperCase()}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {trade.pnl !== null && (
+            <span className="tabular-nums" style={{
+              fontSize: "0.9375rem", fontWeight: 700, fontFamily: "var(--font-serif)",
+              color: isProfit ? "var(--color-profit)" : pnl < 0 ? "var(--color-loss)" : "var(--color-text-secondary)",
+            }}>
+              {isProfit ? "+" : ""}${pnl.toFixed(2)}
+            </span>
+          )}
+          {expanded ? <ChevronUp size={14} style={{ color: "var(--color-text-tertiary)" }} /> : <ChevronDown size={14} style={{ color: "var(--color-text-tertiary)" }} />}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
+        <span style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)" }}>
+          Open: <span className="tabular-nums" style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-secondary)" }}>{parseFloat(trade.openPrice).toFixed(5)}</span>
+        </span>
+        {trade.closePrice && (
+          <span style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)" }}>
+            Close: <span className="tabular-nums" style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-secondary)" }}>{parseFloat(trade.closePrice).toFixed(5)}</span>
+          </span>
+        )}
+        {trade.aiConfidence && (
+          <span style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)" }}>
+            AI: <span style={{ color: trade.aiConfidence >= 80 ? "var(--color-profit)" : trade.aiConfidence >= 65 ? "var(--color-accent)" : "var(--color-gold)", fontWeight: 600 }}>{trade.aiConfidence}%</span>
+          </span>
+        )}
+        <span style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)" }}>
+          <span
+            className="px-1.5 py-0.5 rounded-full text-xs"
+            style={{
+              background: trade.status === "open" ? "var(--color-accent-dim)" : "var(--color-bg-surface)",
+              color: trade.status === "open" ? "var(--color-accent)" : "var(--color-text-tertiary)",
+              border: `1px solid ${trade.status === "open" ? "var(--color-accent)" : "var(--color-border-subtle)"}`,
+            }}
+          >{trade.status}</span>
+        </span>
+        <span style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)" }}>
+          {new Date(trade.openedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+        </span>
+      </div>
+      {expanded && trade.aiReasoning && (
+        <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--color-border-subtle)" }}>
+          <span style={{ fontSize: "0.6875rem", fontWeight: 600, color: "var(--color-accent)" }}>AI Reasoning: </span>
+          <span style={{ fontSize: "0.6875rem", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>{trade.aiReasoning}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TradeRow({ trade }: { trade: {
   id: number; instrument: string; direction: "BUY" | "SELL";
   openPrice: string; closePrice: string | null; size: string;
@@ -180,34 +253,34 @@ export default function TradeHistory() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:flex-wrap md:gap-3">
         <div className="flex items-center gap-1.5">
           <Filter size={13} style={{ color: "var(--color-text-tertiary)" }} />
           <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", fontWeight: 500 }}>Filter:</span>
         </div>
-        <div className="flex gap-1.5 flex-wrap">
+        <div className="flex gap-1.5 overflow-x-auto pb-1 md:flex-wrap md:pb-0">
           {INSTRUMENTS.map(inst => (
             <FilterPill key={inst} active={instrumentFilter === inst} onClick={() => setInstrumentFilter(inst)}>
               {inst}
             </FilterPill>
           ))}
         </div>
-        <div style={{ width: 1, height: 16, background: "var(--color-border-subtle)" }} />
-        <div className="flex gap-1.5">
+        <div className="hidden md:block" style={{ width: 1, height: 16, background: "var(--color-border-subtle)" }} />
+        <div className="flex gap-1.5 overflow-x-auto pb-1 md:pb-0">
           {STATUSES.map(s => (
             <FilterPill key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)}>
               <span className="capitalize">{s}</span>
             </FilterPill>
           ))}
         </div>
-        <div style={{ width: 1, height: 16, background: "var(--color-border-subtle)" }} />
-        <div className="flex items-center gap-2">
+        <div className="hidden md:block" style={{ width: 1, height: 16, background: "var(--color-border-subtle)" }} />
+        <div className="flex items-center gap-2 flex-wrap">
           <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>From:</span>
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-            className="hj-input" style={{ width: "8rem", fontSize: "0.75rem", padding: "0.25rem 0.5rem", colorScheme: "dark" }} />
+            className="hj-input" style={{ width: "8.5rem", fontSize: "0.75rem", padding: "0.25rem 0.5rem", colorScheme: "light" }} />
           <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>To:</span>
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-            className="hj-input" style={{ width: "8rem", fontSize: "0.75rem", padding: "0.25rem 0.5rem", colorScheme: "dark" }} />
+            className="hj-input" style={{ width: "8.5rem", fontSize: "0.75rem", padding: "0.25rem 0.5rem", colorScheme: "light" }} />
           {(dateFrom || dateTo) && (
             <button onClick={() => { setDateFrom(""); setDateTo(""); }}
               style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", background: "none", border: "none", cursor: "pointer" }}>
@@ -217,8 +290,22 @@ export default function TradeHistory() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="rounded-2xl overflow-hidden"
+      {/* Mobile card list */}
+      <div className="md:hidden space-y-2">
+        {trades.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center rounded-2xl"
+            style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)" }}>
+            <TrendingUp size={28} style={{ color: "var(--color-text-tertiary)", marginBottom: "0.75rem" }} />
+            <p style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--color-text-primary)", marginBottom: "0.25rem" }}>No trades found</p>
+            <p style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>Trades will appear here once you start trading</p>
+          </div>
+        ) : (
+          trades.map(trade => <TradeMobileCard key={trade.id} trade={trade as any} />)
+        )}
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden md:block rounded-2xl overflow-hidden"
         style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)" }}>
         {trades.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">

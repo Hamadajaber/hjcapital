@@ -23,11 +23,20 @@ import { toast } from "sonner";
 const NAV_ITEMS = [
   { path: "/",            label: "Dashboard",    icon: LayoutDashboard },
   { path: "/signals",     label: "AI Signals",   icon: TrendingUp },
-  { path: "/auto-trade",  label: "HJ Auto Trade", icon: Brain, highlight: true },
+  { path: "/auto-trade",  label: "Auto Trade",   icon: Brain, highlight: true },
   { path: "/advisor",     label: "AI Advisor",   icon: MessageSquare },
   { path: "/history",     label: "Trade History",icon: History },
   { path: "/performance", label: "Performance",  icon: BarChart3 },
   { path: "/risk",        label: "Risk Settings",icon: Shield },
+];
+
+// Items shown in the mobile bottom nav (most important 5)
+const BOTTOM_NAV_ITEMS = [
+  { path: "/",            label: "Dashboard",  icon: LayoutDashboard },
+  { path: "/signals",     label: "Signals",    icon: TrendingUp },
+  { path: "/auto-trade",  label: "Auto Trade", icon: Brain, highlight: true },
+  { path: "/history",     label: "History",    icon: History },
+  { path: "/performance", label: "More",       icon: BarChart3 },
 ];
 
 export default function HJLayout({ children }: { children: React.ReactNode }) {
@@ -73,7 +82,7 @@ export default function HJLayout({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      {/* ── Sidebar ─────────────────────────────────────────────────────── */}
+      {/* ── Sidebar (desktop always visible, mobile slide-in) ─────────────── */}
       <aside
         className={cn(
           "fixed lg:static inset-y-0 left-0 z-50 w-64 flex flex-col",
@@ -251,7 +260,7 @@ export default function HJLayout({ children }: { children: React.ReactNode }) {
 
         {/* Mobile top bar */}
         <header
-          className="lg:hidden flex items-center justify-between px-4 py-3"
+          className="lg:hidden flex items-center justify-between px-4 py-3 shrink-0"
           style={{
             background: "var(--color-bg-surface)",
             borderBottom: "1px solid var(--color-border-subtle)",
@@ -260,6 +269,7 @@ export default function HJLayout({ children }: { children: React.ReactNode }) {
           <button
             onClick={() => setSidebarOpen(true)}
             style={{ color: "var(--color-text-secondary)" }}
+            aria-label="Open menu"
           >
             <Menu size={20} />
           </button>
@@ -267,15 +277,79 @@ export default function HJLayout({ children }: { children: React.ReactNode }) {
             <img src="/manus-storage/hj-logo-shield_56c87b67.png" alt="HJ Capital" style={{ width: 28, height: 28, objectFit: "contain" }} />
             <span style={{ fontWeight: 600, fontSize: "0.9375rem", color: "var(--color-text-primary)" }}>HJ Capital</span>
           </div>
-          <div className={cn("hj-badge", mode === "paper" ? "mode-paper" : "mode-live")} style={{ fontSize: "0.625rem" }}>
+          <button
+            onClick={toggleMode}
+            disabled={setModeMutation.isPending}
+            className={cn("hj-badge", mode === "paper" ? "mode-paper" : "mode-live")}
+            style={{ fontSize: "0.625rem", cursor: "pointer" }}
+            title="Toggle trading mode"
+          >
             {mode === "paper" ? "PAPER" : "LIVE"}
-          </div>
+          </button>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto">
+        {/* Page content — extra bottom padding on mobile for bottom nav */}
+        <main className="flex-1 overflow-y-auto pb-safe-mobile lg:pb-0">
           {children}
         </main>
+
+        {/* ── Mobile Bottom Navigation ──────────────────────────────────── */}
+        <nav
+          className="lg:hidden shrink-0 flex items-stretch"
+          style={{
+            background: "var(--color-sidebar-bg)",
+            borderTop: "1px solid var(--color-sidebar-border)",
+            boxShadow: "0 -4px 24px oklch(0.180 0.020 145 / 0.08)",
+            paddingBottom: "env(safe-area-inset-bottom, 0px)",
+          }}
+        >
+          {BOTTOM_NAV_ITEMS.map(({ path, label, icon: Icon, highlight }) => {
+            const isActive = location === path;
+            return (
+              <Link
+                key={path}
+                href={path}
+                className="flex-1 flex flex-col items-center justify-center gap-1 py-2.5 transition-all duration-150 relative"
+                style={{
+                  color: isActive
+                    ? "var(--color-accent)"
+                    : highlight
+                    ? "oklch(0.75 0.18 55)"
+                    : "var(--color-text-tertiary)",
+                  minHeight: 56,
+                }}
+              >
+                {isActive && (
+                  <span
+                    className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full"
+                    style={{ background: "var(--color-accent)" }}
+                  />
+                )}
+                <Icon
+                  size={18}
+                  style={{
+                    color: isActive
+                      ? "var(--color-accent)"
+                      : highlight
+                      ? "oklch(0.75 0.18 55)"
+                      : "var(--color-text-tertiary)",
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: "0.5625rem",
+                    fontWeight: isActive ? 700 : 500,
+                    letterSpacing: "0.02em",
+                    lineHeight: 1,
+                    fontFamily: "var(--font-sans)",
+                  }}
+                >
+                  {label}
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
       </div>
     </div>
   );

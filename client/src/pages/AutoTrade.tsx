@@ -102,38 +102,38 @@ export default function AutoTrade() {
 
   return (
     <div
-      className="min-h-screen p-6 md:p-8"
+      className="min-h-screen p-4 md:p-6"
       style={{ background: "var(--color-bg-base)", color: "var(--color-text-primary)" }}
     >
       {/* ── Page Header ── */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-4">
+      <div className="mb-5">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
             {/* Icon mark */}
             <div
-              className="w-12 h-12 rounded-xl flex items-center justify-center shadow-sm"
+              className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm"
               style={{
                 background: "linear-gradient(135deg, var(--color-accent-light), var(--color-bg-elevated))",
                 border: "1px solid var(--color-accent-dim)",
               }}
             >
-              <Brain size={22} style={{ color: "var(--color-accent)" }} />
+              <Brain size={18} style={{ color: "var(--color-accent)" }} />
             </div>
             <div>
               <h1
-                className="text-2xl md:text-3xl font-semibold tracking-tight"
+                className="text-xl md:text-2xl font-semibold tracking-tight"
                 style={{ fontFamily: "var(--font-serif)", color: "var(--color-text-primary)" }}
               >
                 HJ Auto Trade Mode
               </h1>
-              <p className="section-label mt-0.5">Powered by Hamada's AI — Autonomous Market Intelligence</p>
+              <p className="section-label mt-0.5 hidden sm:block">Powered by Hamada's AI — Autonomous Market Intelligence</p>
             </div>
           </div>
 
           {/* Live status pill */}
           {isRunning && (
             <div
-              className="flex items-center gap-2 px-4 py-2 rounded-full"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full"
               style={{
                 background: "var(--color-profit-bg)",
                 border: "1px solid oklch(0.440 0.080 145 / 0.30)",
@@ -154,7 +154,7 @@ export default function AutoTrade() {
         </div>
 
         {/* Divider */}
-        <div className="hj-divider mt-6" />
+        <div className="hj-divider mt-4" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -454,7 +454,7 @@ export default function AutoTrade() {
         <div className="lg:col-span-2">
           <div
             className="hj-card flex flex-col"
-            style={{ minHeight: "600px" }}
+            style={{ minHeight: "clamp(400px, 60vh, 600px)" }}
           >
             {/* Log header */}
             <div

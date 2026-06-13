@@ -53,7 +53,7 @@ function StatCard({
       <p
         className="tabular-nums"
         style={{
-          fontSize: "1.5rem", fontWeight: 600,
+          fontSize: "clamp(1.125rem, 4vw, 1.5rem)", fontWeight: 600,
           fontFamily: "var(--font-serif)", letterSpacing: "-0.02em",
           color: valueColor ?? "var(--color-text-primary)",
         }}
@@ -129,28 +129,29 @@ export default function Dashboard() {
     <div className="p-6 space-y-6 animate-fade-in">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 style={{ fontSize: "1.5rem", fontWeight: 600, color: "var(--color-text-primary)", letterSpacing: "-0.02em", fontFamily: "var(--font-serif)" }}>
+          <h1 style={{ fontSize: "1.375rem", fontWeight: 600, color: "var(--color-text-primary)", letterSpacing: "-0.02em", fontFamily: "var(--font-serif)" }}>
             Dashboard
           </h1>
           <p style={{ fontSize: "0.8125rem", color: "var(--color-text-tertiary)", marginTop: "0.125rem" }}>
-            Welcome back, Hamada — {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+            Welcome back, Hamada — {new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className={cn("flex items-center gap-2 px-3 py-1.5 text-xs font-bold", mode === "paper" ? "mode-paper" : "mode-live")}>
+        <div className="flex items-center gap-2">
+          <div className={cn("flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold", mode === "paper" ? "mode-paper" : "mode-live")}>
             <div className={cn("w-1.5 h-1.5 rounded-full", mode === "live" && "animate-pulse")}
               style={{ background: mode === "paper" ? "var(--color-gold)" : "var(--color-loss)" }} />
-            {mode === "paper" ? "PAPER MODE" : "LIVE MODE"}
+            {mode === "paper" ? "PAPER" : "LIVE"}
           </div>
           <button
             onClick={() => generateAllMutation.mutate()}
             disabled={generateAllMutation.isPending}
-            className="hj-btn hj-btn-ghost"
+            className="hj-btn hj-btn-ghost text-xs"
           >
-            <RefreshCw size={13} className={generateAllMutation.isPending ? "animate-spin" : ""} />
-            Refresh Signals
+            <RefreshCw size={12} className={generateAllMutation.isPending ? "animate-spin" : ""} />
+            <span className="hidden sm:inline">Refresh Signals</span>
+            <span className="sm:hidden">Refresh</span>
           </button>
         </div>
       </div>
