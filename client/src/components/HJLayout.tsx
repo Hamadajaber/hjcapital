@@ -46,6 +46,10 @@ export default function HJLayout({ children }: { children: React.ReactNode }) {
   const logoutMutation = trpc.auth.logout.useMutation({ onSuccess: () => logout() });
 
   const portfolioQuery = trpc.portfolio.get.useQuery();
+  const liveBalanceQuery = trpc.portfolio.liveBalance.useQuery(undefined, {
+    refetchInterval: 60000,
+    retry: false,
+  });
   const mode    = portfolioQuery.data?.mode    ?? "paper";
   const balance = portfolioQuery.data?.balance ?? "250.00";
 
@@ -124,39 +128,66 @@ export default function HJLayout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        {/* Balance card */}
-        <div className="px-4 pb-4">
+        {/* Balance cards — Paper + Live */}
+        <div className="px-4 pb-3 space-y-2">
+          {/* Paper balance */}
           <div
-            className="rounded-xl p-4"
+            className="rounded-xl px-4 py-3"
             style={{
               background: "linear-gradient(135deg, var(--color-bg-elevated), var(--color-bg-overlay))",
-              border: "1px solid var(--color-border-subtle)",
+              border: "1px solid oklch(0.620 0.130 72 / 0.20)",
             }}
           >
-            <p style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "0.375rem" }}>
-              Account Balance
-            </p>
+            <div className="flex items-center gap-1.5 mb-1">
+              <div className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--color-gold)" }} />
+              <p style={{ fontSize: "0.625rem", color: "var(--color-gold)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 700 }}>
+                Paper Balance
+              </p>
+            </div>
             <p
               className="tabular-nums"
-              style={{
-                fontSize: "1.5rem",
-                fontWeight: 700,
-                fontFamily: "var(--font-serif)",
-                color: "var(--color-text-primary)",
-                letterSpacing: "-0.02em",
-              }}
+              style={{ fontSize: "1.25rem", fontWeight: 700, fontFamily: "var(--font-serif)", color: "var(--color-text-primary)", letterSpacing: "-0.02em" }}
             >
               ${formattedBalance}
             </p>
-            <div className="flex items-center gap-1.5 mt-2">
+            <p style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)", marginTop: "0.125rem" }}>Simulation — no real funds</p>
+          </div>
+
+          {/* Live Capital.com balance */}
+          <div
+            className="rounded-xl px-4 py-3"
+            style={{
+              background: liveBalanceQuery.data?.ok ? "var(--color-profit-dim)" : "var(--color-bg-elevated)",
+              border: `1px solid ${liveBalanceQuery.data?.ok ? "oklch(0.720 0.130 155 / 0.25)" : "var(--color-border-subtle)"}`,
+            }}
+          >
+            <div className="flex items-center gap-1.5 mb-1">
               <div
-                className="w-1.5 h-1.5 rounded-full animate-pulse-dot"
-                style={{ background: mode === "paper" ? "var(--color-gold)" : "var(--color-loss)" }}
+                className={liveBalanceQuery.data?.ok ? "w-1.5 h-1.5 rounded-full animate-pulse" : "w-1.5 h-1.5 rounded-full"}
+                style={{ background: liveBalanceQuery.data?.ok ? "var(--color-profit)" : "var(--color-text-tertiary)" }}
               />
-              <span style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)" }}>
-                {mode === "paper" ? "Simulation balance" : "Live balance"}
-              </span>
+              <p style={{ fontSize: "0.625rem", color: liveBalanceQuery.data?.ok ? "var(--color-profit)" : "var(--color-text-tertiary)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 700 }}>
+                Live Balance
+              </p>
             </div>
+            {liveBalanceQuery.isLoading ? (
+              <div className="animate-pulse h-6 w-24 rounded" style={{ background: "var(--color-bg-overlay)" }} />
+            ) : liveBalanceQuery.data?.ok && liveBalanceQuery.data?.balance !== null ? (
+              <>
+                <p
+                  className="tabular-nums"
+                  style={{ fontSize: "1.25rem", fontWeight: 700, fontFamily: "var(--font-serif)", color: "var(--color-text-primary)", letterSpacing: "-0.02em" }}
+                >
+                  ${parseFloat(String(liveBalanceQuery.data.balance)).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                </p>
+                <p style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)", marginTop: "0.125rem" }}>Capital.com — real funds</p>
+              </>
+            ) : (
+              <>
+                <p style={{ fontSize: "1rem", fontFamily: "var(--font-serif)", color: "var(--color-text-tertiary)" }}>—</p>
+                <p style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)", marginTop: "0.125rem" }}>Not connected</p>
+              </>
+            )}
           </div>
         </div>
 

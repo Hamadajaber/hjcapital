@@ -162,6 +162,30 @@ export const appRouter = router({
     overallStats: ownerProcedure.query(async () => {
       return await getOverallStats();
     }),
+
+    // Fetch real balance from Capital.com (live account)
+    liveBalance: ownerProcedure.query(async () => {
+      try {
+        const { getAccountBalance } = await import("./capitalcom");
+        const live = await getAccountBalance();
+        return {
+          ok: true,
+          balance: live.balance,
+          available: live.available,
+          profitLoss: live.profitLoss,
+          currency: live.currency,
+        };
+      } catch (err) {
+        return {
+          ok: false,
+          balance: null,
+          available: null,
+          profitLoss: null,
+          currency: "USD",
+          error: String(err),
+        };
+      }
+    }),
   }),
 
   // ─── Trades ─────────────────────────────────────────────────────────────────
