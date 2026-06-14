@@ -82,3 +82,13 @@
 
 - [x] Fix Telegram trade-close alert: use actual trade direction, real entry price, and real close price (positionDirection, positionOpenLevel, positionCurrentLevel from position object)
 - [x] Add live Capital.com market-status check inside executeDecision() / placeOrder() as a secondary guard (checkMarketTradeable() calls /api/v1/markets/:epic, falls back to hardcoded schedule)
+
+## Round 7 — Scheduled Auto-Start/Stop
+
+- [x] Add /api/scheduled/auto-trade-start handler (starts engine in paper mode, sends Telegram notification)
+- [x] Add /api/scheduled/auto-trade-stop handler (stops engine, sends Telegram notification)
+- [x] Register both handlers in server/_core/index.ts before Vite fallthrough
+- [x] Add schedule_config table to DB (stores task UIDs for start/stop jobs, enabled flag, mode, interval)
+- [x] Add schedule tRPC procedures: getSchedule, enableSchedule, disableSchedule
+- [x] Add schedule status UI to AutoTrade page (shows schedule info + enable/disable toggle)
+- [ ] Deploy to production, then enable schedule via the toggle in AutoTrade page

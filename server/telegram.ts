@@ -10,7 +10,7 @@ function getTelegramConfig() {
   return { token, chatId };
 }
 
-async function sendTelegramMessage(text: string): Promise<boolean> {
+export async function sendTelegramMessage(text: string): Promise<boolean> {
   const { token, chatId } = getTelegramConfig();
   if (!token || !chatId) {
     console.warn("[Telegram] Bot token or chat ID not configured");

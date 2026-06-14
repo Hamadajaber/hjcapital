@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Brain, Zap, Shield, TrendingUp, Square, Activity } from "lucide-react";
+import { Brain, Zap, Shield, TrendingUp, Square, Activity, Clock, Calendar } from "lucide-react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatTime(date: Date | string | null) {
@@ -56,6 +56,15 @@ export default function AutoTrade() {
 
   const statusQuery = trpc.autoTrade.status.useQuery(undefined, { refetchInterval: 5000 });
   const sessionsQuery = trpc.autoTrade.getSessions.useQuery();
+  const scheduleQuery = trpc.autoTrade.getSchedule.useQuery(undefined, { refetchInterval: 30000 });
+  const enableScheduleMutation = trpc.autoTrade.enableSchedule.useMutation({
+    onSuccess: () => { toast.success("Daily schedule enabled!"); scheduleQuery.refetch(); },
+    onError: (e) => toast.error(`Failed to enable schedule: ${e.message}`),
+  });
+  const disableScheduleMutation = trpc.autoTrade.disableSchedule.useMutation({
+    onSuccess: () => { toast.success("Daily schedule disabled."); scheduleQuery.refetch(); },
+    onError: (e) => toast.error(`Failed to disable schedule: ${e.message}`),
+  });
   const activeSessionId = statusQuery.data?.sessionId;
   const logsQuery = trpc.autoTrade.getLogs.useQuery(
     { sessionId: activeSessionId ?? 0, limit: 80 },
@@ -445,6 +454,79 @@ export default function AutoTrade() {
             ) : (
               <p className="text-xs text-center py-6" style={{ color: "var(--color-text-tertiary)" }}>
                 No sessions yet
+              </p>
+            )}
+          </div>
+          {/* Scheduled Automation Card */}
+          <div className="hj-card p-5">
+            <h2 className="section-label flex items-center gap-2 mb-4">
+              <Calendar size={13} style={{ color: "var(--color-accent)" }} />
+              Scheduled Automation
+            </h2>
+
+            {/* Schedule info */}
+            <div className="space-y-2 mb-4">
+              {[
+                { label: "Auto-Start", value: "10:00 AM Cairo (Mon–Fri)", icon: "🟢" },
+                { label: "Auto-Stop",  value: "11:00 PM Cairo (Mon–Fri)", icon: "🔴" },
+                { label: "Mode",       value: scheduleQuery.data?.defaultMode?.toUpperCase() ?? "PAPER", icon: "📊" },
+                { label: "Cycle",      value: `Every ${scheduleQuery.data?.cycleIntervalMinutes ?? 15} min`, icon: "🔄" },
+              ].map((r) => (
+                <div
+                  key={r.label}
+                  className="flex items-center justify-between py-1.5"
+                  style={{ borderBottom: "1px solid var(--color-border-subtle)" }}
+                >
+                  <span className="text-xs" style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)" }}>
+                    {r.icon} {r.label}
+                  </span>
+                  <span className="text-xs font-semibold" style={{ color: "var(--color-text-primary)", fontFamily: "var(--font-sans)" }}>
+                    {r.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Enable / Disable toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold" style={{ color: "var(--color-text-primary)", fontFamily: "var(--font-sans)" }}>
+                  {scheduleQuery.data?.enabled ? "Schedule Active" : "Schedule Inactive"}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--color-text-tertiary)" }}>
+                  {scheduleQuery.data?.enabled
+                    ? "Engine starts/stops automatically every weekday"
+                    : "Enable to auto-start the engine daily"}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  if (scheduleQuery.data?.enabled) {
+                    disableScheduleMutation.mutate();
+                  } else {
+                    enableScheduleMutation.mutate({ mode: "paper", cycleIntervalMinutes: 15 });
+                  }
+                }}
+                disabled={enableScheduleMutation.isPending || disableScheduleMutation.isPending}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none disabled:opacity-50 ${
+                  scheduleQuery.data?.enabled
+                    ? "bg-[var(--color-profit)]"
+                    : "bg-[var(--color-border-subtle)]"
+                }`}
+                style={{ minWidth: 44 }}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${
+                    scheduleQuery.data?.enabled ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {scheduleQuery.data?.enabled && (
+              <p className="text-xs mt-3 text-center" style={{ color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>
+                <Clock size={10} className="inline mr-1" />
+                Runs automatically — no action needed
               </p>
             )}
           </div>

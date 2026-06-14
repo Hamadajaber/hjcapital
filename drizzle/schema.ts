@@ -150,3 +150,23 @@ export const autoTradeLog = mysqlTable("auto_trade_log", {
 
 export type AutoTradeLog = typeof autoTradeLog.$inferSelect;
 export type InsertAutoTradeLog = typeof autoTradeLog.$inferInsert;
+
+// Schedule Config — stores Heartbeat cron task UIDs for auto-start/stop
+export const scheduleConfig = mysqlTable("schedule_config", {
+  id: int("id").autoincrement().primaryKey(),
+  // Whether the daily schedule is enabled
+  enabled: boolean("enabled").notNull().default(false),
+  // Trading mode to use when auto-starting
+  defaultMode: mysqlEnum("defaultMode", ["paper", "live"]).notNull().default("paper"),
+  // Cycle interval in minutes
+  cycleIntervalMinutes: int("cycleIntervalMinutes").notNull().default(15),
+  // Heartbeat task UIDs (null = not yet created)
+  startTaskUid: varchar("startTaskUid", { length: 65 }),
+  stopTaskUid: varchar("stopTaskUid", { length: 65 }),
+  // Human-readable schedule description
+  startCron: varchar("startCron", { length: 64 }).default("0 7 * * 1-5"),   // 07:00 UTC = 10:00 Cairo
+  stopCron: varchar("stopCron", { length: 64 }).default("0 20 * * 1-5"),    // 20:00 UTC = 23:00 Cairo
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ScheduleConfig = typeof scheduleConfig.$inferSelect;

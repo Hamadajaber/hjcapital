@@ -244,3 +244,47 @@ export async function insertChatMessage(msg: InsertChatMessage): Promise<void> {
   if (!db) return;
   await db.insert(chatMessages).values(msg);
 }
+
+// ─── Schedule Config ──────────────────────────────────────────────────────────
+
+import { scheduleConfig, ScheduleConfig } from "../drizzle/schema";
+
+export async function getScheduleConfig(): Promise<ScheduleConfig | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(scheduleConfig).limit(1);
+  if (rows.length > 0) return rows[0];
+  // Seed default row
+  await db.insert(scheduleConfig).values({
+    enabled: false,
+    defaultMode: "paper",
+    cycleIntervalMinutes: 15,
+    startCron: "0 7 * * 1-5",
+    stopCron: "0 20 * * 1-5",
+  });
+  const seeded = await db.select().from(scheduleConfig).limit(1);
+  return seeded[0] ?? null;
+}
+
+export async function updateScheduleConfig(patch: Partial<{
+  enabled: boolean;
+  defaultMode: "paper" | "live";
+  cycleIntervalMinutes: number;
+  startTaskUid: string | null;
+  stopTaskUid: string | null;
+}>): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const existing = await db.select().from(scheduleConfig).limit(1);
+  if (existing.length === 0) {
+    await db.insert(scheduleConfig).values({
+      enabled: patch.enabled ?? false,
+      defaultMode: patch.defaultMode ?? "paper",
+      cycleIntervalMinutes: patch.cycleIntervalMinutes ?? 15,
+      startTaskUid: patch.startTaskUid ?? null,
+      stopTaskUid: patch.stopTaskUid ?? null,
+    });
+  } else {
+    await db.update(scheduleConfig).set(patch);
+  }
+}

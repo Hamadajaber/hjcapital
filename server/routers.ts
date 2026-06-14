@@ -10,7 +10,14 @@ import {
   getLatestSignals, insertSignal,
   getRiskSettings, updateRiskSettings,
   getChatHistory, insertChatMessage,
+  getScheduleConfig, updateScheduleConfig,
 } from "./db";
+import {
+  createHeartbeatJob,
+  updateHeartbeatJob,
+  deleteHeartbeatJob,
+} from "./_core/heartbeat";
+import { parse as parseCookie } from "cookie";
 import { ENV } from "./_core/env";
 import {
   getAccountBalance,
@@ -393,6 +400,78 @@ export const appRouter = router({
     // Get recent sessions
     getSessions: ownerProcedure.query(async () => {
       return getRecentSessions(10);
+    }),
+
+    // ── Schedule: get current config ──────────────────────────────────────
+    getSchedule: ownerProcedure.query(async () => {
+      return getScheduleConfig();
+    }),
+
+    // ── Schedule: enable daily auto-start/stop ────────────────────────────
+    enableSchedule: ownerProcedure
+      .input(z.object({
+        mode: z.enum(["paper", "live"]).default("paper"),
+        cycleIntervalMinutes: z.number().min(5).max(60).default(15),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const sessionToken = parseCookie(ctx.req.headers.cookie ?? "")[COOKIE_NAME] ?? "";
+
+        // Create start job (07:00 UTC Mon–Fri = 10:00 Cairo)
+        const startJob = await createHeartbeatJob({
+          name: "hj-auto-trade-start",
+          cron: "0 7 * * 1-5",
+          path: "/api/scheduled/auto-trade-start",
+          payload: { mode: input.mode, cycleIntervalMinutes: input.cycleIntervalMinutes },
+          description: `Daily auto-start HJ Auto Trade (${input.mode} mode, ${input.cycleIntervalMinutes}min cycle)`,
+        }, sessionToken);
+
+        // Create stop job (20:00 UTC Mon–Fri = 23:00 Cairo)
+        const stopJob = await createHeartbeatJob({
+          name: "hj-auto-trade-stop",
+          cron: "0 20 * * 1-5",
+          path: "/api/scheduled/auto-trade-stop",
+          payload: { reason: "Scheduled daily stop (end of trading session)" },
+          description: "Daily auto-stop HJ Auto Trade",
+        }, sessionToken);
+
+        await updateScheduleConfig({
+          enabled: true,
+          defaultMode: input.mode,
+          cycleIntervalMinutes: input.cycleIntervalMinutes,
+          startTaskUid: startJob.taskUid,
+          stopTaskUid: stopJob.taskUid,
+        });
+
+        return {
+          success: true,
+          startTaskUid: startJob.taskUid,
+          stopTaskUid: stopJob.taskUid,
+          nextStart: startJob.nextExecutionAt,
+          nextStop: stopJob.nextExecutionAt,
+        };
+      }),
+
+    // ── Schedule: disable (pause) daily auto-start/stop ───────────────────
+    disableSchedule: ownerProcedure.mutation(async ({ ctx }) => {
+      const config = await getScheduleConfig();
+      if (!config) return { success: true };
+
+      const sessionToken = parseCookie(ctx.req.headers.cookie ?? "")[COOKIE_NAME] ?? "";
+
+      if (config.startTaskUid) {
+        try { await deleteHeartbeatJob(config.startTaskUid, sessionToken); } catch {}
+      }
+      if (config.stopTaskUid) {
+        try { await deleteHeartbeatJob(config.stopTaskUid, sessionToken); } catch {}
+      }
+
+      await updateScheduleConfig({
+        enabled: false,
+        startTaskUid: null,
+        stopTaskUid: null,
+      });
+
+      return { success: true };
     }),
   }),
 });
