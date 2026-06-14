@@ -636,12 +636,11 @@ async function checkDailyRiskLimits(sessionId: number, mode: "paper" | "live"): 
 
   const todayPnl = todayTrades.reduce((sum: number, t: typeof todayTrades[0]) => sum + parseFloat(t.pnl ?? "0"), 0);
 
-  if (todayPnl <= -risk.dailyLossLimit) {
-    return { blocked: true, reason: `Daily loss limit reached: $${Math.abs(todayPnl).toFixed(2)} / $${risk.dailyLossLimit}` };
-  }
-
-  if (todayPnl >= risk.dailyProfitLock) {
-    return { blocked: true, reason: `Daily profit target locked: $${todayPnl.toFixed(2)} / $${risk.dailyProfitLock}` };
+  // Daily loss limit = X% of current capital
+  const currentBalance = await getCurrentBalance(mode);
+  const dailyLossLimitAbs = currentBalance * (risk.dailyLossLimitPct / 100);
+  if (todayPnl <= -dailyLossLimitAbs) {
+    return { blocked: true, reason: `Daily loss limit reached: $${Math.abs(todayPnl).toFixed(2)} / $${dailyLossLimitAbs.toFixed(2)} (${risk.dailyLossLimitPct}% of capital)` };
   }
 
   return { blocked: false, reason: "" };
@@ -651,12 +650,12 @@ async function checkDailyRiskLimits(sessionId: number, mode: "paper" | "live"): 
 
 async function getRiskSettings() {
   const db = await getDb();
-  if (!db) return { dailyLossLimit: 7.5, dailyProfitLock: 10, maxRiskPerTrade: 1, minConfidenceThreshold: 72, maxOpenPositions: 3 };
+  if (!db) return { dailyLossLimitPct: 25, stopLossPerTrade: 1, maxRiskPerTrade: 1, minConfidenceThreshold: 72, maxOpenPositions: 3 };
   const rows = await db.select().from(riskSettings).limit(1);
   const r = rows[0];
   return {
-    dailyLossLimit: r ? parseFloat(r.dailyLossLimit) : 7.5,
-    dailyProfitLock: r ? parseFloat(r.dailyProfitLock) : 10,
+    dailyLossLimitPct: r ? parseFloat(r.dailyLossLimitPct) : 25,
+    stopLossPerTrade: r ? parseFloat(r.stopLossPerTrade) : 1,
     maxRiskPerTrade: r ? parseFloat(r.maxRiskPerTrade) : 1,
     minConfidenceThreshold: r ? r.minConfidenceThreshold : 72,
     maxOpenPositions: r ? r.maxOpenPositions : 3,

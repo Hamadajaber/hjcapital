@@ -285,8 +285,8 @@ export const appRouter = router({
 
     update: ownerProcedure
       .input(z.object({
-        dailyLossLimit: z.string().optional(),
-        dailyProfitLock: z.string().optional(),
+        dailyLossLimitPct: z.string().optional(),
+        stopLossPerTrade: z.string().optional(),
         maxRiskPerTrade: z.string().optional(),
         minConfidenceThreshold: z.number().optional(),
         maxOpenPositions: z.number().optional(),

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
-import { Shield, Save, AlertTriangle, Info } from "lucide-react";
+import { Shield, Save, AlertTriangle, Info, Target } from "lucide-react";
 import { toast } from "sonner";
 
 function SettingRow({
@@ -43,8 +43,8 @@ export default function RiskSettings() {
   });
 
   const [settings, setSettings] = useState({
-    dailyLossLimit: "7.50",
-    dailyProfitLock: "10.00",
+    dailyLossLimitPct: "25.00",
+    stopLossPerTrade: "1.00",
     maxRiskPerTrade: "1.00",
     minConfidenceThreshold: 72,
     maxOpenPositions: 3,
@@ -53,8 +53,8 @@ export default function RiskSettings() {
   useEffect(() => {
     if (riskQuery.data) {
       setSettings({
-        dailyLossLimit: riskQuery.data.dailyLossLimit,
-        dailyProfitLock: riskQuery.data.dailyProfitLock,
+        dailyLossLimitPct: riskQuery.data.dailyLossLimitPct,
+        stopLossPerTrade: riskQuery.data.stopLossPerTrade,
         maxRiskPerTrade: riskQuery.data.maxRiskPerTrade,
         minConfidenceThreshold: riskQuery.data.minConfidenceThreshold,
         maxOpenPositions: riskQuery.data.maxOpenPositions,
@@ -64,8 +64,8 @@ export default function RiskSettings() {
 
   const handleSave = () => {
     updateMutation.mutate({
-      dailyLossLimit: settings.dailyLossLimit,
-      dailyProfitLock: settings.dailyProfitLock,
+      dailyLossLimitPct: settings.dailyLossLimitPct,
+      stopLossPerTrade: settings.stopLossPerTrade,
       maxRiskPerTrade: settings.maxRiskPerTrade,
       minConfidenceThreshold: settings.minConfidenceThreshold,
       maxOpenPositions: settings.maxOpenPositions,
@@ -117,10 +117,10 @@ export default function RiskSettings() {
           </p>
           <p style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)", marginTop: "0.25rem" }}>
             {riskLevel === "low"
-              ? "Your settings prioritize capital preservation. Ideal for growing a small account steadily."
+              ? "Your settings prioritize capital preservation. Each trade is protected individually — no daily profit cap."
               : riskLevel === "medium"
               ? "Moderate risk. Suitable for experienced traders with a clear strategy."
-              : "High risk per trade. Consider reducing to protect your $250 capital."}
+              : "High risk per trade. Consider reducing to protect your capital."}
           </p>
         </div>
       </div>
@@ -128,7 +128,7 @@ export default function RiskSettings() {
       {/* Settings panels */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
-        {/* Daily limits */}
+        {/* Capital protection */}
         <div
           className="rounded-2xl p-5"
           style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)" }}
@@ -140,21 +140,21 @@ export default function RiskSettings() {
             >
               <AlertTriangle size={13} style={{ color: "var(--color-loss)" }} />
             </div>
-            <h3 style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-text-primary)" }}>Daily Limits</h3>
+            <h3 style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-text-primary)" }}>Capital Protection</h3>
           </div>
           <SettingRow
             label="Daily Loss Limit"
-            description="Stop all trading when daily losses reach this amount"
-            value={settings.dailyLossLimit}
-            onChange={(v) => setSettings(s => ({ ...s, dailyLossLimit: v }))}
-            min={1} max={50} step={0.5} prefix="$"
+            description="Stop all trading if total daily losses exceed this % of capital"
+            value={settings.dailyLossLimitPct}
+            onChange={(v) => setSettings(s => ({ ...s, dailyLossLimitPct: v }))}
+            min={5} max={50} step={1} suffix="%"
           />
           <SettingRow
-            label="Daily Profit Lock"
-            description="Lock in profits and stop trading when this daily gain is reached"
-            value={settings.dailyProfitLock}
-            onChange={(v) => setSettings(s => ({ ...s, dailyProfitLock: v }))}
-            min={1} max={100} step={0.5} prefix="$"
+            label="Stop Loss Per Trade"
+            description="Each trade automatically closes if it loses this % of capital"
+            value={settings.stopLossPerTrade}
+            onChange={(v) => setSettings(s => ({ ...s, stopLossPerTrade: v }))}
+            min={0.1} max={5} step={0.1} suffix="%"
           />
         </div>
 
@@ -168,7 +168,7 @@ export default function RiskSettings() {
               className="p-1.5 rounded-lg"
               style={{ background: "var(--color-accent-dim)", border: "1px solid var(--color-accent)" }}
             >
-              <Shield size={13} style={{ color: "var(--color-accent)" }} />
+              <Target size={13} style={{ color: "var(--color-accent)" }} />
             </div>
             <h3 style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-text-primary)" }}>Trade Controls</h3>
           </div>
@@ -196,7 +196,7 @@ export default function RiskSettings() {
         </div>
       </div>
 
-      {/* Info box */}
+      {/* Philosophy info box */}
       <div
         className="flex items-start gap-3 p-4 rounded-xl"
         style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)" }}
@@ -204,11 +204,11 @@ export default function RiskSettings() {
         <Info size={14} style={{ color: "var(--color-accent)", flexShrink: 0, marginTop: "0.125rem" }} />
         <div style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
           <p>
-            <strong style={{ color: "var(--color-text-primary)" }}>Capital Preservation Philosophy:</strong>{" "}
-            With a $250 account, the goal is small, consistent profits. A 1% daily gain ($2.50) compounded over 250 trading days grows your account significantly without excessive risk.
+            <strong style={{ color: "var(--color-text-primary)" }}>Investment Philosophy — Protect the Trade, Not the Day:</strong>{" "}
+            Instead of capping daily profits, each trade has its own stop loss. If the market is strong, the engine keeps trading and capturing gains. The day only stops if total losses hit {settings.dailyLossLimitPct}% of capital.
           </p>
           <p style={{ marginTop: "0.375rem" }}>
-            Recommended settings: Daily loss limit $7.50 (3%), Daily profit lock $10 (4%), Max risk per trade 1%, Min confidence 72%.
+            Current settings: Daily loss cap {settings.dailyLossLimitPct}% · Stop loss per trade {settings.stopLossPerTrade}% · Max risk {settings.maxRiskPerTrade}% · Min confidence {settings.minConfidenceThreshold}%.
           </p>
         </div>
       </div>

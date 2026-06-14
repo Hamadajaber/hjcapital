@@ -91,4 +91,10 @@
 - [x] Add schedule_config table to DB (stores task UIDs for start/stop jobs, enabled flag, mode, interval)
 - [x] Add schedule tRPC procedures: getSchedule, enableSchedule, disableSchedule
 - [x] Add schedule status UI to AutoTrade page (shows schedule info + enable/disable toggle)
-- [ ] Deploy to production, then enable schedule via the toggle in AutoTrade page
+- [x] Deploy to production, then enable schedule via the toggle in AutoTrade page
+
+## Round 8 — Dual Balance Display
+
+- [x] Add portfolio.liveBalance tRPC procedure (fetches real balance from Capital.com, returns ok/error)
+- [x] Dashboard: show Paper Trading balance and Capital.com Live balance in separate cards
+- [x] Sidebar: show both Paper and Live balance cards stacked

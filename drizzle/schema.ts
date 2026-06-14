@@ -82,8 +82,11 @@ export type InsertSignal = typeof signals.$inferInsert;
 // Risk settings
 export const riskSettings = mysqlTable("risk_settings", {
   id: int("id").autoincrement().primaryKey(),
-  dailyLossLimit: decimal("dailyLossLimit", { precision: 8, scale: 2 }).notNull().default("7.50"),
-  dailyProfitLock: decimal("dailyProfitLock", { precision: 8, scale: 2 }).notNull().default("10.00"),
+  // Daily loss limit as % of capital (default 25%) — stops engine if total daily loss exceeds this
+  dailyLossLimitPct: decimal("dailyLossLimitPct", { precision: 5, scale: 2 }).notNull().default("25.00"),
+  // Per-trade stop loss as % of capital (default 1%) — each trade has its own stop loss
+  stopLossPerTrade: decimal("stopLossPerTrade", { precision: 5, scale: 2 }).notNull().default("1.00"),
+  // Max risk per trade as % of capital
   maxRiskPerTrade: decimal("maxRiskPerTrade", { precision: 5, scale: 2 }).notNull().default("1.00"),
   minConfidenceThreshold: int("minConfidenceThreshold").notNull().default(72),
   maxOpenPositions: int("maxOpenPositions").notNull().default(3),

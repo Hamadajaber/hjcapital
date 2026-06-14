@@ -198,8 +198,8 @@ export async function getRiskSettings(): Promise<RiskSettings | undefined> {
   if (result.length > 0) return result[0];
   // Seed defaults
   await db.insert(riskSettings).values({
-    dailyLossLimit: "7.50",
-    dailyProfitLock: "10.00",
+    dailyLossLimitPct: "25.00",
+    stopLossPerTrade: "1.00",
     maxRiskPerTrade: "1.00",
     minConfidenceThreshold: 72,
     maxOpenPositions: 3,
@@ -209,8 +209,8 @@ export async function getRiskSettings(): Promise<RiskSettings | undefined> {
 }
 
 export async function updateRiskSettings(settings: Partial<{
-  dailyLossLimit: string;
-  dailyProfitLock: string;
+  dailyLossLimitPct: string;
+  stopLossPerTrade: string;
   maxRiskPerTrade: string;
   minConfidenceThreshold: number;
   maxOpenPositions: number;
@@ -220,8 +220,8 @@ export async function updateRiskSettings(settings: Partial<{
   const existing = await db.select().from(riskSettings).limit(1);
   if (existing.length === 0) {
     await db.insert(riskSettings).values({
-      dailyLossLimit: settings.dailyLossLimit ?? "7.50",
-      dailyProfitLock: settings.dailyProfitLock ?? "10.00",
+      dailyLossLimitPct: settings.dailyLossLimitPct ?? "25.00",
+      stopLossPerTrade: settings.stopLossPerTrade ?? "1.00",
       maxRiskPerTrade: settings.maxRiskPerTrade ?? "1.00",
       minConfidenceThreshold: settings.minConfidenceThreshold ?? 72,
       maxOpenPositions: settings.maxOpenPositions ?? 3,
