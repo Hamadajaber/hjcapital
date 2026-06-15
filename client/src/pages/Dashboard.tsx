@@ -186,31 +186,8 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Dual Balance Panel — Paper vs Live */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Paper Balance */}
-        <div
-          className="rounded-2xl p-5"
-          style={{ background: "var(--color-gold-bg)", border: "1px solid oklch(0.620 0.130 72 / 0.25)" }}
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-2 h-2 rounded-full" style={{ background: "var(--color-gold)" }} />
-            <span style={{ fontSize: "0.625rem", color: "var(--color-gold)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>Paper Trading Balance</span>
-          </div>
-          <p style={{ fontSize: "clamp(1.5rem, 5vw, 2rem)", fontFamily: "var(--font-serif)", fontWeight: 700, color: "var(--color-text-primary)", letterSpacing: "-0.02em" }}>
-            ${balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-          </p>
-          <p style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", marginTop: "0.25rem" }}>
-            Simulation — no real funds
-          </p>
-          <div className="flex items-center gap-1 mt-2">
-            <span style={{ fontSize: "0.75rem", color: totalReturn >= 0 ? "var(--color-profit)" : "var(--color-loss)", fontWeight: 600 }}>
-              {totalReturn >= 0 ? "+" : ""}${totalReturn.toFixed(2)} ({totalReturnPct}%)
-            </span>
-            <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>since start</span>
-          </div>
-        </div>
-
+      {/* Live Balance Panel — Capital.com only */}
+      <div>
         {/* Live Capital.com Balance */}
         <div
           className="rounded-2xl p-5"

@@ -426,10 +426,12 @@ export default function AutoTrade() {
   });
 
   // Auto-scroll only when user hasn't manually scrolled up
+  // Use direct scrollTop assignment (not scrollIntoView) to avoid scrolling the outer page
   useEffect(() => {
     if (userScrolled) return;
-    if (logEndRef.current) {
-      logEndRef.current.scrollIntoView({ behavior: "smooth" });
+    const el = logContainerRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
     }
   }, [logsQuery.data, userScrolled]);
 
@@ -914,7 +916,8 @@ export default function AutoTrade() {
                   <button
                     onClick={() => {
                       setUserScrolled(false);
-                      logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+                      const el = logContainerRef.current;
+                      if (el) el.scrollTop = el.scrollHeight;
                     }}
                     className="text-xs px-2 py-0.5 rounded-full transition-all"
                     style={{

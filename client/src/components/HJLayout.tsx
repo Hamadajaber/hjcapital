@@ -128,31 +128,8 @@ export default function HJLayout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        {/* Balance cards — Paper + Live */}
-        <div className="px-4 pb-3 space-y-2">
-          {/* Paper balance */}
-          <div
-            className="rounded-xl px-4 py-3"
-            style={{
-              background: "linear-gradient(135deg, var(--color-bg-elevated), var(--color-bg-overlay))",
-              border: "1px solid oklch(0.620 0.130 72 / 0.20)",
-            }}
-          >
-            <div className="flex items-center gap-1.5 mb-1">
-              <div className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--color-gold)" }} />
-              <p style={{ fontSize: "0.625rem", color: "var(--color-gold)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 700 }}>
-                Paper Balance
-              </p>
-            </div>
-            <p
-              className="tabular-nums"
-              style={{ fontSize: "1.25rem", fontWeight: 700, fontFamily: "var(--font-serif)", color: "var(--color-text-primary)", letterSpacing: "-0.02em" }}
-            >
-              ${formattedBalance}
-            </p>
-            <p style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)", marginTop: "0.125rem" }}>Simulation — no real funds</p>
-          </div>
-
+        {/* Balance card — Live only */}
+        <div className="px-4 pb-3">
           {/* Live Capital.com balance */}
           <div
             className="rounded-xl px-4 py-3"
