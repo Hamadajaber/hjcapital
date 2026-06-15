@@ -210,3 +210,10 @@
 - [x] Add Working Orders panel to Dashboard
 - [x] Add Capital.com Activity History tab to Trade History page
 - [x] Add Capital.com Transaction History tab to Trade History page
+
+## Round 16 — Auto-Start Engine on Boot
+- [x] Auto-start engine in Live mode on server boot (index.ts)
+- [x] Remove mode selector and interval slider from UI (always Live, always 15min)
+- [x] Replace START ENGINE button with status-only view when engine is running
+- [x] Make STOP ENGINE the only user action — shown prominently with confirmation
+- [x] Show "Engine auto-started" indicator in the UI

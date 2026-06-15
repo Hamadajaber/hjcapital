@@ -640,117 +640,32 @@ export default function AutoTrade() {
             </h2>
 
             {!isRunning ? (
-              <div className="space-y-5">
-                {/* Mode selector */}
-                <div>
-                  <p className="text-xs mb-2" style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)" }}>
-                    Trading Mode
+              <div className="space-y-4">
+                {/* Engine is stopped — show restart option */}
+                <div
+                  className="rounded-lg p-4 text-center"
+                  style={{ background: "var(--color-bg-elevated)", border: "1px solid var(--color-border-subtle)" }}
+                >
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-3"
+                    style={{ background: "var(--color-loss-bg)", border: "1px solid oklch(0.500 0.140 20 / 0.25)" }}>
+                    <Square size={16} style={{ color: "var(--color-loss)" }} />
+                  </div>
+                  <p className="text-sm font-semibold mb-1" style={{ color: "var(--color-text-primary)", fontFamily: "var(--font-serif)" }}>
+                    Engine Stopped
                   </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {(["paper", "live"] as const).map((m) => (
-                      <button
-                        key={m}
-                        onClick={() => setMode(m)}
-                        className="py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 border"
-                        style={{
-                          fontFamily: "var(--font-sans)",
-                          letterSpacing: "0.04em",
-                          background: mode === m
-                            ? (m === "live" ? "var(--color-loss-bg)" : "var(--color-gold-bg)")
-                            : "var(--color-bg-elevated)",
-                          borderColor: mode === m
-                            ? (m === "live" ? "oklch(0.500 0.140 20 / 0.35)" : "oklch(0.620 0.130 72 / 0.35)")
-                            : "var(--color-border-subtle)",
-                          color: mode === m
-                            ? (m === "live" ? "var(--color-loss)" : "var(--color-gold)")
-                            : "var(--color-text-secondary)",
-                        }}
-                      >
-                        {m === "paper" ? "📄 Paper" : "⚡ Live"}
-                      </button>
-                    ))}
-                  </div>
-                  {mode === "live" && (
-                    <p className="text-xs mt-2 flex items-center gap-1" style={{ color: "var(--color-gold)" }}>
-                      ⚠️ Live mode uses real money on Capital.com
-                    </p>
-                  )}
-                </div>
-
-                {/* Cycle interval */}
-                <div>
-                  <p className="text-xs mb-2" style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)" }}>
-                    Analysis Cycle — every{" "}
-                    <span style={{ fontFamily: "var(--font-serif)", fontWeight: 600, color: "var(--color-text-primary)" }}>
-                      {interval}
-                    </span>{" "}
-                    min
+                  <p className="text-xs mb-4" style={{ color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>
+                    The engine auto-starts on server boot in Live mode.
+                    Restart manually if needed.
                   </p>
-                  <input
-                    type="range"
-                    min={5}
-                    max={60}
-                    step={5}
-                    value={interval}
-                    onChange={(e) => setIntervalVal(Number(e.target.value))}
-                    className="w-full"
-                    style={{ accentColor: "var(--color-accent)" }}
-                  />
-                  <div
-                    className="flex justify-between text-xs mt-1"
-                    style={{ color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}
-                  >
-                    <span>5 min</span>
-                    <span>60 min</span>
-                  </div>
-                </div>
-
-                {/* Live confirmation */}
-                {confirmLive && (
-                  <div
-                    className="rounded-lg p-4"
-                    style={{
-                      background: "var(--color-gold-bg)",
-                      border: "1px solid oklch(0.620 0.130 72 / 0.30)",
-                    }}
-                  >
-                    <p
-                      className="text-sm font-semibold mb-1"
-                      style={{ color: "var(--color-gold)", fontFamily: "var(--font-sans)" }}
-                    >
-                      ⚠️ Confirm Live Trading
-                    </p>
-                    <p className="text-xs mb-3" style={{ color: "var(--color-text-secondary)" }}>
-                      This will place REAL trades on your Capital.com account. Are you sure?
-                    </p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => { setConfirmLive(false); startMutation.mutate({ mode: "live", cycleIntervalMinutes: interval }); }}
-                        className="hj-btn hj-btn-primary flex-1 justify-center py-2 text-xs"
-                      >
-                        Yes, Start Live
-                      </button>
-                      <button
-                        onClick={() => setConfirmLive(false)}
-                        className="hj-btn hj-btn-ghost flex-1 justify-center py-2 text-xs"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Start button */}
-                {!confirmLive && (
                   <button
-                    onClick={handleStart}
+                    onClick={() => startMutation.mutate({ mode: "live", cycleIntervalMinutes: 15 })}
                     disabled={startMutation.isPending}
-                    className="hj-btn hj-btn-primary w-full justify-center py-3 text-sm disabled:opacity-50"
+                    className="hj-btn hj-btn-primary w-full justify-center py-2.5 text-sm disabled:opacity-50"
                   >
-                    <Brain size={16} />
-                    {startMutation.isPending ? "Starting..." : "Activate HJ Auto Trade"}
+                    <Brain size={15} />
+                    {startMutation.isPending ? "Starting..." : "Restart Engine (Live)"}
                   </button>
-                )}
+                </div>
               </div>
             ) : (
               <div className="space-y-4">
@@ -787,9 +702,15 @@ export default function AutoTrade() {
                   ))}
                 </div>
 
-                <p className="text-xs" style={{ color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>
-                  Last cycle: {formatTime(status?.lastCycleAt ?? null)}
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs" style={{ color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>
+                    Last cycle: {formatTime(status?.lastCycleAt ?? null)}
+                  </p>
+                  <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                    style={{ background: "var(--color-profit-bg)", color: "var(--color-profit)", fontFamily: "var(--font-sans)" }}>
+                    Auto-started • Live • 15 min
+                  </span>
+                </div>
 
                 {/* Stop controls */}
                 {!confirmStop ? (
@@ -842,7 +763,7 @@ export default function AutoTrade() {
                 { label: "Daily Loss Limit",  value: "$7.50",  color: "var(--color-loss)" },
                 { label: "Daily Profit Lock", value: "$10.00", color: "var(--color-profit)" },
                 { label: "Max Risk / Trade",  value: "1%",     color: "var(--color-gold)" },
-                { label: "Min AI Confidence", value: "72%",    color: "var(--color-accent)" },
+                { label: "Min AI Confidence", value: "55%",    color: "var(--color-accent)" },
                 { label: "Max Open Positions",value: "3",      color: "var(--color-text-secondary)" },
               ].map((r) => (
                 <div

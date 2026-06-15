@@ -117,6 +117,23 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
   });
+
+  // Auto-start the trade engine in Live mode on every server boot
+  // The engine runs continuously — user only needs to act to STOP it
+  setTimeout(async () => {
+    try {
+      const existing = getEngineState();
+      if (!existing?.isRunning) {
+        console.log("[AutoTrade] Auto-starting engine in LIVE mode...");
+        await startAutoTrade("live", 15);
+        console.log("[AutoTrade] Engine auto-started in LIVE mode.");
+      } else {
+        console.log("[AutoTrade] Engine already running, skipping auto-start.");
+      }
+    } catch (err) {
+      console.error("[AutoTrade] Auto-start failed:", err);
+    }
+  }, 5000); // 5s delay to let DB connections settle
 }
 
 startServer().catch(console.error);

@@ -430,7 +430,7 @@ export default function TradeHistory() {
       {activeTab === "activity" && <ActivityHistoryTab />}
       {activeTab === "transactions" && <TransactionHistoryTab />}
 
-      {activeTab === "platform" && <>
+      {activeTab === "platform" && <div className="space-y-6">
 
       {/* Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -534,7 +534,8 @@ export default function TradeHistory() {
           </div>
         )}
       </div>
-      </>}
+      </div>
+      }
     </div>
   );
 }
