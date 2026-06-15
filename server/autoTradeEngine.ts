@@ -588,7 +588,7 @@ async function analyzeMarket(
   ).then((arr) => arr.filter(Boolean).join("\n"));
 
   // Build the full enhanced prompt
-  const prompt = `You are HJ Capital's elite AI trading analyst. Your job is to analyze the market using multi-timeframe technical analysis, sentiment, and price action to recommend ONE specific trade.
+  const prompt = `You are HJ Capital's elite AI portfolio manager. Your PRIMARY GOAL is to find and execute profitable trades — not to avoid them. Markets always have opportunities; your job is to identify the BEST one right now.
 
 LIVE MARKET PRICES (right now):
 ${pricesSummary}
@@ -618,12 +618,13 @@ ${openInstruments.length > 0 ? openInstruments.join(", ") : "None"}
 TRADING RULES:
 - ONLY trade instruments listed in CURRENTLY OPEN MARKETS above — never trade closed markets
 - DO NOT open a position in an instrument marked as ⚠️ CORRELATED with an open position
-  - Only recommend a trade if confidence is ${effectiveThreshold}% or higher (dynamic threshold based on recent performance)
+- Confidence threshold: ${effectiveThreshold}% (if you see a valid setup, report your TRUE confidence — do not artificially lower it)
 - Max risk per trade: ${risk.maxRiskPerTrade}% of account
-- Use multi-timeframe confluence: prefer trades where 5min + 1H + 4H all agree on direction
-- Prefer small, consistent profits over large risky gains
+- IMPORTANT: Even partial confluence (2 out of 3 timeframes agreeing) is sufficient to recommend a trade
+- Prefer small, consistent profits over large risky gains — ANY profit is better than no trade
 - Always include stop loss and take profit levels
-- Consider both technical signals AND news sentiment in your decision
+- Consider both technical signals AND news sentiment
+- If you see a setup with ${effectiveThreshold}% or higher confidence, you MUST recommend it — missing a trade is also a cost
 
 Respond in this EXACT JSON format (no markdown, no explanation outside JSON):
 {
@@ -637,12 +638,12 @@ Respond in this EXACT JSON format (no markdown, no explanation outside JSON):
   "size": 1
 }
 
-If no good opportunity exists, respond:
+Only use HOLD if there is genuinely NO setup meeting the threshold across ALL available instruments:
 {
   "instrument": "NONE",
   "action": "HOLD",
   "confidence": 0,
-  "reasoning": "No high-confidence setup found at this time"
+  "reasoning": "Specific reason why no instrument has a valid setup right now"
 }`;
 
   // Run Ensemble Analysis (3 AI models vote)

@@ -1,7 +1,39 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
-import { Shield, Save, AlertTriangle, Info, Target } from "lucide-react";
+import { Shield, Save, AlertTriangle, Info, Target, Zap, Scale, Lock } from "lucide-react";
 import { toast } from "sonner";
+
+const PRESETS = {
+  conservative: {
+    label: "Conservative — حماية رأس المال",
+    description: "Threshold 70% — فقط الصفقات عالية الثقة جداً",
+    icon: Lock,
+    color: "var(--color-profit)",
+    dimColor: "var(--color-profit-dim)",
+    borderColor: "oklch(0.720 0.130 155 / 0.30)",
+    values: { minConfidenceThreshold: 70, maxRiskPerTrade: "0.50", maxOpenPositions: 2, stopLossPerTrade: "0.50", dailyLossLimitPct: "15.00" },
+  },
+  balanced: {
+    label: "Balanced — توازن مثالي",
+    description: "Threshold 55% — توازن بين الفرص والحماية",
+    icon: Scale,
+    color: "var(--color-gold)",
+    dimColor: "oklch(0.65 0.18 55 / 0.08)",
+    borderColor: "oklch(0.65 0.18 55 / 0.30)",
+    values: { minConfidenceThreshold: 55, maxRiskPerTrade: "1.00", maxOpenPositions: 3, stopLossPerTrade: "1.00", dailyLossLimitPct: "25.00" },
+  },
+  aggressive: {
+    label: "Aggressive — أقصى الفرص",
+    description: "Threshold 45% — يفتح أكثر الصفقات بثقة أعلى",
+    icon: Zap,
+    color: "var(--color-loss)",
+    dimColor: "var(--color-loss-dim)",
+    borderColor: "oklch(0.660 0.155 20 / 0.30)",
+    values: { minConfidenceThreshold: 45, maxRiskPerTrade: "2.00", maxOpenPositions: 5, stopLossPerTrade: "1.50", dailyLossLimitPct: "35.00" },
+  },
+} as const;
+
+type PresetKey = keyof typeof PRESETS;
 
 function SettingRow({
   label, description, value, onChange, type = "number", min, max, step, prefix, suffix
@@ -46,9 +78,25 @@ export default function RiskSettings() {
     dailyLossLimitPct: "25.00",
     stopLossPerTrade: "1.00",
     maxRiskPerTrade: "1.00",
-    minConfidenceThreshold: 72,
+    minConfidenceThreshold: 55,
     maxOpenPositions: 3,
   });
+
+  const [activePreset, setActivePreset] = useState<PresetKey | null>("balanced");
+
+  const applyPreset = (key: PresetKey) => {
+    const preset = PRESETS[key];
+    setSettings(s => ({
+      ...s,
+      minConfidenceThreshold: preset.values.minConfidenceThreshold,
+      maxRiskPerTrade: preset.values.maxRiskPerTrade,
+      maxOpenPositions: preset.values.maxOpenPositions,
+      stopLossPerTrade: preset.values.stopLossPerTrade,
+      dailyLossLimitPct: preset.values.dailyLossLimitPct,
+    }));
+    setActivePreset(key);
+    toast.info(`Applied ${preset.label.split(" — ")[0]} preset`);
+  };
 
   useEffect(() => {
     if (riskQuery.data) {
@@ -122,6 +170,54 @@ export default function RiskSettings() {
               ? "Moderate risk. Suitable for experienced traders with a clear strategy."
               : "High risk per trade. Consider reducing to protect your capital."}
           </p>
+        </div>
+      </div>
+
+      {/* Aggressiveness Preset Selector */}
+      <div
+        className="rounded-2xl p-5"
+        style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)" }}
+      >
+        <div className="flex items-center gap-2.5 mb-4">
+          <div className="p-1.5 rounded-lg" style={{ background: "var(--color-accent-dim)", border: "1px solid var(--color-accent)" }}>
+            <Zap size={13} style={{ color: "var(--color-accent)" }} />
+          </div>
+          <div>
+            <h3 style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-text-primary)" }}>Trading Mode</h3>
+            <p style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", marginTop: "0.0625rem" }}>Quick preset — adjusts confidence threshold, risk, and position limits</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {(Object.entries(PRESETS) as [PresetKey, typeof PRESETS[PresetKey]][]).map(([key, preset]) => {
+            const Icon = preset.icon;
+            const isActive = activePreset === key;
+            return (
+              <button
+                key={key}
+                onClick={() => applyPreset(key)}
+                className="flex flex-col items-start gap-2 p-4 rounded-xl text-left transition-all"
+                style={{
+                  background: isActive ? preset.dimColor : "transparent",
+                  border: `1px solid ${isActive ? preset.borderColor : "var(--color-border-subtle)"}`,
+                  cursor: "pointer",
+                  transform: isActive ? "scale(1.01)" : "scale(1)",
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <Icon size={14} style={{ color: isActive ? preset.color : "var(--color-text-tertiary)" }} />
+                  <span style={{ fontSize: "0.8125rem", fontWeight: 600, color: isActive ? preset.color : "var(--color-text-primary)" }}>
+                    {preset.label.split(" — ")[0]}
+                  </span>
+                </div>
+                <p style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)", lineHeight: 1.4 }}>
+                  {preset.description}
+                </p>
+                <div style={{ fontSize: "0.6875rem", color: isActive ? preset.color : "var(--color-text-tertiary)", fontWeight: 500 }}>
+                  Confidence: {preset.values.minConfidenceThreshold}% · Risk: {preset.values.maxRiskPerTrade}%
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 

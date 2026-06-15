@@ -171,26 +171,26 @@ export async function getDynamicConfidenceThreshold(): Promise<{
   try {
     const { winRate, totalTrades } = await get7DayWinRate();
 
-    // Not enough data — use default
+    // Not enough data — use a lower default to allow early trades and build history
     if (totalTrades < 5) {
-      return { threshold: 72, shouldStop: false, reason: "Insufficient data (< 5 trades)", winRate, totalTrades };
+      return { threshold: 55, shouldStop: false, reason: "Insufficient data (< 5 trades) — using 55% to allow early trades", winRate, totalTrades };
     }
 
     let threshold: number;
     let reason: string;
 
     if (winRate >= 70) {
-      threshold = 60;
-      reason = `Win rate ${winRate}% (excellent) — threshold lowered to 60% to capture more opportunities`;
+      threshold = 50;
+      reason = `Win rate ${winRate}% (excellent) — threshold lowered to 50% to capture more opportunities`;
     } else if (winRate >= 60) {
-      threshold = 65;
-      reason = `Win rate ${winRate}% (good) — threshold at 65%`;
+      threshold = 55;
+      reason = `Win rate ${winRate}% (good) — threshold at 55%`;
     } else if (winRate >= 50) {
-      threshold = 72;
-      reason = `Win rate ${winRate}% (normal) — standard threshold 72%`;
+      threshold = 60;
+      reason = `Win rate ${winRate}% (normal) — standard threshold 60%`;
     } else if (winRate >= 40) {
-      threshold = 82;
-      reason = `Win rate ${winRate}% (below average) — threshold raised to 82% (conservative mode)`;
+      threshold = 70;
+      reason = `Win rate ${winRate}% (below average) — threshold raised to 70% (conservative mode)`;
     } else {
       // Win rate < 40% — auto-stop
       threshold = 95; // effectively blocks all trades
@@ -673,7 +673,17 @@ export async function runEnsembleAnalysis(prompt: string): Promise<EnsembleResul
 
   // Find winning action
   const finalAction = (Object.entries(scores).sort(([, a], [, b]) => b - a)[0][0]) as "BUY" | "SELL" | "HOLD";
-  const finalConfidence = Math.round(scores[finalAction] * 100);
+
+  // Use the HIGHEST individual vote confidence for the winning action (not weighted average)
+  // This prevents the weighted math from artificially deflating confidence scores
+  // e.g. if Claude says BUY@80%, GPT says BUY@75%, Gemini says HOLD@0% → confidence = 80% (not 46%)
+  const winningVotes = votes.filter((v) => v.action === finalAction);
+  const bestVoteConfidence = winningVotes.length > 0
+    ? Math.max(...winningVotes.map((v) => v.confidence))
+    : Math.round(scores[finalAction] * 100);
+  // Blend: 70% best vote + 30% weighted average for balance
+  const weightedConfidence = Math.round(scores[finalAction] * 100);
+  const finalConfidence = Math.round(bestVoteConfidence * 0.7 + weightedConfidence * 0.3);
 
   // Determine agreement level
   const actionCounts = votes.reduce((acc, v) => {
@@ -706,11 +716,17 @@ export async function runEnsembleAnalysis(prompt: string): Promise<EnsembleResul
 /**
  * Determine trade size multiplier based on ensemble agreement.
  * - Unanimous → full size (1.0×)
- * - Majority → half size (0.5×)
- * - Split → no trade (0×)
+ * - Majority → 70% size (0.7×) — was 0.5, increased to capture more majority opportunities
+ * - Split → 30% size (0.3×) — was 0 (blocked), now allows small exploratory trades
+ *   BUT only if the winning action has confidence ≥ 60% from at least one model
  */
 export function getEnsembleSizeMultiplier(result: EnsembleResult): number {
   if (result.agreement === "unanimous") return 1.0;
-  if (result.agreement === "majority") return 0.5;
-  return 0; // split → HOLD
+  if (result.agreement === "majority") return 0.7;
+  // Split: allow a small trade only if the best vote is confident enough
+  const bestVoteForAction = result.votes
+    .filter((v) => v.action === result.finalAction)
+    .sort((a, b) => b.confidence - a.confidence)[0];
+  if (bestVoteForAction && bestVoteForAction.confidence >= 65) return 0.3;
+  return 0; // split with low confidence → HOLD
 }
