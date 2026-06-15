@@ -3,7 +3,7 @@ import { RefreshCw, TrendingUp, TrendingDown, Minus, Clock, AlertCircle, Wifi } 
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-const INSTRUMENTS = ["EURUSD", "GBPUSD", "GOLD", "US500", "BTC"];
+const INSTRUMENTS = ["EURUSD", "GBPUSD", "GOLD", "US500"];
 
 function SignalBadge({ signal }: { signal: "BUY" | "SELL" | "HOLD" }) {
   return (

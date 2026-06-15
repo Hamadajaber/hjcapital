@@ -27,6 +27,128 @@ function DecisionBadge({ action }: { action: string }) {
   return <span className={cls}>{action}</span>;
 }
 
+// ─── Log Entries List (collapsible reasoning) ────────────────────────────────
+type LogEntry = {
+  id: number;
+  decision: string;
+  instrument?: string | null;
+  confidence?: number | null;
+  actionTaken: string;
+  reasoning?: string | null;
+  actionDetail?: string | null;
+  pnlRealized?: string | null;
+  createdAt: Date | string | null;
+};
+
+function LogEntriesList({ logs }: { logs: LogEntry[] }) {
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  const toggle = (id: number) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Extract first meaningful sentence from reasoning (skip [SCAN:...] tags)
+  const summarize = (text: string | null | undefined) => {
+    if (!text) return "";
+    // Remove [TAG] prefixes like [UNANIMOUS ENSEMBLE] [SCAN:EURUSD]
+    const clean = text.replace(/\[.*?\]/g, "").trim();
+    // Take first sentence or first 120 chars
+    const dot = clean.search(/[.!?]/);
+    if (dot > 0 && dot < 160) return clean.slice(0, dot + 1);
+    return clean.slice(0, 120) + (clean.length > 120 ? "…" : "");
+  };
+
+  return (
+    <>
+      {logs.map((log) => {
+        const isOpen = expanded.has(log.id);
+        const hasDetail = !!log.reasoning && log.reasoning.length > 10;
+        const summary = summarize(log.reasoning);
+        const pnl = log.pnlRealized ? parseFloat(log.pnlRealized) : 0;
+
+        return (
+          <div
+            key={log.id}
+            className="hj-card transition-all duration-150"
+            style={{ cursor: hasDetail ? "pointer" : "default" }}
+            onClick={() => hasDetail && toggle(log.id)}
+          >
+            {/* Compact header row */}
+            <div className="flex items-center justify-between gap-2 px-4 py-3">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <DecisionBadge action={log.decision} />
+                {log.instrument && log.instrument !== "ALL" && log.instrument !== "NONE" && (
+                  <span
+                    className="text-xs font-semibold px-2 py-0.5 rounded"
+                    style={{
+                      background: "var(--color-bg-elevated)",
+                      border: "1px solid var(--color-border-subtle)",
+                      color: "var(--color-text-primary)",
+                      fontFamily: "var(--font-sans)",
+                    }}
+                  >
+                    {log.instrument}
+                  </span>
+                )}
+                <ActionTakenBadge action={log.actionTaken} />
+                {pnl !== 0 && (
+                  <span className="text-xs font-semibold tabular-nums" style={{ fontFamily: "var(--font-serif)", color: pnl >= 0 ? "var(--color-profit)" : "var(--color-loss)" }}>
+                    {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {(log.confidence ?? 0) > 0 && (
+                  <span className="text-xs tabular-nums" style={{ color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>
+                    {log.confidence}%
+                  </span>
+                )}
+                <span className="text-xs" style={{ color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>
+                  {formatTime(log.createdAt)}
+                </span>
+                {hasDetail && (
+                  <span style={{ color: "var(--color-text-tertiary)", fontSize: "0.6rem" }}>{isOpen ? "▲" : "▼"}</span>
+                )}
+              </div>
+            </div>
+
+            {/* Summary line — always visible */}
+            {summary && (
+              <p className="px-4 pb-2 text-xs leading-relaxed" style={{ color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>
+                {summary}
+              </p>
+            )}
+
+            {/* Expanded full reasoning */}
+            {isOpen && hasDetail && (
+              <div className="px-4 pb-3 border-t" style={{ borderColor: "var(--color-border-subtle)", paddingTop: "0.75rem" }}>
+                {(log.confidence ?? 0) > 0 && (
+                  <div className="confidence-bar mb-3">
+                    <div className="confidence-fill" style={{ width: `${log.confidence}%` }} />
+                  </div>
+                )}
+                <p className="text-xs leading-relaxed" style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)" }}>
+                  {log.reasoning}
+                </p>
+                {log.actionDetail && log.actionDetail !== log.reasoning && (
+                  <p className="text-xs mt-2 italic" style={{ color: "var(--color-text-tertiary)" }}>
+                    {log.actionDetail}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 function ActionTakenBadge({ action }: { action: string }) {
   const label = action.replace(/_/g, " ");
   const cls = (() => {
@@ -966,85 +1088,7 @@ export default function AutoTrade() {
                   </p>
                 </div>
               ) : (
-                logs.map((log) => (
-                  <div
-                    key={log.id}
-                    className="hj-card p-4 transition-all duration-150"
-                  >
-                    {/* Top row */}
-                    <div className="flex items-start justify-between gap-3 mb-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <DecisionBadge action={log.decision} />
-                        {log.instrument && log.instrument !== "ALL" && log.instrument !== "NONE" && (
-                          <span
-                            className="text-xs font-semibold px-2 py-0.5 rounded"
-                            style={{
-                              background: "var(--color-bg-elevated)",
-                              border: "1px solid var(--color-border-subtle)",
-                              color: "var(--color-text-primary)",
-                              fontFamily: "var(--font-sans)",
-                            }}
-                          >
-                            {log.instrument}
-                          </span>
-                        )}
-                        {(log.confidence ?? 0) > 0 && (
-                          <span className="text-xs" style={{ color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>
-                            {log.confidence}% confidence
-                          </span>
-                        )}
-                        <ActionTakenBadge action={log.actionTaken} />
-                      </div>
-                      <span
-                        className="text-xs whitespace-nowrap shrink-0"
-                        style={{ color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}
-                      >
-                        {formatTime(log.createdAt)}
-                      </span>
-                    </div>
-
-                    {/* Confidence bar */}
-                    {(log.confidence ?? 0) > 0 && (
-                      <div className="confidence-bar mb-2">
-                        <div
-                          className="confidence-fill"
-                          style={{ width: `${log.confidence}%` }}
-                        />
-                      </div>
-                    )}
-
-                    {/* Reasoning */}
-                    <p
-                      className="text-xs leading-relaxed"
-                      style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)" }}
-                    >
-                      {log.reasoning}
-                    </p>
-
-                    {/* Action detail */}
-                    {log.actionDetail && log.actionDetail !== log.reasoning && (
-                      <p
-                        className="text-xs mt-1 italic"
-                        style={{ color: "var(--color-text-tertiary)" }}
-                      >
-                        {log.actionDetail}
-                      </p>
-                    )}
-
-                    {/* P&L */}
-                    {log.pnlRealized && parseFloat(log.pnlRealized) !== 0 && (
-                      <div
-                        className="mt-2 text-sm font-semibold"
-                        style={{
-                          fontFamily: "var(--font-serif)",
-                          color: parseFloat(log.pnlRealized) >= 0 ? "var(--color-profit)" : "var(--color-loss)",
-                        }}
-                      >
-                        P&L: {parseFloat(log.pnlRealized) >= 0 ? "+" : ""}${parseFloat(log.pnlRealized).toFixed(2)}
-                      </div>
-                    )}
-                  </div>
-                ))
+                <LogEntriesList logs={logs} />
               )}
               <div ref={logEndRef} />
             </div>

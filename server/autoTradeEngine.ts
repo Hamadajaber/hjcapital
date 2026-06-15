@@ -329,7 +329,7 @@ async function runCycle() {
       const remainingSlots = risk.maxOpenPositions - openCount;
 
       // Get all currently open markets
-      const allInstruments = getOpenMarkets(["EURUSD", "GBPUSD", "GOLD", "US500", "BTC"]);
+      const allInstruments = getOpenMarkets(["EURUSD", "GBPUSD", "GOLD", "US500"]);
 
       // Filter out instruments already in open positions
       const candidateInstruments = allInstruments.filter((inst) => !openInstruments.includes(inst));
@@ -483,7 +483,7 @@ async function gatherMarketContext(): Promise<Record<string, unknown>> {
   ]);
 
   // Fetch multi-timeframe candles + technical analysis for open markets
-  const allTopInstruments = ["EURUSD", "GOLD", "US500", "GBPUSD", "BTC"];
+  const allTopInstruments = ["EURUSD", "GOLD", "US500", "GBPUSD"];
   const topInstruments = getOpenMarkets(allTopInstruments);
 
   const technicalData: Record<string, MultiTimeframeData> = {};
@@ -666,7 +666,7 @@ LATEST NEWS HEADLINES:
 ${news.slice(0, 5).join("\n")}
 
 CURRENTLY OPEN MARKETS (only trade these):
-${getOpenMarkets(["EURUSD", "GBPUSD", "GOLD", "US500", "BTC"]).join(", ") || "No markets open right now"}
+${getOpenMarkets(["EURUSD", "GBPUSD", "GOLD", "US500"]).join(", ") || "No markets open right now"}
 
 CURRENTLY OPEN POSITIONS (correlation filter — avoid correlated pairs):
 ${openInstruments.length > 0 ? openInstruments.join(", ") : "None"}
