@@ -38,6 +38,12 @@ import {
   getSessionLogs,
   getRecentSessions,
 } from "./autoTradeEngine";
+import {
+  getDynamicConfidenceThreshold,
+  checkEconomicCalendar,
+} from "./engineIntelligence";
+import { getWSState, getAllCachedPrices } from "./capitalcomWS";
+import { getRecentLessons, getEngineIntelligence } from "./db";
 
 // ─── Owner-only guard ─────────────────────────────────────────────────────────
 // Uses role-based check (admin) as primary guard.
@@ -600,6 +606,45 @@ Respond ONLY with valid JSON:
   }),
 
   // ─── Telegram Webhook Setup ──────────────────────────────────────────────────
+  // ─── Intelligence Dashboard ──────────────────────────────────────────────────
+  intelligence: router({
+    getLessons: ownerProcedure
+      .input(z.object({ instrument: z.string().optional(), limit: z.number().default(10) }))
+      .query(async ({ input }) => {
+        return await getRecentLessons(input.instrument, input.limit);
+      }),
+    getDynamicThreshold: ownerProcedure
+      .query(async () => {
+        return await getDynamicConfidenceThreshold();
+      }),
+    getIntelligenceHistory: ownerProcedure
+      .input(z.object({ limit: z.number().default(20) }))
+      .query(async ({ input }) => {
+        const intel = await getEngineIntelligence();
+        return intel ? [intel] : [];
+      }),
+    getCalendarEvents: ownerProcedure
+      .query(async () => {
+        return await checkEconomicCalendar();
+      }),
+    getStreamingStatus: ownerProcedure
+      .query(async () => {
+        const wsState = getWSState();
+        const cachedPrices = getAllCachedPrices();
+        return {
+          websocket: wsState,
+          cachedPrices: cachedPrices.map((p) => ({
+            epic: p.epic,
+            bid: p.bid,
+            ask: p.ask,
+            mid: p.mid,
+            source: p.source,
+            ageMs: Date.now() - p.timestamp,
+          })),
+        };
+      }),
+  }),
+
   telegram: router({
     registerWebhook: ownerProcedure
       .input(z.object({ webhookUrl: z.string().url() }))

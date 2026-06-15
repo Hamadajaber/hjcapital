@@ -36,6 +36,13 @@
       "when": 1781518430506,
       "tag": "0004_tan_earthquake",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1781542803860,
+      "tag": "0005_premium_hawkeye",
+      "breakpoints": true
     }
   ]
 }

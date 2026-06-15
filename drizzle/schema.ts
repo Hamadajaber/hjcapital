@@ -189,3 +189,39 @@ export const priceAlerts = mysqlTable("price_alerts", {
 
 export type PriceAlert = typeof priceAlerts.$inferSelect;
 export type InsertPriceAlert = typeof priceAlerts.$inferInsert;
+
+// Trade Lessons — AI self-evaluation after each closed trade (Learning Memory System)
+export const tradeLessons = mysqlTable("trade_lessons", {
+  id: int("id").autoincrement().primaryKey(),
+  tradeId: int("tradeId"),
+  instrument: varchar("instrument", { length: 32 }).notNull(),
+  direction: mysqlEnum("direction", ["BUY", "SELL"]).notNull(),
+  entryPrice: decimal("entryPrice", { precision: 12, scale: 5 }),
+  exitPrice: decimal("exitPrice", { precision: 12, scale: 5 }),
+  pnl: decimal("pnl", { precision: 10, scale: 2 }),
+  wasCorrect: boolean("wasCorrect").notNull().default(false),
+  aiVerdict: text("aiVerdict").notNull(),  // AI's self-evaluation
+  lessonText: text("lessonText").notNull(), // Key lesson extracted
+  marketConditions: text("marketConditions"), // Brief market context at trade time
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type TradeLesson = typeof tradeLessons.$inferSelect;
+export type InsertTradeLesson = typeof tradeLessons.$inferInsert;
+
+// Engine Intelligence State — stores dynamic thresholds and regime data
+export const engineIntelligence = mysqlTable("engine_intelligence", {
+  id: int("id").autoincrement().primaryKey(),
+  // Dynamic confidence threshold (adjusted based on 7-day win rate)
+  dynamicConfidenceThreshold: int("dynamicConfidenceThreshold").notNull().default(72),
+  // Current market regime per instrument (JSON: { EURUSD: 'trending_up', GOLD: 'ranging', ... })
+  marketRegimes: json("marketRegimes"),
+  // 7-day win rate (0-100)
+  winRate7d: decimal("winRate7d", { precision: 5, scale: 2 }).notNull().default("0.00"),
+  // Total trades in last 7 days
+  trades7d: int("trades7d").notNull().default(0),
+  // Last time intelligence was updated
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type EngineIntelligence = typeof engineIntelligence.$inferSelect;

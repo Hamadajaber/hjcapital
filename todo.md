@@ -124,3 +124,60 @@
 - [x] Read autoTradeEngine.ts data flow: gatherMarketContext → analyzeMarket → executeDecision → logDecision
 - [x] Add Unit Tests for technicalAnalysis.ts — 55 tests covering all 7 exported functions (RSI, MACD, Bollinger, Patterns, Correlation, Summary, Formatter)
 - [x] Total test suite: 71 tests, 71 passing (4 test files)
+
+## Round 11 — Strategic Development Guide Implementation
+
+### Phase 1A — Learning Memory System
+- [x] Add `trade_lessons` DB table (trade_id, instrument, direction, entry, exit, pnl, ai_verdict, lesson_text, created_at)
+- [x] Add `evaluateTrade()` function: after trade closes, call AI to evaluate the decision and extract a lesson
+- [x] Add `getRecentLessons()` DB helper: fetch last 5 lessons per instrument
+- [x] Inject recent lessons into analyzeMarket() prompt context
+
+### Phase 1B — Dynamic Confidence Threshold
+- [x] Add `getDynamicConfidenceThreshold()` function: calculate based on 7-day win rate
+- [x] If win rate > 70% → threshold = 60% (more aggressive)
+- [x] If win rate 50-70% → threshold = 70% (normal)
+- [x] If win rate < 50% → threshold = 85% (conservative)
+- [x] If win rate < 40% → auto-stop engine + Telegram alert
+- [x] Use dynamic threshold in executeDecision() instead of fixed value
+
+### Phase 1C — Market Regime Detection
+- [x] Add `detectMarketRegime()` function: classify as Trending Up / Trending Down / Ranging / Volatile
+- [x] Use ATR + RSI + Bollinger bandwidth for classification
+- [x] Adjust strategy per regime: Trending = large targets, Ranging = small targets, Volatile = HOLD
+- [x] Include regime in AI prompt context
+
+### Phase 1D — Adaptive ATR Stop Loss
+- [x] Add `calculateATRStopLoss()` function: SL = entry ± (ATR × 1.5)
+- [x] Add trailing stop logic: move SL to breakeven at 50% profit, to +25% at 75% profit
+- [x] Replace fixed SL in executeDecision() with ATR-based SL
+- [x] Add trailing stop monitoring in runCycle()
+
+### Phase 2A — Client Sentiment Integration
+- [x] Add `getClientSentiment()` to capitalcom.ts: GET /api/v1/clientsentiment
+- [x] Add contrarian signal logic: if >75% long → bearish signal; if >75% short → bullish signal
+- [x] Include sentiment data in analyzeMarket() prompt
+
+### Phase 2B — Economic Calendar Filter
+- [x] Add `checkEconomicCalendar()` function: fetch Forex Factory RSS for high-impact events
+- [x] Parse events for next 4 hours: NFP, FOMC, CPI, GDP, interest rate decisions
+- [x] If high-impact event detected → skip cycle + send Telegram warning
+
+### Phase 2C — Ensemble Decision Making (3 AI Models)
+- [x] Add `ensembleAnalysis()` function: call Claude + GPT-4o + Gemini Flash in parallel
+- [x] Implement weighted voting: Claude 40%, GPT 35%, Gemini 25%
+- [x] 3/3 agreement → full size trade; 2/3 → half size; 1/3 → HOLD
+- [x] Log each model's vote in auto_trade_log
+
+### Phase 3 — WebSocket Streaming
+- [x] Add `capitalcomWebSocket.ts`: connect to Capital.com WebSocket API
+- [x] Subscribe to real-time OHLC candles for all active instruments
+- [x] Replace polling in runCycle() with event-driven price updates
+- [x] Handle reconnection logic
+
+### UI Updates
+- [x] AutoTrade page: show current Market Regime badge
+- [x] AutoTrade page: show Client Sentiment gauge (% long vs short)
+- [x] AutoTrade page: show Dynamic Confidence Threshold value
+- [x] AutoTrade page: show Ensemble Votes (Claude/GPT/Gemini) in decision log
+- [x] AutoTrade page: show Recent Lessons panel

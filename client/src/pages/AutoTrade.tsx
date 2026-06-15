@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Brain, Zap, Shield, TrendingUp, Square, Activity, Clock, Calendar, Bell, BellRing, Trash2, Plus } from "lucide-react";
+import { Brain, Zap, Shield, TrendingUp, Square, Activity, Clock, Calendar, Bell, BellRing, Trash2, Plus, Lightbulb, BarChart3, Globe, Wifi, WifiOff } from "lucide-react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatTime(date: Date | string | null) {
@@ -47,6 +47,197 @@ function ActionTakenBadge({ action }: { action: string }) {
 }
 
 // ─── Price Alerts Card ───────────────────────────────────────────────────────
+// ─── Intelligence Dashboard Card ─────────────────────────────────────────────
+function IntelligenceDashboardCard() {
+  const [activeTab, setActiveTab] = useState<"lessons" | "threshold" | "calendar" | "streaming">("lessons");
+
+  const lessonsQuery = trpc.intelligence.getLessons.useQuery({ limit: 8 }, { refetchInterval: 60000 });
+  const thresholdQuery = trpc.intelligence.getDynamicThreshold.useQuery(undefined, { refetchInterval: 30000 });
+  const calendarQuery = trpc.intelligence.getCalendarEvents.useQuery(undefined, { refetchInterval: 300000 });
+  const streamingQuery = trpc.intelligence.getStreamingStatus.useQuery(undefined, { refetchInterval: 10000 });
+
+  const wsConnected = streamingQuery.data?.websocket.connected ?? false;
+
+  const tabs = [
+    { id: "lessons" as const, label: "AI Lessons" },
+    { id: "threshold" as const, label: "Confidence" },
+    { id: "calendar" as const, label: "Calendar" },
+    { id: "streaming" as const, label: wsConnected ? "WS Live" : "Polling" },
+  ];
+
+  return (
+    <div className="hj-card p-5">
+      <h2 className="section-label flex items-center gap-2 mb-4">
+        <Brain size={13} style={{ color: "var(--color-accent)" }} />
+        AI Intelligence
+      </h2>
+
+      {/* Tab bar */}
+      <div className="flex gap-1 mb-4" style={{ borderBottom: "1px solid var(--color-border-subtle)", paddingBottom: "8px" }}>
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className="px-2 py-1 rounded text-xs transition-all"
+            style={{
+              fontFamily: "var(--font-sans)",
+              background: activeTab === tab.id ? "var(--color-accent)" : "transparent",
+              color: activeTab === tab.id ? "#000" : "var(--color-text-secondary)",
+              fontWeight: activeTab === tab.id ? 600 : 400,
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Lessons Tab */}
+      {activeTab === "lessons" && (
+        <div className="space-y-2 max-h-64 overflow-y-auto">
+          {lessonsQuery.isLoading ? (
+            <p className="text-xs text-center py-4" style={{ color: "var(--color-text-tertiary)" }}>Loading lessons...</p>
+          ) : !lessonsQuery.data?.length ? (
+            <div className="text-center py-6">
+              <Lightbulb size={24} className="mx-auto mb-2" style={{ color: "var(--color-text-tertiary)" }} />
+              <p className="text-xs" style={{ color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>
+                No lessons yet. The AI learns after each closed trade.
+              </p>
+            </div>
+          ) : (
+            lessonsQuery.data.map((lesson, i) => (
+              <div key={i} className="p-3 rounded" style={{ background: "var(--color-bg-secondary)", border: "1px solid var(--color-border-subtle)" }}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold" style={{ color: "var(--color-accent)", fontFamily: "var(--font-sans)" }}>
+                    {lesson.instrument}
+                  </span>
+                  <span className="text-xs" style={{ fontFamily: "var(--font-sans)", color: parseFloat(lesson.pnl ?? "0") >= 0 ? "var(--color-profit)" : "var(--color-loss)" }}>
+                    {parseFloat(lesson.pnl ?? "0") >= 0 ? "+" : ""}${parseFloat(lesson.pnl ?? "0").toFixed(2)}
+                  </span>
+                </div>
+                <p className="text-xs leading-relaxed" style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)" }}>
+                  {lesson.lessonText}
+                </p>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Confidence Threshold Tab */}
+      {activeTab === "threshold" && (
+        <div className="space-y-2">
+          {thresholdQuery.isLoading ? (
+            <p className="text-xs text-center py-4" style={{ color: "var(--color-text-tertiary)" }}>Loading...</p>
+          ) : (
+            <>
+              {[
+                { label: "Dynamic Threshold", value: `${thresholdQuery.data?.threshold ?? "—"}%`, accent: true },
+                { label: "7-Day Win Rate", value: `${thresholdQuery.data?.winRate?.toFixed(1) ?? "—"}%`, profit: true },
+                { label: "Recent Trades (7d)", value: String(thresholdQuery.data?.totalTrades ?? "—") },
+              ].map((r) => (
+                <div key={r.label} className="flex items-center justify-between py-2" style={{ borderBottom: "1px solid var(--color-border-subtle)" }}>
+                  <span className="text-xs" style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)" }}>{r.label}</span>
+                  <span className="text-sm font-bold" style={{ fontFamily: "var(--font-serif)", color: r.accent ? "var(--color-accent)" : r.profit ? "var(--color-profit)" : "var(--color-text-primary)" }}>
+                    {r.value}
+                  </span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between py-2">
+                <span className="text-xs" style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)" }}>Engine Status</span>
+                <span className="text-xs font-semibold px-2 py-0.5 rounded" style={{
+                  fontFamily: "var(--font-sans)",
+                  background: thresholdQuery.data?.shouldStop ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)",
+                  color: thresholdQuery.data?.shouldStop ? "var(--color-loss)" : "var(--color-profit)",
+                }}>
+                  {thresholdQuery.data?.shouldStop ? "⚠ Auto-Stop Active" : "✓ Normal"}
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Economic Calendar Tab */}
+      {activeTab === "calendar" && (
+        <div className="space-y-2">
+          {calendarQuery.isLoading ? (
+            <p className="text-xs text-center py-4" style={{ color: "var(--color-text-tertiary)" }}>Checking calendar...</p>
+          ) : (
+            <>
+              <div className="flex items-center gap-2 p-2 rounded mb-3" style={{
+                background: calendarQuery.data?.shouldSkip ? "rgba(239,68,68,0.1)" : "rgba(34,197,94,0.1)",
+                border: `1px solid ${calendarQuery.data?.shouldSkip ? "rgba(239,68,68,0.3)" : "rgba(34,197,94,0.3)"}`,
+              }}>
+                <span className="text-sm">{calendarQuery.data?.shouldSkip ? "⚠️" : "✅"}</span>
+                <p className="text-xs" style={{ color: "var(--color-text-primary)", fontFamily: "var(--font-sans)" }}>
+                  {calendarQuery.data?.reason ?? "No high-impact events"}
+                </p>
+              </div>
+              {(calendarQuery.data?.events ?? []).slice(0, 5).map((ev, i) => (
+                <div key={i} className="flex items-center justify-between py-1.5" style={{ borderBottom: "1px solid var(--color-border-subtle)" }}>
+                  <div>
+                    <span className="text-xs font-semibold" style={{ color: "var(--color-text-primary)", fontFamily: "var(--font-sans)" }}>{ev.event}</span>
+                    <span className="text-xs ml-2" style={{ color: "var(--color-text-tertiary)" }}>{ev.currency}</span>
+                  </div>
+                  <span className="text-xs px-1.5 py-0.5 rounded" style={{
+                    fontFamily: "var(--font-sans)",
+                    background: ev.impact === "high" ? "rgba(239,68,68,0.15)" : "rgba(251,191,36,0.15)",
+                    color: ev.impact === "high" ? "var(--color-loss)" : "var(--color-gold)",
+                  }}>
+                    {ev.impact}
+                  </span>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Streaming Status Tab */}
+      {activeTab === "streaming" && (
+        <div className="space-y-2">
+          {streamingQuery.isLoading ? (
+            <p className="text-xs text-center py-4" style={{ color: "var(--color-text-tertiary)" }}>Loading...</p>
+          ) : (
+            <>
+              <div className="flex items-center gap-2 p-2 rounded mb-3" style={{
+                background: wsConnected ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)",
+                border: `1px solid ${wsConnected ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`,
+              }}>
+                {wsConnected
+                  ? <Wifi size={14} style={{ color: "var(--color-profit)" }} />
+                  : <WifiOff size={14} style={{ color: "var(--color-loss)" }} />}
+                <span className="text-xs font-semibold" style={{ fontFamily: "var(--font-sans)", color: wsConnected ? "var(--color-profit)" : "var(--color-loss)" }}>
+                  {wsConnected ? "WebSocket Connected" : "Using REST Polling"}
+                </span>
+              </div>
+              {[
+                { label: "Reconnects", value: streamingQuery.data?.websocket.reconnectCount ?? 0 },
+                { label: "Subscribed Epics", value: streamingQuery.data?.websocket.subscribedEpics?.length ?? 0 },
+                { label: "Cached Prices", value: streamingQuery.data?.cachedPrices?.length ?? 0 },
+              ].map((r) => (
+                <div key={r.label} className="flex items-center justify-between py-1.5" style={{ borderBottom: "1px solid var(--color-border-subtle)" }}>
+                  <span className="text-xs" style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)" }}>{r.label}</span>
+                  <span className="text-xs font-semibold" style={{ color: "var(--color-text-primary)", fontFamily: "var(--font-sans)" }}>{r.value}</span>
+                </div>
+              ))}
+              {(streamingQuery.data?.cachedPrices ?? []).map((p) => (
+                <div key={p.epic} className="flex items-center justify-between py-1" style={{ borderBottom: "1px solid var(--color-border-subtle)" }}>
+                  <span className="text-xs font-semibold" style={{ color: "var(--color-accent)", fontFamily: "var(--font-sans)" }}>{p.epic}</span>
+                  <div className="text-right">
+                    <span className="text-xs" style={{ color: "var(--color-text-primary)", fontFamily: "var(--font-sans)" }}>{p.mid.toFixed(5)}</span>
+                    <span className="text-xs ml-2" style={{ color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>{p.source}</span>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PriceAlertsCard() {
   const [instrument, setInstrument] = useState("EURUSD");
   const [targetPrice, setTargetPrice] = useState("");
@@ -599,6 +790,9 @@ export default function AutoTrade() {
               </p>
             )}
           </div>
+          {/* Intelligence Dashboard Card */}
+          <IntelligenceDashboardCard />
+
           {/* Price Alerts Card */}
           <div className="hj-card p-5">
             <h2 className="section-label flex items-center gap-2 mb-4">

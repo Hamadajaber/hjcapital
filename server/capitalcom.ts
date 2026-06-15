@@ -99,6 +99,14 @@ async function capitalRequest<T>(
   return response.json() as Promise<T>;
 }
 
+/**
+ * Export session tokens for use in other modules (e.g., client sentiment)
+ */
+export async function getSessionTokens(): Promise<{ cst: string; securityToken: string }> {
+  const session = await getSession();
+  return { cst: session.cst, securityToken: session.securityToken };
+}
+
 // ─── Account ─────────────────────────────────────────────────────────────────
 
 export interface CapitalAccount {

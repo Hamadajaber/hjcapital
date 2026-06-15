@@ -431,3 +431,99 @@ export async function getInstrumentPerformance(): Promise<Array<{
     };
   });
 }
+
+// ─── Trade Lessons (Learning Memory System) ───────────────────────────────────
+
+import {
+  tradeLessons, InsertTradeLesson, TradeLesson,
+  engineIntelligence, EngineIntelligence,
+} from "../drizzle/schema";
+
+export async function insertTradeLesson(lesson: Omit<InsertTradeLesson, "id" | "createdAt">): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(tradeLessons).values(lesson);
+}
+
+/**
+ * Get the most recent lessons for a specific instrument (or all instruments).
+ * Used to inject into AI prompt context.
+ */
+export async function getRecentLessons(instrument?: string, limit = 5): Promise<TradeLesson[]> {
+  const db = await getDb();
+  if (!db) return [];
+  if (instrument) {
+    return db
+      .select()
+      .from(tradeLessons)
+      .where(eq(tradeLessons.instrument, instrument))
+      .orderBy(desc(tradeLessons.createdAt))
+      .limit(limit);
+  }
+  return db
+    .select()
+    .from(tradeLessons)
+    .orderBy(desc(tradeLessons.createdAt))
+    .limit(limit * 2); // broader context when no instrument filter
+}
+
+/**
+ * Get 7-day win rate from closed trades.
+ */
+export async function get7DayWinRate(): Promise<{ winRate: number; totalTrades: number; wins: number }> {
+  const db = await getDb();
+  if (!db) return { winRate: 0, totalTrades: 0, wins: 0 };
+
+  const since = new Date();
+  since.setDate(since.getDate() - 7);
+
+  const recentTrades = await db
+    .select()
+    .from(trades)
+    .where(and(eq(trades.status, "closed"), gte(trades.closedAt!, since)));
+
+  const totalTrades = recentTrades.length;
+  const wins = recentTrades.filter((t) => parseFloat(t.pnl ?? "0") > 0).length;
+  const winRate = totalTrades > 0 ? (wins / totalTrades) * 100 : 0;
+
+  return { winRate: Math.round(winRate * 10) / 10, totalTrades, wins };
+}
+
+// ─── Engine Intelligence ──────────────────────────────────────────────────────
+
+export async function getEngineIntelligence(): Promise<EngineIntelligence | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(engineIntelligence).limit(1);
+  if (rows.length > 0) return rows[0];
+  // Seed default row
+  await db.insert(engineIntelligence).values({
+    dynamicConfidenceThreshold: 72,
+    winRate7d: "0.00",
+    trades7d: 0,
+    marketRegimes: {},
+  });
+  const seeded = await db.select().from(engineIntelligence).limit(1);
+  return seeded[0] ?? null;
+}
+
+export async function updateEngineIntelligence(patch: Partial<{
+  dynamicConfidenceThreshold: number;
+  marketRegimes: Record<string, string>;
+  winRate7d: string;
+  trades7d: number;
+}>): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const existing = await db.select().from(engineIntelligence).limit(1);
+  if (existing.length === 0) {
+    await db.insert(engineIntelligence).values({
+      dynamicConfidenceThreshold: patch.dynamicConfidenceThreshold ?? 72,
+      winRate7d: patch.winRate7d ?? "0.00",
+      trades7d: patch.trades7d ?? 0,
+      marketRegimes: patch.marketRegimes ?? {},
+    });
+  } else {
+    await db.update(engineIntelligence).set(patch);
+  }
+}

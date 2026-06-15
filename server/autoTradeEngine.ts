@@ -36,6 +36,7 @@ import {
   getOpenMarkets,
   checkMarketTradeable,
   getMinDealSize,
+  getSessionTokens,
 } from "./capitalcom";
 import type { OHLCVCandle } from "./capitalcom";
 import {
@@ -49,6 +50,21 @@ import {
   formatSentimentForPrompt,
 } from "./sentimentAnalysis";
 import { getDb, getPriceAlerts, triggerPriceAlert } from "./db";
+import {
+  evaluateClosedTrade,
+  formatLessonsForPrompt,
+  getDynamicConfidenceThreshold,
+  detectMarketRegime,
+  formatRegimeForPrompt,
+  calculateATRStopLoss,
+  calculateTrailingStop,
+  getClientSentiment,
+  formatSentimentSignalForPrompt,
+  checkEconomicCalendar,
+  runEnsembleAnalysis,
+  getEnsembleSizeMultiplier,
+} from "./engineIntelligence";
+import type { MarketRegime, EnsembleResult } from "./engineIntelligence";
 import {
   autoTradeSession,
   autoTradeLog,
@@ -210,6 +226,33 @@ async function runCycle() {
   console.log(`[AutoTrade] Cycle #${_engineState.cycleCount} starting...`);
 
   try {
+    // 0. Check Economic Calendar — skip if high-impact event in next 4 hours
+    const calendarCheck = await checkEconomicCalendar();
+    if (calendarCheck.shouldSkip) {
+      await logDecision(_engineState.sessionId, {
+        instrument: "ALL",
+        action: "SKIP",
+        confidence: 0,
+        reasoning: `Economic Calendar: ${calendarCheck.reason}`,
+      }, "skipped", calendarCheck.reason);
+      await notifyRiskAlert(`📅 تم تخطي الدورة بسبب أحداث اقتصادية كبيرة\n${calendarCheck.reason}`).catch(() => {});
+      console.log(`[AutoTrade] Cycle skipped: ${calendarCheck.reason}`);
+      return;
+    }
+
+    // 0b. Dynamic Confidence Threshold — auto-adjust based on 7-day win rate
+    const dynamicThreshold = await getDynamicConfidenceThreshold();
+    if (dynamicThreshold.shouldStop) {
+      await logDecision(_engineState.sessionId, {
+        instrument: "ALL",
+        action: "SKIP",
+        confidence: 0,
+        reasoning: `Auto-stop: ${dynamicThreshold.reason}`,
+      }, "blocked_risk", dynamicThreshold.reason);
+      await stopAutoTrade(`Win rate protection: ${dynamicThreshold.reason}`);
+      return;
+    }
+
     // 1. Check risk limits first
     const riskCheck = await checkDailyRiskLimits(_engineState.sessionId, _engineState.mode);
     if (riskCheck.blocked) {
@@ -282,7 +325,7 @@ async function runCycle() {
       // Get list of currently open instrument epics for correlation filter
       const openInstruments = openPositions.map((p) => p.epic);
 
-      const decision = await analyzeMarket(marketContext, risk, openInstruments);
+      const decision = await analyzeMarket(marketContext, risk, openInstruments, dynamicThreshold.threshold);
       if (decision.action !== "HOLD" && decision.action !== "SKIP") {
         // Final market-hours guard before execution
         if (decision.instrument !== "NONE" && !isMarketOpen(decision.instrument)) {
@@ -341,6 +384,22 @@ async function gatherMarketContext(): Promise<Record<string, unknown>> {
   const technicalData: Record<string, MultiTimeframeData> = {};
   const sentimentData: Record<string, string> = {};
 
+  // Fetch Capital.com Client Sentiment (contrarian signal)
+  let clientSentimentSection = "";
+  try {
+    const tokens = await getSessionTokens().catch(() => null);
+    if (tokens) {
+      const sentimentMap = await getClientSentiment(
+        tokens.securityToken,
+        tokens.cst,
+        topInstruments.map((inst) => INSTRUMENT_EPICS[inst] ?? inst)
+      );
+      clientSentimentSection = formatSentimentSignalForPrompt(sentimentMap);
+    }
+  } catch (err) {
+    console.warn("[AutoTrade] Client sentiment error:", err);
+  }
+
   await Promise.allSettled(
     topInstruments.map(async (inst) => {
       const epic = INSTRUMENT_EPICS[inst] ?? inst;
@@ -388,6 +447,7 @@ async function gatherMarketContext(): Promise<Record<string, unknown>> {
     news: newsHeadlines.status === "fulfilled" ? newsHeadlines.value : [],
     technical: technicalData,
     sentiment: sentimentData,
+    clientSentiment: clientSentimentSection,
     timestamp: new Date().toISOString(),
   };
 }
@@ -426,12 +486,15 @@ function getDefaultNewsContext(): string[] {
 async function analyzeMarket(
   marketContext: Record<string, unknown>,
   risk: { minConfidenceThreshold: number; maxRiskPerTrade: number },
-  openInstruments: string[]
+  openInstruments: string[],
+  dynamicThreshold?: number
 ): Promise<TradeDecision> {
+  const effectiveThreshold = dynamicThreshold ?? risk.minConfidenceThreshold;
   const prices = (marketContext.prices as any[]) ?? [];
   const news = (marketContext.news as string[]) ?? [];
   const technical = marketContext.technical as Record<string, MultiTimeframeData>;
   const sentiment = marketContext.sentiment as Record<string, string>;
+  const clientSentiment = (marketContext.clientSentiment as string) ?? "";
 
   const pricesSummary = prices
     .map((p: any) => `${p.epic}: bid=${p.bid}, ask=${p.ask}, change=${p.pctChange?.toFixed(2)}%`)
@@ -454,9 +517,28 @@ async function analyzeMarket(
     })
     .join("\n\n");
 
-  // Build sentiment section
+  // Build sentiment section (news-based)
   const sentimentSection = Object.values(sentiment).join("\n");
 
+  // Build regime section for each instrument
+  const regimeSection = Object.entries(technical)
+    .map(([inst, data]) => {
+      if (data.candles1h.length >= 20) {
+        const candles = data.candles1h.map((c: OHLCVCandle) => ({ open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume, timestamp: c.timestamp }));
+        const regime = detectMarketRegime(candles);
+        return formatRegimeForPrompt(inst, regime);
+      }
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n");
+
+  // Fetch lessons for context (top instruments)
+  const lessonsSection = await Promise.all(
+    Object.keys(technical).slice(0, 2).map((inst) => formatLessonsForPrompt(inst))
+  ).then((arr) => arr.filter(Boolean).join("\n"));
+
+  // Build the full enhanced prompt
   const prompt = `You are HJ Capital's elite AI trading analyst. Your job is to analyze the market using multi-timeframe technical analysis, sentiment, and price action to recommend ONE specific trade.
 
 LIVE MARKET PRICES (right now):
@@ -467,6 +549,13 @@ ${technicalSection || "No technical data available"}
 
 NEWS SENTIMENT:
 ${sentimentSection || "No sentiment data available"}
+
+MARKET REGIME ANALYSIS:
+${regimeSection || "No regime data available"}
+${clientSentiment ? `\nCAPITAL.COM CLIENT SENTIMENT (Contrarian):${clientSentiment}` : ""}
+
+PAST LESSONS (learn from these):
+${lessonsSection || "No lessons yet — this is early in the learning cycle"}
 
 LATEST NEWS HEADLINES:
 ${news.slice(0, 5).join("\n")}
@@ -480,7 +569,7 @@ ${openInstruments.length > 0 ? openInstruments.join(", ") : "None"}
 TRADING RULES:
 - ONLY trade instruments listed in CURRENTLY OPEN MARKETS above — never trade closed markets
 - DO NOT open a position in an instrument marked as ⚠️ CORRELATED with an open position
-- Only recommend a trade if confidence is ${risk.minConfidenceThreshold}% or higher
+  - Only recommend a trade if confidence is ${effectiveThreshold}% or higher (dynamic threshold based on recent performance)
 - Max risk per trade: ${risk.maxRiskPerTrade}% of account
 - Use multi-timeframe confluence: prefer trades where 5min + 1H + 4H all agree on direction
 - Prefer small, consistent profits over large risky gains
@@ -507,26 +596,70 @@ If no good opportunity exists, respond:
   "reasoning": "No high-confidence setup found at this time"
 }`;
 
-  const response = await invokeLLM({
+  // Run Ensemble Analysis (3 AI models vote)
+  const ensemble = await runEnsembleAnalysis(prompt);
+  const sizeMultiplier = getEnsembleSizeMultiplier(ensemble);
+
+  // If ensemble says split → HOLD
+  if (sizeMultiplier === 0 || ensemble.finalAction === "HOLD") {
+    return {
+      instrument: "NONE",
+      action: "HOLD",
+      confidence: ensemble.finalConfidence,
+      reasoning: `Ensemble split — no consensus: ${ensemble.combinedReasoning}`,
+    };
+  }
+
+  // Use the winning vote's entry/SL/TP details
+  const winningVote = ensemble.votes.find((v) => v.action === ensemble.finalAction);
+  const parsedDetails = winningVote ? JSON.parse(
+    // Re-parse the winning model's response to get price levels
+    // Fallback: use ensemble action with no specific levels
+    "{}"
+  ) : {};
+
+  // We need to re-parse the winning model's full response — use the first vote's reasoning
+  // The ensemble already has the action and confidence; we need to get price levels from the prompt
+  // Run a quick single-model call to get the structured entry/SL/TP
+  const detailResponse = await invokeLLM({
     messages: [
       { role: "system", content: "You are a professional forex and commodities trader. You respond only in valid JSON." },
-      { role: "user", content: prompt },
+      { role: "user", content: prompt + `\n\nThe ensemble of AI models has decided: ${ensemble.finalAction} with ${ensemble.finalConfidence}% confidence (${ensemble.agreement} agreement). Now provide the specific entry, stop loss, and take profit levels.` },
     ],
     response_format: { type: "json_object" } as any,
   });
 
-  const content = response.choices?.[0]?.message?.content ?? "{}";
-  const parsed = JSON.parse(typeof content === "string" ? content : JSON.stringify(content));
+  const detailContent = detailResponse.choices?.[0]?.message?.content ?? "{}";
+  const parsed = JSON.parse(typeof detailContent === "string" ? detailContent : JSON.stringify(detailContent));
+
+  // Use ATR-based stop loss if candle data is available
+  const instrument = parsed.instrument ?? ensemble.votes[0]?.action !== "HOLD" ? (Object.keys(technical)[0] ?? "NONE") : "NONE";
+  const instTechnical = technical[instrument];
+  let stopLoss = parsed.stopLoss;
+  let takeProfit = parsed.takeProfit;
+
+  if (instTechnical && instTechnical.candles1h.length >= 14 && parsed.entryPrice) {
+    const candles = instTechnical.candles1h.map((c: OHLCVCandle) => ({ open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume, timestamp: c.timestamp }));
+    const atrSL = calculateATRStopLoss(candles, parsed.entryPrice, ensemble.finalAction as "BUY" | "SELL");
+    // Use ATR-based SL/TP if AI didn't provide valid levels
+    if (!stopLoss || !takeProfit) {
+      stopLoss = atrSL.stopLoss;
+      takeProfit = atrSL.takeProfit;
+    }
+  }
+
+  const baseSize = parsed.size ?? 1;
+  const adjustedSize = Math.max(0.1, baseSize * sizeMultiplier);
 
   return {
     instrument: parsed.instrument ?? "NONE",
-    action: parsed.action ?? "HOLD",
-    confidence: parsed.confidence ?? 0,
-    reasoning: parsed.reasoning ?? "No reasoning provided",
+    action: ensemble.finalAction,
+    confidence: ensemble.finalConfidence,
+    reasoning: `[${ensemble.agreement.toUpperCase()} ENSEMBLE] ${ensemble.combinedReasoning}`,
     entryPrice: parsed.entryPrice,
-    stopLoss: parsed.stopLoss,
-    takeProfit: parsed.takeProfit,
-    size: parsed.size ?? 1,
+    stopLoss,
+    takeProfit,
+    size: adjustedSize,
   };
 }
 
@@ -676,6 +809,18 @@ async function executeDecision(
         reason: decision.reasoning,
         mode,
       }).catch(() => {});
+
+      // Learning Memory: AI evaluates the closed trade and stores a lesson
+      evaluateClosedTrade({
+        tradeId: 0, // we don't have the exact tradeId here; use 0 as placeholder
+        instrument: decision.instrument,
+        direction: decision.positionDirection ?? "BUY",
+        entryPrice: decision.positionOpenLevel ?? decision.entryPrice ?? 0,
+        exitPrice: confirmedCloseLevel ?? decision.positionCurrentLevel ?? decision.entryPrice ?? 0,
+        pnl,
+        originalReasoning: decision.reasoning,
+        marketConditionsAtEntry: `Mode: ${mode}, Confidence: ${decision.confidence}%`,
+      }).catch((err) => console.warn("[AutoTrade] Trade evaluation error:", err));
 
     } else if (decision.action === "BUY" || decision.action === "SELL") {
       // Calculate size based on risk
