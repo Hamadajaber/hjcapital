@@ -33,6 +33,7 @@ import {
   isMarketOpen,
   getOpenMarkets,
   checkMarketTradeable,
+  getMinDealSize,
 } from "./capitalcom";
 import { getDb } from "./db";
 import {
@@ -415,18 +416,43 @@ If no good opportunity exists, respond:
 }
 
 async function analyzeForClose(
-  position: { dealId: string; epic: string; direction: string; profitLoss: number; openLevel: number },
+  position: { dealId: string; epic: string; direction: string; profitLoss: number; openLevel: number; currentLevel: number },
   marketContext: Record<string, unknown>
 ): Promise<TradeDecision> {
   const prices = (marketContext.prices as any[]) ?? [];
   const posPrice = prices.find((p: any) => p.epic === position.epic);
+
+  // Safely resolve open level — Capital.com sometimes returns null/undefined
+  const safeOpenLevel = (position.openLevel && !isNaN(position.openLevel))
+    ? position.openLevel
+    : position.currentLevel; // fallback to current price if open level missing
+
+  // Compute current price for close notification
+  const currentLevel = posPrice
+    ? (posPrice.bid + posPrice.ask) / 2
+    : (position.currentLevel && !isNaN(position.currentLevel) ? position.currentLevel : safeOpenLevel);
+
+  // If we don't have a valid open level, close immediately to avoid data-integrity issues
+  if (!position.openLevel || isNaN(position.openLevel)) {
+    console.warn(`[AutoTrade] Position ${position.dealId} has invalid openLevel (${position.openLevel}) — closing to prevent data corruption`);
+    return {
+      instrument: position.epic,
+      action: "CLOSE",
+      confidence: 100,
+      reasoning: "Position has invalid open level data — closing to prevent P&L calculation errors.",
+      closeDealId: position.dealId,
+      positionDirection: position.direction as "BUY" | "SELL",
+      positionOpenLevel: safeOpenLevel,
+      positionCurrentLevel: currentLevel,
+    };
+  }
 
   const prompt = `You are HJ Capital's risk manager. Analyze this open position and decide if it should be closed NOW.
 
 OPEN POSITION:
 - Instrument: ${position.epic}
 - Direction: ${position.direction}
-- Open Level: ${position.openLevel}
+- Open Level: ${safeOpenLevel}
 - Current P&L: $${position.profitLoss?.toFixed(2)}
 - Current Price: ${posPrice ? `bid=${posPrice.bid}, ask=${posPrice.ask}` : "unavailable"}
 
@@ -451,11 +477,6 @@ Respond in JSON:
   const content = response.choices?.[0]?.message?.content ?? "{}";
   const parsed = JSON.parse(typeof content === "string" ? content : JSON.stringify(content));
 
-  // Compute current price for close notification
-  const currentLevel = posPrice
-    ? (posPrice.bid + posPrice.ask) / 2
-    : position.openLevel;
-
   return {
     instrument: position.epic,
     action: parsed.action ?? "HOLD",
@@ -463,7 +484,7 @@ Respond in JSON:
     reasoning: parsed.reasoning ?? "",
     closeDealId: position.dealId,
     positionDirection: position.direction as "BUY" | "SELL",
-    positionOpenLevel: position.openLevel,
+    positionOpenLevel: safeOpenLevel,
     positionCurrentLevel: currentLevel,
   };
 }
@@ -553,10 +574,16 @@ async function executeDecision(
           }, "skipped", `Live market check: ${decision.instrument} not tradeable`);
           return;
         }
+        // Enforce minimum deal size from Capital.com API
+        const minSize = await getMinDealSize(epic).catch(() => 1);
+        const adjustedSize = Math.max(size, minSize);
+        if (adjustedSize !== size) {
+          console.log(`[AutoTrade] Size adjusted from ${size} to ${adjustedSize} (min deal size for ${epic}: ${minSize})`);
+        }
         const result = await placeOrder({
           epic,
           direction: decision.action,
-          size,
+          size: adjustedSize,
           stopLoss: decision.stopLoss,
           takeProfit: decision.takeProfit,
         });

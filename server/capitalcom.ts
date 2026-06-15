@@ -211,6 +211,35 @@ export async function checkMarketTradeable(epic: string): Promise<boolean> {
   }
 }
 
+/**
+ * Fetch the minimum deal size for an instrument from Capital.com.
+ * Returns the minimum size, or a safe default if the API call fails.
+ */
+export async function getMinDealSize(epic: string): Promise<number> {
+  // Known minimums as fallback (Capital.com standard)
+  const KNOWN_MINIMUMS: Record<string, number> = {
+    EURUSD: 1000,
+    GBPUSD: 1000,
+    GOLD: 1,
+    US500: 1,
+    BITCOIN: 0.01,
+  };
+
+  try {
+    const data = await capitalRequest<{
+      dealingRules?: {
+        minDealSize?: { value: number };
+      };
+    }>(`/api/v1/markets/${epic}`);
+    const min = data.dealingRules?.minDealSize?.value;
+    if (min && min > 0) return min;
+  } catch { /* use fallback */ }
+
+  // Fallback: look up by epic or friendly name
+  const friendlyName = Object.entries(INSTRUMENT_EPICS).find(([, e]) => e === epic)?.[0] ?? epic;
+  return KNOWN_MINIMUMS[friendlyName] ?? KNOWN_MINIMUMS[epic] ?? 1;
+}
+
 export async function getAllMarketPrices(): Promise<MarketPrice[]> {
   const results = await Promise.allSettled(
     Object.entries(INSTRUMENT_EPICS).map(async ([name, epic]) => {
