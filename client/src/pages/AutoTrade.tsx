@@ -386,6 +386,8 @@ export default function AutoTrade() {
   const [confirmStop, setConfirmStop] = useState(false);
   const [confirmLive, setConfirmLive] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
+  const logContainerRef = useRef<HTMLDivElement>(null);
+  const [userScrolled, setUserScrolled] = useState(false);
 
   const statusQuery = trpc.autoTrade.status.useQuery(undefined, { refetchInterval: 5000 });
   const sessionsQuery = trpc.autoTrade.getSessions.useQuery();
@@ -423,11 +425,13 @@ export default function AutoTrade() {
     onError: (err) => toast.error(`Failed to stop: ${err.message}`),
   });
 
+  // Auto-scroll only when user hasn't manually scrolled up
   useEffect(() => {
+    if (userScrolled) return;
     if (logEndRef.current) {
       logEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [logsQuery.data]);
+  }, [logsQuery.data, userScrolled]);
 
   const status = statusQuery.data;
   const isRunning = status?.isRunning ?? false;
@@ -904,11 +908,40 @@ export default function AutoTrade() {
                   </span>
                 )}
               </h2>
-              <span className="section-label">{logs.length} entries</span>
+              <div className="flex items-center gap-2">
+                <span className="section-label">{logs.length} entries</span>
+                {userScrolled && (
+                  <button
+                    onClick={() => {
+                      setUserScrolled(false);
+                      logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+                    }}
+                    className="text-xs px-2 py-0.5 rounded-full transition-all"
+                    style={{
+                      fontFamily: "var(--font-sans)",
+                      background: "var(--color-accent)",
+                      color: "#000",
+                      fontWeight: 600,
+                    }}
+                  >
+                    ↓ Latest
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Log body */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div
+              ref={logContainerRef}
+              className="flex-1 overflow-y-auto p-4 space-y-3"
+              onScroll={() => {
+                const el = logContainerRef.current;
+                if (!el) return;
+                // If user scrolled up more than 60px from bottom, lock auto-scroll
+                const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+                setUserScrolled(distFromBottom > 60);
+              }}
+            >
               {logs.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center py-16">
                   <div
