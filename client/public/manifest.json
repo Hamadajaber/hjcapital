@@ -1,0 +1,90 @@
+{
+  "name": "HJ Capital — منصة حمادة الاستثمارية",
+  "short_name": "HJ Capital",
+  "description": "منصة تداول ذكية مدعومة بالذكاء الاصطناعي — Hamada's AI Trading Platform",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "lang": "ar",
+  "dir": "rtl",
+  "categories": ["finance", "business"],
+  "icons": [
+    {
+      "src": "/manus-storage/hj-icon-72_0ab1a772.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/manus-storage/hj-icon-96_7fe87ac8.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/manus-storage/hj-icon-128_240d0f91.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/manus-storage/hj-icon-144_18aeca65.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/manus-storage/hj-icon-152_74e0c06f.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/manus-storage/hj-icon-192_df7d5e95.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/manus-storage/hj-icon-384_b92c381b.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/manus-storage/hj-icon-512_1c532645.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Auto Trade",
+      "short_name": "تداول",
+      "description": "فتح محرك التداول الآلي",
+      "url": "/auto-trade",
+      "icons": [{ "src": "/manus-storage/hj-icon-96_7fe87ac8.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "لوحة",
+      "description": "لوحة التحكم الرئيسية",
+      "url": "/dashboard",
+      "icons": [{ "src": "/manus-storage/hj-icon-96_7fe87ac8.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "AI Signals",
+      "short_name": "إشارات",
+      "description": "إشارات الذكاء الاصطناعي",
+      "url": "/signals",
+      "icons": [{ "src": "/manus-storage/hj-icon-96_7fe87ac8.png", "sizes": "96x96" }]
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
+}

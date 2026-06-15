@@ -14,6 +14,7 @@ import AutoTrade from "./pages/AutoTrade";
 import Login from "./pages/Login";
 import HJLayout from "./components/HJLayout";
 import { useAuth } from "./_core/hooks/useAuth";
+import { PwaInstallPrompt } from "./components/PwaInstallPrompt";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoutes() {
@@ -74,6 +75,7 @@ function App() {
             }}
           />
           <ProtectedRoutes />
+          <PwaInstallPrompt />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
