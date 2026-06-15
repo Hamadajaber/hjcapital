@@ -1,10 +1,10 @@
-// HJ Capital PWA Service Worker
-const CACHE_NAME = 'hj-capital-v1';
+// HJ Capital PWA Service Worker v2
+// IMPORTANT: JS/CSS use network-first to prevent stale React chunk errors
+const CACHE_NAME = 'hj-capital-v2';
 const OFFLINE_URL = '/offline.html';
 
-// Assets to cache immediately on install
+// Assets to cache immediately on install (shell only, no JS bundles)
 const PRECACHE_ASSETS = [
-  '/',
   '/offline.html',
   '/manifest.json',
 ];
@@ -30,22 +30,33 @@ self.addEventListener('activate', (event) => {
           .filter((key) => key !== CACHE_NAME)
           .map((key) => caches.delete(key))
       )
-    )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-// Fetch strategy:
-// - API calls: network-only (never cache trading data)
-// - Navigation: network-first with offline fallback
-// - Static assets (JS/CSS/images): cache-first
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
   // Never intercept API calls — always go to network
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/manus-storage/')) {
+  if (
+    url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/manus-storage/') ||
+    url.pathname.startsWith('/@fs/') ||
+    url.pathname.startsWith('/@vite/') ||
+    url.pathname.startsWith('/__manus__/')
+  ) {
     return;
+  }
+
+  // Never cache Vite dev server chunks (version hashes change on rebuild)
+  // This prevents stale React copies from causing "multiple React" errors
+  if (
+    url.pathname.includes('node_modules') ||
+    url.search.includes('v=') ||
+    url.search.includes('t=')
+  ) {
+    return; // Let browser handle natively
   }
 
   // Navigation requests: network-first, fallback to offline page
@@ -53,7 +64,6 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // Cache successful navigation responses
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
           return response;
@@ -67,13 +77,24 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets: cache-first
-  if (
-    request.destination === 'script' ||
-    request.destination === 'style' ||
-    request.destination === 'image' ||
-    request.destination === 'font'
-  ) {
+  // JS/CSS: NETWORK-FIRST — critical to always get fresh React/Vite bundles
+  if (request.destination === 'script' || request.destination === 'style') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // Images and fonts: cache-first (these don't change)
+  if (request.destination === 'image' || request.destination === 'font') {
     event.respondWith(
       caches.match(request).then((cached) => {
         if (cached) return cached;
