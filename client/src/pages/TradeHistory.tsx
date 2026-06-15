@@ -2,7 +2,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Filter, TrendingUp, TrendingDown, Clock, ChevronDown, ChevronUp, Activity, ArrowLeftRight } from "lucide-react";
 
-const INSTRUMENTS = ["All", "EURUSD", "GBPUSD", "GOLD", "US500"];
+const INSTRUMENTS = ["All", "EURUSD", "GBPUSD", "USDJPY", "EURGBP", "GOLD", "XAGUSD", "OIL_CRUDE", "US500", "GER40", "NASDAQ"];
 const STATUSES = ["All", "open", "closed", "cancelled"] as const;
 
 function FilterPill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {

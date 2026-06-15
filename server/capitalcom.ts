@@ -160,10 +160,20 @@ export interface MarketPrice {
 
 // Mapping from our instrument names to Capital.com epics
 export const INSTRUMENT_EPICS: Record<string, string> = {
+  // Forex
   EURUSD: "EURUSD",
   GBPUSD: "GBPUSD",
+  USDJPY: "USDJPY",
+  EURGBP: "EURGBP",
+  // Commodities
   GOLD: "GOLD",
+  XAGUSD: "SILVER",
+  OIL_CRUDE: "OIL_CRUDE",
+  // Indices
   US500: "US500",
+  GER40: "DE30",
+  NASDAQ: "US100",
+  // Legacy (kept for backward compat)
   BTC: "BITCOIN",
 };
 
@@ -788,19 +798,43 @@ export function isMarketOpen(instrument: string): boolean {
 
   if (epic === "BITCOIN") return true; // Crypto is 24/7
 
-  if (epic === "EURUSD" || epic === "GBPUSD") {
+  if (epic === "EURUSD" || epic === "GBPUSD" || epic === "USDJPY" || epic === "EURGBP") {
     // Forex: Mon 00:00 – Fri 22:00
     if (day === 0) return false; // Sunday closed
     if (day === 5 && timeMinutes >= 22 * 60) return false; // Fri after 22:00 UTC
     return true;
   }
 
-  if (epic === "GOLD") {
-    // Mon 22:00 – Fri 17:00, with daily break 20:59–22:00
+  if (epic === "GOLD" || epic === "SILVER") {
+    // Metals: Mon 22:00 – Fri 17:00, with daily break 20:59–22:00
     if (day === 0 && timeMinutes < 22 * 60) return false; // Sun before 22:00
     if (day === 5 && timeMinutes >= 17 * 60) return false; // Fri after 17:00
     // Daily maintenance break: 20:59 – 22:00 UTC
     if (timeMinutes >= 20 * 60 + 59 && timeMinutes < 22 * 60) return false;
+    return true;
+  }
+
+  if (epic === "OIL_CRUDE") {
+    // Oil: Mon 00:00 – Fri 22:00, daily break 22:00–23:00
+    if (day === 0) return false; // Sunday closed
+    if (day === 5 && timeMinutes >= 22 * 60) return false; // Fri after 22:00
+    // Daily maintenance break: 22:00 – 23:00 UTC
+    if (timeMinutes >= 22 * 60 && timeMinutes < 23 * 60) return false;
+    return true;
+  }
+
+  if (epic === "DE30") {
+    // DAX 40: Mon–Fri 07:00–21:00 UTC (Xetra hours)
+    if (day === 0 || day === 6) return false;
+    return timeMinutes >= 7 * 60 && timeMinutes < 21 * 60;
+  }
+
+  if (epic === "NDAQ100") {
+    // NASDAQ 100: same as US500 — Mon 21:05 – Fri 21:00, daily break 21:00–21:05
+    if (day === 0) return false;
+    if (day === 5 && timeMinutes >= 21 * 60) return false;
+    if (timeMinutes >= 21 * 60 && timeMinutes < 21 * 60 + 5) return false;
+    if (day === 1 && timeMinutes < 21 * 60 + 5) return false;
     return true;
   }
 

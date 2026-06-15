@@ -329,7 +329,7 @@ async function runCycle() {
       const remainingSlots = risk.maxOpenPositions - openCount;
 
       // Get all currently open markets
-      const allInstruments = getOpenMarkets(["EURUSD", "GBPUSD", "GOLD", "US500"]);
+      const allInstruments = getOpenMarkets(["EURUSD", "GBPUSD", "USDJPY", "EURGBP", "GOLD", "XAGUSD", "OIL_CRUDE", "US500", "GER40", "NASDAQ"]);
 
       // Filter out instruments already in open positions
       const candidateInstruments = allInstruments.filter((inst) => !openInstruments.includes(inst));
@@ -483,7 +483,7 @@ async function gatherMarketContext(): Promise<Record<string, unknown>> {
   ]);
 
   // Fetch multi-timeframe candles + technical analysis for open markets
-  const allTopInstruments = ["EURUSD", "GOLD", "US500", "GBPUSD"];
+  const allTopInstruments = ["EURUSD", "GBPUSD", "USDJPY", "EURGBP", "GOLD", "XAGUSD", "OIL_CRUDE", "US500", "GER40", "NASDAQ"];
   const topInstruments = getOpenMarkets(allTopInstruments);
 
   const technicalData: Record<string, MultiTimeframeData> = {};
@@ -505,47 +505,53 @@ async function gatherMarketContext(): Promise<Record<string, unknown>> {
     console.warn("[AutoTrade] Client sentiment error:", err);
   }
 
-  await Promise.allSettled(
-    topInstruments.map(async (inst) => {
-      const epic = INSTRUMENT_EPICS[inst] ?? inst;
+  // Fetch instruments sequentially with a small delay to avoid Capital.com 429 rate limits
+  // (10 instruments × 3 timeframes = 30 API calls — sequential with 300ms gap prevents throttling)
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-      // Fetch 3 timeframes in parallel
-      const [c5m, c1h, c4h] = await Promise.all([
-        getCandles(epic, "MINUTE_5", 50).catch(() => [] as OHLCVCandle[]),
-        getCandles(epic, "HOUR", 50).catch(() => [] as OHLCVCandle[]),
-        getCandles(epic, "HOUR_4", 30).catch(() => [] as OHLCVCandle[]),
-      ]);
+  for (let i = 0; i < topInstruments.length; i++) {
+    const inst = topInstruments[i];
+    const epic = INSTRUMENT_EPICS[inst] ?? inst;
 
-      // Convert to Candle format for technical analysis
-      const toCandles = (arr: OHLCVCandle[]): Candle[] =>
-        arr.map((c) => ({ open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume, timestamp: c.timestamp }));
+    // Small delay between instruments (skip for first)
+    if (i > 0) await sleep(300);
 
-      const summary5m = c5m.length >= 14
-        ? formatTechnicalSummaryForPrompt(inst, buildTechnicalSummary(toCandles(c5m)), "5min")
-        : `${inst} [5min]: insufficient data`;
-      const summary1h = c1h.length >= 14
-        ? formatTechnicalSummaryForPrompt(inst, buildTechnicalSummary(toCandles(c1h)), "1H")
-        : `${inst} [1H]: insufficient data`;
-      const summary4h = c4h.length >= 14
-        ? formatTechnicalSummaryForPrompt(inst, buildTechnicalSummary(toCandles(c4h)), "4H")
-        : `${inst} [4H]: insufficient data`;
+    // Fetch 3 timeframes sequentially per instrument to stay within rate limits
+    const c5m = await getCandles(epic, "MINUTE_5", 50).catch(() => [] as OHLCVCandle[]);
+    await sleep(150);
+    const c1h = await getCandles(epic, "HOUR", 50).catch(() => [] as OHLCVCandle[]);
+    await sleep(150);
+    const c4h = await getCandles(epic, "HOUR_4", 30).catch(() => [] as OHLCVCandle[]);
 
-      technicalData[inst] = {
-        candles5m: c5m,
-        candles1h: c1h,
-        candles4h: c4h,
-        technicalSummary5m: summary5m,
-        technicalSummary1h: summary1h,
-        technicalSummary4h: summary4h,
-      };
+    // Convert to Candle format for technical analysis
+    const toCandles = (arr: OHLCVCandle[]): Candle[] =>
+      arr.map((c) => ({ open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume, timestamp: c.timestamp }));
 
-      // Sentiment analysis
-      const sentiment = await getInstrumentSentiment(inst).catch(() => null);
-      if (sentiment) {
-        sentimentData[inst] = formatSentimentForPrompt(inst, sentiment);
-      }
-    })
-  );
+    const summary5m = c5m.length >= 14
+      ? formatTechnicalSummaryForPrompt(inst, buildTechnicalSummary(toCandles(c5m)), "5min")
+      : `${inst} [5min]: insufficient data`;
+    const summary1h = c1h.length >= 14
+      ? formatTechnicalSummaryForPrompt(inst, buildTechnicalSummary(toCandles(c1h)), "1H")
+      : `${inst} [1H]: insufficient data`;
+    const summary4h = c4h.length >= 14
+      ? formatTechnicalSummaryForPrompt(inst, buildTechnicalSummary(toCandles(c4h)), "4H")
+      : `${inst} [4H]: insufficient data`;
+
+    technicalData[inst] = {
+      candles5m: c5m,
+      candles1h: c1h,
+      candles4h: c4h,
+      technicalSummary5m: summary5m,
+      technicalSummary1h: summary1h,
+      technicalSummary4h: summary4h,
+    };
+
+    // Sentiment analysis
+    const sentiment = await getInstrumentSentiment(inst).catch(() => null);
+    if (sentiment) {
+      sentimentData[inst] = formatSentimentForPrompt(inst, sentiment);
+    }
+  }
 
   return {
     prices: prices.status === "fulfilled" ? prices.value : [],
@@ -666,7 +672,7 @@ LATEST NEWS HEADLINES:
 ${news.slice(0, 5).join("\n")}
 
 CURRENTLY OPEN MARKETS (only trade these):
-${getOpenMarkets(["EURUSD", "GBPUSD", "GOLD", "US500"]).join(", ") || "No markets open right now"}
+${getOpenMarkets(["EURUSD", "GBPUSD", "USDJPY", "EURGBP", "GOLD", "XAGUSD", "OIL_CRUDE", "US500", "GER40", "NASDAQ"]).join(", ") || "No markets open right now"}
 
 CURRENTLY OPEN POSITIONS (correlation filter — avoid correlated pairs):
 ${openInstruments.length > 0 ? openInstruments.join(", ") : "None"}

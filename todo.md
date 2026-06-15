@@ -217,3 +217,11 @@
 - [x] Replace START ENGINE button with status-only view when engine is running
 - [x] Make STOP ENGINE the only user action — shown prominently with confirmation
 - [x] Show "Engine auto-started" indicator in the UI
+
+## Round 17 — Expand to 10 Instruments
+- [x] Add 6 new instruments to INSTRUMENT_EPICS in capitalcom.ts: USDJPY, XAGUSD, GER40, OIL_CRUDE, EURGBP, NASDAQ
+- [x] Update all 3 instrument arrays in autoTradeEngine.ts (runCycle, gatherMarketContext, prompt)
+- [x] Update correlation map to include new pairs (EURGBP↔EURUSD, NASDAQ↔US500, XAGUSD↔GOLD)
+- [x] Update isMarketOpen() to add market hours for new instruments
+- [x] Update Signals page instrument filter list
+- [x] Update TradeHistory page instrument filter list

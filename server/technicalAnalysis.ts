@@ -341,10 +341,12 @@ export function buildTechnicalSummary(candles: Candle[]): TechnicalSummary {
 
 // Instruments that are highly correlated — avoid opening both simultaneously
 const CORRELATION_GROUPS: string[][] = [
-  ["EURUSD", "GBPUSD", "AUDUSD", "NZDUSD"], // USD-correlated pairs (all move together)
-  ["USDCHF", "USDJPY", "USDCAD"],             // USD strength pairs
-  ["GOLD", "SILVER"],                          // Precious metals
-  ["US500", "US100", "US30"],                  // US indices
+  ["EURUSD", "GBPUSD", "EURGBP", "AUDUSD", "NZDUSD"], // EUR/GBP/USD pairs (all move together)
+  ["USDCHF", "USDJPY", "USDCAD"],                      // USD strength pairs
+  ["GOLD", "XAGUSD"],                                   // Precious metals (Gold + Silver)
+  ["US500", "NASDAQ", "US100", "US30"],                 // US indices (S&P + NASDAQ)
+  ["GER40"],                                            // European indices (standalone)
+  ["OIL_CRUDE"],                                        // Oil (standalone)
 ];
 
 export function isCorrelatedWithOpenPositions(
