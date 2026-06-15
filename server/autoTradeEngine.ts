@@ -3,13 +3,15 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * The core AI brain of HJ Auto Trade Mode.
  * Responsibilities:
- *   1. Gather live market data (prices + candles) from Capital.com
- *   2. Fetch relevant financial news headlines
- *   3. Ask the LLM to analyze and decide: BUY / SELL / HOLD / CLOSE
- *   4. Enforce risk rules before any execution
- *   5. Execute trades on Capital.com (live) or simulate (paper)
- *   6. Log every decision and action to the database
- *   7. Notify the owner of significant events
+ *   1. Gather live market data (prices + multi-timeframe candles) from Capital.com
+ *   2. Run technical analysis (RSI, MACD, Bollinger Bands, candlestick patterns)
+ *   3. Run sentiment analysis (news RSS feeds)
+ *   4. Apply correlation filter (avoid correlated positions)
+ *   5. Ask the LLM to analyze and decide: BUY / SELL / HOLD / CLOSE
+ *   6. Enforce risk rules before any execution
+ *   7. Execute trades on Capital.com (live) or simulate (paper)
+ *   8. Log every decision and action to the database
+ *   9. Notify the owner of significant events
  */
 
 import { invokeLLM } from "./_core/llm";
@@ -24,7 +26,7 @@ import {
 import {
   getAllMarketPrices,
   getMarketPrice,
-  getPriceHistory,
+  getCandles,
   getOpenPositions,
   getAccountBalance,
   placeOrder,
@@ -35,7 +37,18 @@ import {
   checkMarketTradeable,
   getMinDealSize,
 } from "./capitalcom";
-import { getDb } from "./db";
+import type { OHLCVCandle } from "./capitalcom";
+import {
+  buildTechnicalSummary,
+  formatTechnicalSummaryForPrompt,
+  isCorrelatedWithOpenPositions,
+} from "./technicalAnalysis";
+import type { Candle } from "./technicalAnalysis";
+import {
+  getInstrumentSentiment,
+  formatSentimentForPrompt,
+} from "./sentimentAnalysis";
+import { getDb, getPriceAlerts, triggerPriceAlert } from "./db";
 import {
   autoTradeSession,
   autoTradeLog,
@@ -214,8 +227,40 @@ async function runCycle() {
       return;
     }
 
-    // 2. Gather market data
+    // 2. Gather market data (prices + multi-timeframe candles + technical analysis + sentiment)
     const marketContext = await gatherMarketContext();
+
+    // 2b. Check price alerts against current prices
+    try {
+      const prices = (marketContext.prices as any[]) ?? [];
+      const activeAlerts = await getPriceAlerts(true);
+      for (const alert of activeAlerts) {
+        const priceData = prices.find((p: any) =>
+          p.epic === alert.instrument ||
+          p.epic === (INSTRUMENT_EPICS[alert.instrument] ?? alert.instrument)
+        );
+        if (!priceData) continue;
+        const mid = (priceData.bid + priceData.ask) / 2;
+        const target = parseFloat(alert.targetPrice);
+        const triggered =
+          (alert.condition === "above" && mid >= target) ||
+          (alert.condition === "below" && mid <= target);
+        if (triggered) {
+          await triggerPriceAlert(alert.id).catch(() => {});
+          const { notifyPriceAlert } = await import("./telegram");
+          await notifyPriceAlert({
+            instrument: alert.instrument,
+            condition: alert.condition,
+            targetPrice: target,
+            currentPrice: mid,
+            note: alert.note ?? undefined,
+          }).catch(() => {});
+          console.log(`[AutoTrade] Price alert triggered: ${alert.instrument} ${alert.condition} $${target} (current: $${mid.toFixed(5)})`);
+        }
+      }
+    } catch (alertErr) {
+      console.error("[AutoTrade] Price alert check error:", alertErr);
+    }
 
     // 3. Check open positions — decide if any should be closed
     const openPositions = _engineState.mode === "live"
@@ -234,7 +279,10 @@ async function runCycle() {
     const openCount = openPositions.length;
 
     if (openCount < risk.maxOpenPositions) {
-      const decision = await analyzeMarket(marketContext, risk);
+      // Get list of currently open instrument epics for correlation filter
+      const openInstruments = openPositions.map((p) => p.epic);
+
+      const decision = await analyzeMarket(marketContext, risk, openInstruments);
       if (decision.action !== "HOLD" && decision.action !== "SKIP") {
         // Final market-hours guard before execution
         if (decision.instrument !== "NONE" && !isMarketOpen(decision.instrument)) {
@@ -269,7 +317,16 @@ async function runCycle() {
   }
 }
 
-// ─── Market Context ───────────────────────────────────────────────────────────
+// ─── Market Context (Multi-Timeframe + Technical + Sentiment) ─────────────────
+
+interface MultiTimeframeData {
+  candles5m: OHLCVCandle[];
+  candles1h: OHLCVCandle[];
+  candles4h: OHLCVCandle[];
+  technicalSummary5m: string;
+  technicalSummary1h: string;
+  technicalSummary4h: string;
+}
 
 async function gatherMarketContext(): Promise<Record<string, unknown>> {
   const [prices, newsHeadlines] = await Promise.allSettled([
@@ -277,23 +334,60 @@ async function gatherMarketContext(): Promise<Record<string, unknown>> {
     fetchNewsHeadlines(),
   ]);
 
-  // Fetch recent candles for top instruments — only open markets
-  const candleData: Record<string, unknown> = {};
-  const allTopInstruments = ["EURUSD", "GOLD", "US500"];
+  // Fetch multi-timeframe candles + technical analysis for open markets
+  const allTopInstruments = ["EURUSD", "GOLD", "US500", "GBPUSD"];
   const topInstruments = getOpenMarkets(allTopInstruments);
+
+  const technicalData: Record<string, MultiTimeframeData> = {};
+  const sentimentData: Record<string, string> = {};
 
   await Promise.allSettled(
     topInstruments.map(async (inst) => {
       const epic = INSTRUMENT_EPICS[inst] ?? inst;
-      const candles = await getPriceHistory(epic, "HOUR", 12).catch(() => []);
-      candleData[inst] = candles.slice(-6); // last 6 hours
+
+      // Fetch 3 timeframes in parallel
+      const [c5m, c1h, c4h] = await Promise.all([
+        getCandles(epic, "MINUTE_5", 50).catch(() => [] as OHLCVCandle[]),
+        getCandles(epic, "HOUR", 50).catch(() => [] as OHLCVCandle[]),
+        getCandles(epic, "HOUR_4", 30).catch(() => [] as OHLCVCandle[]),
+      ]);
+
+      // Convert to Candle format for technical analysis
+      const toCandles = (arr: OHLCVCandle[]): Candle[] =>
+        arr.map((c) => ({ open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume, timestamp: c.timestamp }));
+
+      const summary5m = c5m.length >= 14
+        ? formatTechnicalSummaryForPrompt(inst, buildTechnicalSummary(toCandles(c5m)), "5min")
+        : `${inst} [5min]: insufficient data`;
+      const summary1h = c1h.length >= 14
+        ? formatTechnicalSummaryForPrompt(inst, buildTechnicalSummary(toCandles(c1h)), "1H")
+        : `${inst} [1H]: insufficient data`;
+      const summary4h = c4h.length >= 14
+        ? formatTechnicalSummaryForPrompt(inst, buildTechnicalSummary(toCandles(c4h)), "4H")
+        : `${inst} [4H]: insufficient data`;
+
+      technicalData[inst] = {
+        candles5m: c5m,
+        candles1h: c1h,
+        candles4h: c4h,
+        technicalSummary5m: summary5m,
+        technicalSummary1h: summary1h,
+        technicalSummary4h: summary4h,
+      };
+
+      // Sentiment analysis
+      const sentiment = await getInstrumentSentiment(inst).catch(() => null);
+      if (sentiment) {
+        sentimentData[inst] = formatSentimentForPrompt(inst, sentiment);
+      }
     })
   );
 
   return {
     prices: prices.status === "fulfilled" ? prices.value : [],
     news: newsHeadlines.status === "fulfilled" ? newsHeadlines.value : [],
-    candles: candleData,
+    technical: technicalData,
+    sentiment: sentimentData,
     timestamp: new Date().toISOString(),
   };
 }
@@ -331,53 +425,74 @@ function getDefaultNewsContext(): string[] {
 
 async function analyzeMarket(
   marketContext: Record<string, unknown>,
-  risk: { minConfidenceThreshold: number; maxRiskPerTrade: number }
+  risk: { minConfidenceThreshold: number; maxRiskPerTrade: number },
+  openInstruments: string[]
 ): Promise<TradeDecision> {
   const prices = (marketContext.prices as any[]) ?? [];
   const news = (marketContext.news as string[]) ?? [];
-  const candles = marketContext.candles as Record<string, any[]>;
+  const technical = marketContext.technical as Record<string, MultiTimeframeData>;
+  const sentiment = marketContext.sentiment as Record<string, string>;
 
   const pricesSummary = prices
     .map((p: any) => `${p.epic}: bid=${p.bid}, ask=${p.ask}, change=${p.pctChange?.toFixed(2)}%`)
     .join("\n");
 
-  const candleSummary = Object.entries(candles)
-    .map(([inst, c]) => {
-      if (!c || c.length === 0) return `${inst}: no data`;
-      const last = c[c.length - 1];
-      const first = c[0];
-      const trend = last.close > first.close ? "↑ uptrend" : "↓ downtrend";
-      return `${inst}: ${trend}, last close=${last.close?.toFixed(5)}`;
+  // Build multi-timeframe technical analysis section
+  const technicalSection = Object.entries(technical)
+    .map(([inst, data]) => {
+      // Check correlation filter
+      const corrCheck = isCorrelatedWithOpenPositions(inst, openInstruments);
+      const corrWarning = corrCheck.correlated
+        ? `  ⚠️ CORRELATED with open position: ${corrCheck.conflictsWith} — avoid opening`
+        : "";
+      return [
+        data.technicalSummary5m,
+        data.technicalSummary1h,
+        data.technicalSummary4h,
+        corrWarning,
+      ].filter(Boolean).join("\n");
     })
-    .join("\n");
+    .join("\n\n");
 
-  const prompt = `You are HJ Capital's elite AI trading analyst. Your job is to analyze the market and recommend ONE specific trade.
+  // Build sentiment section
+  const sentimentSection = Object.values(sentiment).join("\n");
+
+  const prompt = `You are HJ Capital's elite AI trading analyst. Your job is to analyze the market using multi-timeframe technical analysis, sentiment, and price action to recommend ONE specific trade.
 
 LIVE MARKET PRICES (right now):
 ${pricesSummary}
 
-RECENT PRICE TRENDS (last 6 hours):
-${candleSummary}
+MULTI-TIMEFRAME TECHNICAL ANALYSIS:
+${technicalSection || "No technical data available"}
 
-LATEST NEWS:
+NEWS SENTIMENT:
+${sentimentSection || "No sentiment data available"}
+
+LATEST NEWS HEADLINES:
 ${news.slice(0, 5).join("\n")}
 
 CURRENTLY OPEN MARKETS (only trade these):
 ${getOpenMarkets(["EURUSD", "GBPUSD", "GOLD", "US500", "BTC"]).join(", ") || "No markets open right now"}
 
+CURRENTLY OPEN POSITIONS (correlation filter — avoid correlated pairs):
+${openInstruments.length > 0 ? openInstruments.join(", ") : "None"}
+
 TRADING RULES:
 - ONLY trade instruments listed in CURRENTLY OPEN MARKETS above — never trade closed markets
+- DO NOT open a position in an instrument marked as ⚠️ CORRELATED with an open position
 - Only recommend a trade if confidence is ${risk.minConfidenceThreshold}% or higher
 - Max risk per trade: ${risk.maxRiskPerTrade}% of account
+- Use multi-timeframe confluence: prefer trades where 5min + 1H + 4H all agree on direction
 - Prefer small, consistent profits over large risky gains
 - Always include stop loss and take profit levels
+- Consider both technical signals AND news sentiment in your decision
 
 Respond in this EXACT JSON format (no markdown, no explanation outside JSON):
 {
   "instrument": "EURUSD",
   "action": "BUY",
   "confidence": 78,
-  "reasoning": "Brief explanation of why (2-3 sentences max)",
+  "reasoning": "Brief explanation of why (2-3 sentences max, mention key indicators)",
   "entryPrice": 1.08450,
   "stopLoss": 1.08200,
   "takeProfit": 1.08750,
@@ -447,6 +562,13 @@ async function analyzeForClose(
     };
   }
 
+  // Get technical analysis for the position's instrument
+  const technical = marketContext.technical as Record<string, MultiTimeframeData>;
+  const instTechnical = technical[position.epic];
+  const technicalContext = instTechnical
+    ? `\n${instTechnical.technicalSummary1h}\n${instTechnical.technicalSummary4h}`
+    : "";
+
   const prompt = `You are HJ Capital's risk manager. Analyze this open position and decide if it should be closed NOW.
 
 OPEN POSITION:
@@ -455,6 +577,8 @@ OPEN POSITION:
 - Open Level: ${safeOpenLevel}
 - Current P&L: $${position.profitLoss?.toFixed(2)}
 - Current Price: ${posPrice ? `bid=${posPrice.bid}, ask=${posPrice.ask}` : "unavailable"}
+
+TECHNICAL ANALYSIS:${technicalContext || " No data available"}
 
 DECISION: Should we close this position now to lock in profit or cut losses?
 
@@ -556,7 +680,6 @@ async function executeDecision(
     } else if (decision.action === "BUY" || decision.action === "SELL") {
       // Calculate size based on risk
       const balance = await getCurrentBalance(mode);
-      const riskAmount = balance * (risk.maxRiskPerTrade / 100);
       const size = decision.size ?? 1;
 
       let tradeId: number | undefined;

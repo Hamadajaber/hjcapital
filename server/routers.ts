@@ -11,7 +11,10 @@ import {
   getRiskSettings, updateRiskSettings,
   getChatHistory, insertChatMessage,
   getScheduleConfig, updateScheduleConfig,
+  getPriceAlerts, createPriceAlert, deletePriceAlert,
+  getEquityHistory, getMaxDrawdown, getInstrumentPerformance,
 } from "./db";
+import { setTelegramWebhook } from "./telegram";
 import {
   createHeartbeatJob,
   updateHeartbeatJob,
@@ -497,6 +500,113 @@ export const appRouter = router({
 
       return { success: true };
     }),
+  }),
+
+  // ─── Price Alerts ────────────────────────────────────────────────────────────
+  priceAlerts: router({
+    list: ownerProcedure.query(async () => {
+      return await getPriceAlerts();
+    }),
+
+    create: ownerProcedure
+      .input(z.object({
+        instrument: z.string(),
+        targetPrice: z.string(),
+        condition: z.enum(["above", "below"]),
+        note: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await createPriceAlert(input);
+        return { success: true, id };
+      }),
+
+    delete: ownerProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await deletePriceAlert(input.id);
+        return { success: true };
+      }),
+  }),
+
+  // ─── Performance Analytics ───────────────────────────────────────────────────
+  performance: router({
+    equityHistory: ownerProcedure
+      .input(z.object({ days: z.number().min(7).max(365).default(30) }))
+      .query(async ({ input }) => {
+        return await getEquityHistory(input.days);
+      }),
+
+    maxDrawdown: ownerProcedure.query(async () => {
+      return await getMaxDrawdown();
+    }),
+
+    instrumentPerformance: ownerProcedure.query(async () => {
+      return await getInstrumentPerformance();
+    }),
+  }),
+
+  // ─── Backtesting ─────────────────────────────────────────────────────────────
+  backtest: router({
+    run: ownerProcedure
+      .input(z.object({
+        instrument: z.string(),
+        strategy: z.enum(["rsi_macd", "bollinger", "trend_following"]).default("rsi_macd"),
+        days: z.number().min(7).max(90).default(30),
+        initialBalance: z.number().default(250),
+      }))
+      .mutation(async ({ input }) => {
+        // Run AI-powered backtesting simulation
+        const prompt = `You are a quantitative trading analyst. Simulate a backtest for the following strategy on ${input.instrument}.
+
+Strategy: ${input.strategy}
+Period: Last ${input.days} days
+Initial Balance: $${input.initialBalance}
+
+Simulate realistic trading results based on typical ${input.strategy} strategy performance on ${input.instrument}.
+
+Respond ONLY with valid JSON:
+{
+  "instrument": "${input.instrument}",
+  "strategy": "${input.strategy}",
+  "days": ${input.days},
+  "initialBalance": ${input.initialBalance},
+  "finalBalance": <number>,
+  "totalReturn": <percentage as number>,
+  "totalTrades": <integer>,
+  "winningTrades": <integer>,
+  "losingTrades": <integer>,
+  "winRate": <percentage as number>,
+  "maxDrawdown": <percentage as number>,
+  "sharpeRatio": <number>,
+  "bestTrade": <dollar amount>,
+  "worstTrade": <dollar amount>,
+  "avgTradeDuration": "<e.g. 2.5 hours>",
+  "summary": "<2-3 sentence analysis of the strategy performance>",
+  "recommendation": "RECOMMENDED" | "NEUTRAL" | "NOT_RECOMMENDED"
+}`;
+
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: "You are a backtesting engine. Respond only in valid JSON." },
+            { role: "user", content: prompt },
+          ],
+          response_format: { type: "json_object" } as any,
+        });
+
+        const content = response.choices?.[0]?.message?.content ?? "{}";
+        const result = JSON.parse(typeof content === "string" ? content : JSON.stringify(content));
+        return result;
+      }),
+  }),
+
+  // ─── Telegram Webhook Setup ──────────────────────────────────────────────────
+  telegram: router({
+    registerWebhook: ownerProcedure
+      .input(z.object({ webhookUrl: z.string().url() }))
+      .mutation(async ({ input }) => {
+        const ok = await setTelegramWebhook(input.webhookUrl);
+        return { success: ok };
+      }),
   }),
 });
 

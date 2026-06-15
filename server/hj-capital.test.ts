@@ -68,8 +68,7 @@ describe("HJ Capital — Risk Router", () => {
     const caller = appRouter.createCaller(ctx);
     const risk = await caller.risk.get();
     expect(risk).toBeDefined();
-    expect(risk.dailyLossLimit).toBeDefined();
-    expect(risk.dailyProfitLock).toBeDefined();
+    expect(risk.dailyLossLimitPct).toBeDefined();
     expect(risk.maxRiskPerTrade).toBeDefined();
     expect(typeof risk.minConfidenceThreshold).toBe("number");
     expect(typeof risk.maxOpenPositions).toBe("number");
@@ -79,8 +78,7 @@ describe("HJ Capital — Risk Router", () => {
     const ctx = createMockContext();
     const caller = appRouter.createCaller(ctx);
     const result = await caller.risk.update({
-      dailyLossLimit: "8.00",
-      dailyProfitLock: "12.00",
+      dailyLossLimitPct: "8.00",
       maxRiskPerTrade: "1.50",
       minConfidenceThreshold: 75,
       maxOpenPositions: 4,
@@ -88,8 +86,7 @@ describe("HJ Capital — Risk Router", () => {
     expect(result.success).toBe(true);
     // Restore defaults
     await caller.risk.update({
-      dailyLossLimit: "7.50",
-      dailyProfitLock: "10.00",
+      dailyLossLimitPct: "7.50",
       maxRiskPerTrade: "1.00",
       minConfidenceThreshold: 72,
       maxOpenPositions: 3,

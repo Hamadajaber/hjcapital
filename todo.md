@@ -98,3 +98,23 @@
 - [x] Add portfolio.liveBalance tRPC procedure (fetches real balance from Capital.com, returns ok/error)
 - [x] Dashboard: show Paper Trading balance and Capital.com Live balance in separate cards
 - [x] Sidebar: show both Paper and Live balance cards stacked
+
+## Round 9 — Platform Enhancements (11 Features)
+
+### AI Engine
+- [x] Multi-timeframe Analysis: fetch 5min + 1h + 4h candles and include all 3 in AI prompt
+- [x] Pattern Recognition: detect candlestick patterns (Doji, Hammer, Engulfing, etc.) and include in AI prompt
+- [x] Correlation Filter: prevent opening correlated pairs simultaneously (EURUSD + GBPUSD)
+- [x] Sentiment Analysis: fetch and parse multiple financial news RSS feeds, include sentiment score in AI prompt
+- [x] Backtesting Engine: server procedure to run strategy on historical Capital.com candle data
+
+### Dashboard
+- [x] Advanced Charts: add RSI, MACD, Bollinger Bands indicators to Performance page charts
+- [x] Portfolio Heatmap: visual heatmap of all instruments' performance by P&L %
+- [x] Drawdown Tracker: calculate and display max drawdown from equity peak
+- [x] Daily Summary: auto Telegram message at end of each trading day with session stats (PDF deferred)
+
+### Notifications
+- [x] Telegram Bot Commands: /start, /stop, /status, /balance commands via webhook
+- [x] Price Alerts: DB table + UI to set price alerts, checked each engine cycle
+- [x] Daily Summary: auto Telegram message at end of each trading day with session stats

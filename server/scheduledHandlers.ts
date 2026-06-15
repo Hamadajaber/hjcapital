@@ -16,7 +16,8 @@ import {
   stopAutoTrade,
   getEngineState,
 } from "./autoTradeEngine";
-import { sendTelegramMessage } from "./telegram";
+import { sendTelegramMessage, sendDailySummary } from "./telegram";
+import { getDailyStats, getPortfolio } from "./db";
 
 // ─── Auto-Trade Start Handler ─────────────────────────────────────────────────
 
@@ -109,12 +110,33 @@ export async function autoTradeStopHandler(req: Request, res: Response) {
       hour: "2-digit",
       minute: "2-digit",
     });
-    await sendTelegramMessage(
-      `🔴 *HJ Auto Trade — Scheduled Stop*\n\n` +
-      `⏰ Time: ${now} (Cairo)\n` +
-      `📋 Reason: ${reason}\n\n` +
-      `_Engine stopped automatically by daily schedule. See you tomorrow!_`
-    );
+    // Send daily summary + stop notification
+    try {
+      const stats = await getDailyStats();
+      const port = await getPortfolio();
+      const balance = port ? parseFloat(port.balance) : 0;
+      const winRate = stats.tradeCount > 0 ? (stats.wins / stats.tradeCount) * 100 : 0;
+      const dateStr = new Date().toLocaleDateString("ar-EG", { timeZone: "Africa/Cairo", weekday: "long", year: "numeric", month: "long", day: "numeric" });
+      await sendDailySummary({
+        date: dateStr,
+        totalTrades: stats.tradeCount,
+        wins: stats.wins,
+        losses: stats.losses,
+        totalPnl: stats.totalPnl,
+        winRate,
+        bestTrade: stats.bestTrade,
+        worstTrade: stats.worstTrade,
+        balance,
+      });
+    } catch (summaryErr) {
+      console.error("[Scheduled] Failed to send daily summary:", summaryErr);
+      await sendTelegramMessage(
+        `🔴 *HJ Auto Trade — Scheduled Stop*\n\n` +
+        `⏰ Time: ${now} (Cairo)\n` +
+        `📋 Reason: ${reason}\n\n` +
+        `_Engine stopped automatically by daily schedule. See you tomorrow!_`
+      );
+    }
 
     return res.json({
       ok: true,

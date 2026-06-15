@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Brain, Zap, Shield, TrendingUp, Square, Activity, Clock, Calendar } from "lucide-react";
+import { Brain, Zap, Shield, TrendingUp, Square, Activity, Clock, Calendar, Bell, BellRing, Trash2, Plus } from "lucide-react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatTime(date: Date | string | null) {
@@ -43,6 +43,148 @@ function ActionTakenBadge({ action }: { action: string }) {
     <span className={`text-xs ${cls}`} style={{ fontFamily: "var(--font-sans)" }}>
       → {label}
     </span>
+  );
+}
+
+// ─── Price Alerts Card ───────────────────────────────────────────────────────
+function PriceAlertsCard() {
+  const [instrument, setInstrument] = useState("EURUSD");
+  const [targetPrice, setTargetPrice] = useState("");
+  const [condition, setCondition] = useState<"above" | "below">("above");
+  const [note, setNote] = useState("");
+  const [showForm, setShowForm] = useState(false);
+
+  const utils = trpc.useUtils();
+  const alertsQuery = trpc.priceAlerts.list.useQuery();
+  const createMutation = trpc.priceAlerts.create.useMutation({
+    onSuccess: () => {
+      toast.success("Price alert created!");
+      setTargetPrice("");
+      setNote("");
+      setShowForm(false);
+      utils.priceAlerts.list.invalidate();
+    },
+    onError: (e) => toast.error(`Failed: ${e.message}`),
+  });
+  const deleteMutation = trpc.priceAlerts.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Alert removed");
+      utils.priceAlerts.list.invalidate();
+    },
+    onError: (e) => toast.error(`Failed: ${e.message}`),
+  });
+
+  const alerts = alertsQuery.data ?? [];
+  const active = alerts.filter(a => a.active);
+  const triggered = alerts.filter(a => !a.active && a.triggered);
+
+  return (
+    <div className="space-y-3">
+      {/* Active alerts list */}
+      {active.length === 0 && !showForm && (
+        <p className="text-xs text-center py-3" style={{ color: "var(--color-text-tertiary)" }}>
+          No active alerts
+        </p>
+      )}
+      {active.map(alert => (
+        <div key={alert.id} className="flex items-center justify-between py-2"
+          style={{ borderBottom: "1px solid var(--color-border-subtle)" }}>
+          <div className="flex items-center gap-2">
+            <Bell size={11} style={{ color: "var(--color-accent)" }} />
+            <div>
+              <span className="text-xs font-semibold" style={{ color: "var(--color-text-primary)", fontFamily: "var(--font-sans)" }}>
+                {alert.instrument}
+              </span>
+              <span className="text-xs ml-1" style={{ color: "var(--color-text-tertiary)" }}>
+                {alert.condition} ${parseFloat(alert.targetPrice).toFixed(4)}
+              </span>
+              {alert.note && (
+                <p className="text-xs mt-0.5" style={{ color: "var(--color-text-tertiary)" }}>{alert.note}</p>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={() => deleteMutation.mutate({ id: alert.id })}
+            disabled={deleteMutation.isPending}
+            className="p-1 rounded transition-colors hover:bg-[var(--color-bg-elevated)]"
+            style={{ color: "var(--color-loss)" }}>
+            <Trash2 size={12} />
+          </button>
+        </div>
+      ))}
+
+      {/* Triggered alerts (last 3) */}
+      {triggered.slice(0, 3).map(alert => (
+        <div key={alert.id} className="flex items-center justify-between py-2 opacity-50"
+          style={{ borderBottom: "1px solid var(--color-border-subtle)" }}>
+          <div className="flex items-center gap-2">
+            <Bell size={11} style={{ color: "var(--color-text-tertiary)" }} />
+            <span className="text-xs" style={{ color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>
+              {alert.instrument} {alert.condition} ${parseFloat(alert.targetPrice).toFixed(4)} — triggered
+            </span>
+          </div>
+        </div>
+      ))}
+
+      {/* Add form */}
+      {showForm ? (
+        <div className="space-y-2 pt-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>Instrument</label>
+              <select value={instrument} onChange={e => setInstrument(e.target.value)}
+                className="w-full mt-1 rounded-lg px-2 py-1.5 text-xs"
+                style={{ background: "var(--color-bg-elevated)", border: "1px solid var(--color-border-default)", color: "var(--color-text-primary)" }}>
+                {["EURUSD", "GBPUSD", "GOLD", "US500", "BTC"].map(i => <option key={i} value={i}>{i}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>Condition</label>
+              <select value={condition} onChange={e => setCondition(e.target.value as "above" | "below")}
+                className="w-full mt-1 rounded-lg px-2 py-1.5 text-xs"
+                style={{ background: "var(--color-bg-elevated)", border: "1px solid var(--color-border-default)", color: "var(--color-text-primary)" }}>
+                <option value="above">Above</option>
+                <option value="below">Below</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>Target Price</label>
+            <input type="number" step="0.0001" value={targetPrice} onChange={e => setTargetPrice(e.target.value)}
+              placeholder="e.g. 1.0850"
+              className="w-full mt-1 rounded-lg px-2 py-1.5 text-xs"
+              style={{ background: "var(--color-bg-elevated)", border: "1px solid var(--color-border-default)", color: "var(--color-text-primary)" }} />
+          </div>
+          <div>
+            <label className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>Note (optional)</label>
+            <input type="text" value={note} onChange={e => setNote(e.target.value)}
+              placeholder="e.g. Support level"
+              className="w-full mt-1 rounded-lg px-2 py-1.5 text-xs"
+              style={{ background: "var(--color-bg-elevated)", border: "1px solid var(--color-border-default)", color: "var(--color-text-primary)" }} />
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => createMutation.mutate({ instrument, targetPrice, condition, note: note || undefined })}
+              disabled={!targetPrice || createMutation.isPending}
+              className="flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all"
+              style={{ background: "var(--color-accent)", color: "oklch(0.1 0 0)", opacity: !targetPrice ? 0.5 : 1 }}>
+              {createMutation.isPending ? "Saving..." : "Save Alert"}
+            </button>
+            <button onClick={() => setShowForm(false)}
+              className="px-3 py-1.5 rounded-lg text-xs transition-all"
+              style={{ background: "var(--color-bg-elevated)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-default)" }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setShowForm(true)}
+          className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all"
+          style={{ background: "var(--color-bg-elevated)", color: "var(--color-text-secondary)", border: "1px dashed var(--color-border-default)" }}>
+          <Plus size={12} /> Add Alert
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -457,6 +599,15 @@ export default function AutoTrade() {
               </p>
             )}
           </div>
+          {/* Price Alerts Card */}
+          <div className="hj-card p-5">
+            <h2 className="section-label flex items-center gap-2 mb-4">
+              <BellRing size={13} style={{ color: "var(--color-accent)" }} />
+              Price Alerts
+            </h2>
+            <PriceAlertsCard />
+          </div>
+
           {/* Scheduled Automation Card */}
           <div className="hj-card p-5">
             <h2 className="section-label flex items-center gap-2 mb-4">

@@ -9,6 +9,9 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { autoTradeStartHandler, autoTradeStopHandler } from "../scheduledHandlers";
+import { handleTelegramUpdate, TelegramUpdate } from "../telegram";
+import { startAutoTrade, stopAutoTrade, getEngineState, getActiveSession } from "../autoTradeEngine";
+import { getAccountBalance } from "../capitalcom";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -40,6 +43,54 @@ async function startServer() {
   // Scheduled Heartbeat handlers — must be registered BEFORE Vite/static fallthrough
   app.post("/api/scheduled/auto-trade-start", autoTradeStartHandler);
   app.post("/api/scheduled/auto-trade-stop", autoTradeStopHandler);
+
+  // Telegram Bot Webhook — handles /start /stop /status /balance commands
+  app.post("/api/telegram/webhook", async (req, res) => {
+    res.sendStatus(200); // Acknowledge immediately
+    try {
+      const update = req.body as TelegramUpdate;
+      await handleTelegramUpdate(update, {
+        onStart: async () => {
+          const state = getEngineState();
+          if (state?.isRunning) {
+            return `⚠️ المحرك يعمل بالفعل في وضع <b>${state.mode.toUpperCase()}</b>.`;
+          }
+          try {
+            await startAutoTrade("live", 15);
+            return `🚀 <b>تم تشغيل محرك التداول الآلي</b>\nالوضع: 🔴 LIVE\nدورة التحليل: كل 15 دقيقة`;
+          } catch (err) {
+            return `❌ فشل تشغيل المحرك: ${String(err)}`;
+          }
+        },
+        onStop: async () => {
+          const state = getEngineState();
+          if (!state?.isRunning) {
+            return `⚠️ المحرك متوقف بالفعل.`;
+          }
+          await stopAutoTrade("Telegram /stop command");
+          return `⏹ <b>تم إيقاف محرك التداول الآلي</b>\nتم الإيقاف بأمر Telegram.`;
+        },
+        onStatus: async () => {
+          const state = getEngineState();
+          const session = await getActiveSession().catch(() => null);
+          if (!state?.isRunning || !session) {
+            return `📊 <b>حالة المحرك</b>\n━━━━━━━━━━━━━━━━━━\nالحالة: <b>متوقف</b>`;
+          }
+          return `📊 <b>حالة المحرك</b>\n━━━━━━━━━━━━━━━━━━\nالحالة: <b>يعمل ✅</b>\nالوضع: <b>${state.mode.toUpperCase()}</b>\nعدد الدورات: <b>${state.cycleCount}</b>\nإجمالي الصفقات: <b>${session.totalTrades}</b>\nنسبة النجاح: <b>${session.totalTrades > 0 ? ((session.winningTrades / session.totalTrades) * 100).toFixed(1) : 0}%</b>\nربح/خسارة الجلسة: <b>${parseFloat(session.sessionPnl) >= 0 ? "+" : ""}$${parseFloat(session.sessionPnl).toFixed(2)}</b>`;
+        },
+        onBalance: async () => {
+          try {
+            const bal = await getAccountBalance();
+            return `💰 <b>رصيد Capital.com</b>\n━━━━━━━━━━━━━━━━━━\nالرصيد: <b>$${bal.balance.toFixed(2)}</b>\nمتاح للتداول: <b>$${bal.available.toFixed(2)}</b>\nربح/خسارة مفتوحة: <b>${bal.profitLoss >= 0 ? "+" : ""}$${bal.profitLoss.toFixed(2)}</b>`;
+          } catch (err) {
+            return `❌ فشل جلب الرصيد: ${String(err)}`;
+          }
+        },
+      });
+    } catch (err) {
+      console.error("[Telegram Webhook] Error:", err);
+    }
+  });
 
   // tRPC API
   app.use(

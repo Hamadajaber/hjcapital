@@ -29,6 +29,13 @@
       "when": 1781468587143,
       "tag": "0003_lame_terrax",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1781518430506,
+      "tag": "0004_tan_earthquake",
+      "breakpoints": true
     }
   ]
 }

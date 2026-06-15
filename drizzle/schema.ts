@@ -173,3 +173,19 @@ export const scheduleConfig = mysqlTable("schedule_config", {
 });
 
 export type ScheduleConfig = typeof scheduleConfig.$inferSelect;
+
+// Price Alerts — user-defined price level alerts
+export const priceAlerts = mysqlTable("price_alerts", {
+  id: int("id").autoincrement().primaryKey(),
+  instrument: varchar("instrument", { length: 32 }).notNull(),
+  targetPrice: decimal("targetPrice", { precision: 12, scale: 5 }).notNull(),
+  condition: mysqlEnum("condition", ["above", "below"]).notNull(),
+  note: text("note"),
+  triggered: boolean("triggered").notNull().default(false),
+  triggeredAt: timestamp("triggeredAt"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PriceAlert = typeof priceAlerts.$inferSelect;
+export type InsertPriceAlert = typeof priceAlerts.$inferInsert;

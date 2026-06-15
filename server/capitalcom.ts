@@ -435,6 +435,65 @@ export async function closePosition(dealId: string): Promise<{ status: string; p
   }
 }
 
+// ─── Candles for Technical Analysis ─────────────────────────────────────────
+
+export type CandleResolution =
+  | "MINUTE"
+  | "MINUTE_5"
+  | "MINUTE_15"
+  | "MINUTE_30"
+  | "HOUR"
+  | "HOUR_4"
+  | "DAY"
+  | "WEEK";
+
+export interface OHLCVCandle {
+  timestamp: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+/**
+ * Fetch OHLCV candles for a given epic and resolution.
+ * Used for multi-timeframe technical analysis.
+ * @param epic - Capital.com instrument epic (e.g. "EURUSD", "GOLD")
+ * @param resolution - Candle resolution (e.g. "MINUTE_5", "HOUR", "HOUR_4")
+ * @param max - Number of candles to fetch (max 1000)
+ */
+export async function getCandles(
+  epic: string,
+  resolution: CandleResolution = "HOUR",
+  max = 50
+): Promise<OHLCVCandle[]> {
+  try {
+    const data = await capitalRequest<{
+      prices: Array<{
+        snapshotTime: string;
+        openPrice: { bid: number; ask: number };
+        highPrice: { bid: number; ask: number };
+        lowPrice: { bid: number; ask: number };
+        closePrice: { bid: number; ask: number };
+        lastTradedVolume?: number;
+      }>;
+    }>(`/api/v1/prices/${epic}?resolution=${resolution}&max=${max}`);
+
+    return (data.prices ?? []).map((p) => ({
+      timestamp: p.snapshotTime,
+      open: (p.openPrice.bid + p.openPrice.ask) / 2,
+      high: (p.highPrice.bid + p.highPrice.ask) / 2,
+      low: (p.lowPrice.bid + p.lowPrice.ask) / 2,
+      close: (p.closePrice.bid + p.closePrice.ask) / 2,
+      volume: p.lastTradedVolume ?? 0,
+    }));
+  } catch (err) {
+    console.warn(`[getCandles] Failed to fetch ${resolution} candles for ${epic}:`, err);
+    return [];
+  }
+}
+
 // ─── Market Hours Check ───────────────────────────────────────────────────────
 
 /**

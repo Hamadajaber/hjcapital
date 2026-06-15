@@ -288,3 +288,146 @@ export async function updateScheduleConfig(patch: Partial<{
     await db.update(scheduleConfig).set(patch);
   }
 }
+
+// ─── Price Alerts ─────────────────────────────────────────────────────────────
+
+import { priceAlerts, PriceAlert, InsertPriceAlert } from "../drizzle/schema";
+
+export async function getPriceAlerts(activeOnly = false): Promise<PriceAlert[]> {
+  const db = await getDb();
+  if (!db) return [];
+  if (activeOnly) {
+    return db.select().from(priceAlerts).where(eq(priceAlerts.active, true)).orderBy(desc(priceAlerts.createdAt));
+  }
+  return db.select().from(priceAlerts).orderBy(desc(priceAlerts.createdAt));
+}
+
+export async function createPriceAlert(alert: Omit<InsertPriceAlert, "id" | "triggered" | "triggeredAt" | "active" | "createdAt">): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const [result] = await db.insert(priceAlerts).values({
+    ...alert,
+    triggered: false,
+    active: true,
+  });
+  return (result as any).insertId as number;
+}
+
+export async function deletePriceAlert(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(priceAlerts).where(eq(priceAlerts.id, id));
+}
+
+export async function triggerPriceAlert(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(priceAlerts).set({
+    triggered: true,
+    triggeredAt: new Date(),
+    active: false,
+  }).where(eq(priceAlerts.id, id));
+}
+
+// ─── Drawdown / Equity History ────────────────────────────────────────────────
+
+export async function getEquityHistory(days = 30): Promise<Array<{ date: string; equity: number; pnl: number }>> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+
+  const closedTrades = await db
+    .select()
+    .from(trades)
+    .where(and(eq(trades.status, "closed"), gte(trades.closedAt!, since)))
+    .orderBy(trades.closedAt);
+
+  // Group by date and compute cumulative equity
+  const byDate: Record<string, number> = {};
+  for (const t of closedTrades) {
+    if (!t.closedAt) continue;
+    const dateStr = t.closedAt.toISOString().slice(0, 10);
+    byDate[dateStr] = (byDate[dateStr] ?? 0) + parseFloat(t.pnl ?? "0");
+  }
+
+  // Build cumulative series
+  const result: Array<{ date: string; equity: number; pnl: number }> = [];
+  let cumulative = 0;
+  for (const [date, pnl] of Object.entries(byDate).sort()) {
+    cumulative += pnl;
+    result.push({ date, equity: Math.round(cumulative * 100) / 100, pnl: Math.round(pnl * 100) / 100 });
+  }
+
+  return result;
+}
+
+export async function getMaxDrawdown(): Promise<{ maxDrawdown: number; maxDrawdownPct: number; peakEquity: number }> {
+  const history = await getEquityHistory(90);
+  if (history.length === 0) return { maxDrawdown: 0, maxDrawdownPct: 0, peakEquity: 0 };
+
+  let peak = 0;
+  let maxDrawdown = 0;
+  let peakEquity = 0;
+
+  for (const { equity } of history) {
+    if (equity > peak) {
+      peak = equity;
+      peakEquity = peak;
+    }
+    const drawdown = peak - equity;
+    if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+  }
+
+  const maxDrawdownPct = peakEquity > 0 ? (maxDrawdown / peakEquity) * 100 : 0;
+
+  return {
+    maxDrawdown: Math.round(maxDrawdown * 100) / 100,
+    maxDrawdownPct: Math.round(maxDrawdownPct * 100) / 100,
+    peakEquity: Math.round(peakEquity * 100) / 100,
+  };
+}
+
+// ─── Instrument Performance Heatmap ──────────────────────────────────────────
+
+export async function getInstrumentPerformance(): Promise<Array<{
+  instrument: string;
+  totalPnl: number;
+  tradeCount: number;
+  winRate: number;
+  avgPnl: number;
+}>> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const closedTrades = await db
+    .select()
+    .from(trades)
+    .where(eq(trades.status, "closed"))
+    .orderBy(desc(trades.closedAt));
+
+  // Group by instrument
+  const byInstrument: Record<string, { pnls: number[]; wins: number }> = {};
+  for (const t of closedTrades) {
+    const inst = t.instrument;
+    if (!byInstrument[inst]) byInstrument[inst] = { pnls: [], wins: 0 };
+    const pnl = parseFloat(t.pnl ?? "0");
+    byInstrument[inst].pnls.push(pnl);
+    if (pnl > 0) byInstrument[inst].wins++;
+  }
+
+  return Object.entries(byInstrument).map(([instrument, data]) => {
+    const totalPnl = data.pnls.reduce((a, b) => a + b, 0);
+    const tradeCount = data.pnls.length;
+    const winRate = tradeCount > 0 ? (data.wins / tradeCount) * 100 : 0;
+    const avgPnl = tradeCount > 0 ? totalPnl / tradeCount : 0;
+    return {
+      instrument,
+      totalPnl: Math.round(totalPnl * 100) / 100,
+      tradeCount,
+      winRate: Math.round(winRate * 10) / 10,
+      avgPnl: Math.round(avgPnl * 100) / 100,
+    };
+  });
+}
