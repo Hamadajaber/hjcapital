@@ -326,8 +326,9 @@ async function runCycle() {
       const openInstruments = openPositions.map((p) => p.epic);
 
       const decision = await analyzeMarket(marketContext, risk, openInstruments, dynamicThreshold.threshold);
+
       if (decision.action !== "HOLD" && decision.action !== "SKIP") {
-        // Final market-hours guard before execution
+        // Found a trade from the main analysis — execute it
         if (decision.instrument !== "NONE" && !isMarketOpen(decision.instrument)) {
           await logDecision(_engineState.sessionId, {
             ...decision,
@@ -338,7 +339,55 @@ async function runCycle() {
           await executeDecision(decision, _engineState.sessionId, _engineState.mode);
         }
       } else {
-        await logDecision(_engineState.sessionId, decision, "skipped", decision.reasoning);
+        // Main analysis returned HOLD — scan each instrument individually for an opportunity
+        console.log(`[AutoTrade] Main analysis: HOLD. Starting opportunity scanner across all instruments...`);
+        await logDecision(_engineState.sessionId, decision, "skipped",
+          `Main analysis: HOLD. Scanning individual instruments...`);
+
+        const allInstruments = getOpenMarkets(["EURUSD", "GBPUSD", "GOLD", "US500", "BTC"]);
+        let foundOpportunity = false;
+
+        for (const inst of allInstruments) {
+          if (foundOpportunity) break;
+
+          // Skip instruments already in open positions
+          if (openInstruments.includes(inst)) {
+            console.log(`[AutoTrade] Scanner: skipping ${inst} (already have open position)`);
+            continue;
+          }
+
+          console.log(`[AutoTrade] Scanner: analyzing ${inst}...`);
+          const scanDecision = await analyzeInstrument(
+            inst, marketContext, risk, openInstruments, dynamicThreshold.threshold
+          );
+
+          if (scanDecision.action !== "HOLD" && scanDecision.action !== "SKIP" && scanDecision.instrument !== "NONE") {
+            console.log(`[AutoTrade] Scanner: found opportunity on ${inst} — ${scanDecision.action} @ ${scanDecision.confidence}%`);
+            foundOpportunity = true;
+
+            if (!isMarketOpen(inst)) {
+              await logDecision(_engineState.sessionId, {
+                ...scanDecision,
+                action: "SKIP",
+                reasoning: `Market closed: ${inst} is not tradeable right now. ${scanDecision.reasoning}`,
+              }, "skipped", `Market closed: ${inst}`);
+            } else {
+              await executeDecision(scanDecision, _engineState.sessionId, _engineState.mode);
+            }
+          } else {
+            console.log(`[AutoTrade] Scanner: no opportunity on ${inst} — ${scanDecision.reasoning?.slice(0, 80)}`);
+          }
+        }
+
+        if (!foundOpportunity) {
+          console.log(`[AutoTrade] Scanner: no opportunities found across all instruments — waiting for next cycle`);
+          await logDecision(_engineState.sessionId, {
+            instrument: "ALL",
+            action: "HOLD",
+            confidence: 0,
+            reasoning: `Opportunity scanner found no trades across ${allInstruments.join(", ")} — market conditions not favorable`,
+          }, "skipped", "No opportunities found after full scan");
+        }
       }
     } else {
       await logDecision(_engineState.sessionId, {
@@ -656,6 +705,165 @@ If no good opportunity exists, respond:
     action: ensemble.finalAction,
     confidence: ensemble.finalConfidence,
     reasoning: `[${ensemble.agreement.toUpperCase()} ENSEMBLE] ${ensemble.combinedReasoning}`,
+    entryPrice: parsed.entryPrice,
+    stopLoss,
+    takeProfit,
+    size: adjustedSize,
+  };
+}
+
+/**
+ * Analyze a SINGLE specific instrument for a trade opportunity.
+ * Used by the opportunity scanner when the main analysis returns HOLD.
+ */
+async function analyzeInstrument(
+  instrument: string,
+  marketContext: Record<string, unknown>,
+  risk: { minConfidenceThreshold: number; maxRiskPerTrade: number },
+  openInstruments: string[],
+  dynamicThreshold?: number
+): Promise<TradeDecision> {
+  const effectiveThreshold = dynamicThreshold ?? risk.minConfidenceThreshold;
+  const prices = (marketContext.prices as any[]) ?? [];
+  const news = (marketContext.news as string[]) ?? [];
+  const technical = marketContext.technical as Record<string, MultiTimeframeData>;
+  const sentiment = marketContext.sentiment as Record<string, string>;
+  const clientSentiment = (marketContext.clientSentiment as string) ?? "";
+
+  const instTechnical = technical[instrument];
+  if (!instTechnical) {
+    return { instrument, action: "HOLD", confidence: 0, reasoning: "No technical data available" };
+  }
+
+  // Check correlation filter — skip if correlated with open position
+  const corrCheck = isCorrelatedWithOpenPositions(instrument, openInstruments);
+  if (corrCheck.correlated) {
+    return {
+      instrument,
+      action: "HOLD",
+      confidence: 0,
+      reasoning: `Correlated with open position: ${corrCheck.conflictsWith}`,
+    };
+  }
+
+  const priceData = prices.find((p: any) => p.epic === instrument || p.epic === (INSTRUMENT_EPICS[instrument] ?? instrument));
+  const priceLine = priceData
+    ? `${instrument}: bid=${priceData.bid}, ask=${priceData.ask}, change=${priceData.pctChange?.toFixed(2)}%`
+    : `${instrument}: price unavailable`;
+
+  // Build technical section for this instrument only
+  const technicalSection = [
+    instTechnical.technicalSummary5m,
+    instTechnical.technicalSummary1h,
+    instTechnical.technicalSummary4h,
+  ].join("\n");
+
+  // Regime for this instrument
+  let regimeSection = "";
+  if (instTechnical.candles1h.length >= 20) {
+    const candles = instTechnical.candles1h.map((c: OHLCVCandle) => ({
+      open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume, timestamp: c.timestamp
+    }));
+    const regime = detectMarketRegime(candles);
+    regimeSection = formatRegimeForPrompt(instrument, regime);
+  }
+
+  const lessonsSection = await formatLessonsForPrompt(instrument).catch(() => "");
+  const sentimentLine = sentiment[instrument] ?? "";
+
+  const prompt = `You are HJ Capital's elite AI trading analyst. Focus ONLY on ${instrument}.
+
+LIVE PRICE:
+${priceLine}
+
+MULTI-TIMEFRAME TECHNICAL ANALYSIS:
+${technicalSection}
+
+NEWS SENTIMENT:
+${sentimentLine || "No sentiment data"}
+
+MARKET REGIME:
+${regimeSection || "No regime data"}
+${clientSentiment ? `\nCAPITAL.COM CLIENT SENTIMENT (Contrarian):${clientSentiment}` : ""}
+
+PAST LESSONS:
+${lessonsSection || "No lessons yet"}
+
+LATEST NEWS:
+${news.slice(0, 3).join("\n")}
+
+TRADING RULES:
+- ONLY analyze ${instrument} — do not suggest other instruments
+- Only recommend a trade if confidence is ${effectiveThreshold}% or higher
+- Max risk per trade: ${risk.maxRiskPerTrade}% of account
+- Use multi-timeframe confluence: prefer trades where 5min + 1H + 4H all agree
+- Always include stop loss and take profit levels
+
+Respond in this EXACT JSON format:
+{
+  "instrument": "${instrument}",
+  "action": "BUY",
+  "confidence": 78,
+  "reasoning": "Brief explanation (2-3 sentences, mention key indicators)",
+  "entryPrice": 1.08450,
+  "stopLoss": 1.08200,
+  "takeProfit": 1.08750,
+  "size": 1
+}
+
+If no good opportunity exists:
+{
+  "instrument": "NONE",
+  "action": "HOLD",
+  "confidence": 0,
+  "reasoning": "No high-confidence setup found at this time"
+}`;
+
+  const ensemble = await runEnsembleAnalysis(prompt);
+  const sizeMultiplier = getEnsembleSizeMultiplier(ensemble);
+
+  if (sizeMultiplier === 0 || ensemble.finalAction === "HOLD") {
+    return {
+      instrument: "NONE",
+      action: "HOLD",
+      confidence: ensemble.finalConfidence,
+      reasoning: `[SCAN:${instrument}] No opportunity: ${ensemble.combinedReasoning}`,
+    };
+  }
+
+  // Get specific entry/SL/TP
+  const detailResponse = await invokeLLM({
+    messages: [
+      { role: "system", content: "You are a professional forex and commodities trader. You respond only in valid JSON." },
+      { role: "user", content: prompt + `\n\nEnsemble decided: ${ensemble.finalAction} @ ${ensemble.finalConfidence}% (${ensemble.agreement}). Provide specific entry, stop loss, and take profit.` },
+    ],
+    response_format: { type: "json_object" } as any,
+  });
+
+  const detailContent = detailResponse.choices?.[0]?.message?.content ?? "{}";
+  const parsed = JSON.parse(typeof detailContent === "string" ? detailContent : JSON.stringify(detailContent));
+
+  let stopLoss = parsed.stopLoss;
+  let takeProfit = parsed.takeProfit;
+
+  if (instTechnical.candles1h.length >= 14 && parsed.entryPrice) {
+    const candles = instTechnical.candles1h.map((c: OHLCVCandle) => ({
+      open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume, timestamp: c.timestamp
+    }));
+    const atrSL = calculateATRStopLoss(candles, parsed.entryPrice, ensemble.finalAction as "BUY" | "SELL");
+    if (!stopLoss || !takeProfit) {
+      stopLoss = atrSL.stopLoss;
+      takeProfit = atrSL.takeProfit;
+    }
+  }
+
+  const adjustedSize = Math.max(0.1, (parsed.size ?? 1) * sizeMultiplier);
+
+  return {
+    instrument,
+    action: ensemble.finalAction,
+    confidence: ensemble.finalConfidence,
+    reasoning: `[SCAN:${instrument}] [${ensemble.agreement.toUpperCase()} ENSEMBLE] ${ensemble.combinedReasoning}`,
     entryPrice: parsed.entryPrice,
     stopLoss,
     takeProfit,
