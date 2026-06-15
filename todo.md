@@ -181,3 +181,12 @@
 - [x] AutoTrade page: show Dynamic Confidence Threshold value
 - [x] AutoTrade page: show Ensemble Votes (Claude/GPT/Gemini) in decision log
 - [x] AutoTrade page: show Recent Lessons panel
+
+## Round 13 — Multi-Trade Per Cycle Fix
+
+- [x] Fix runCycle(): scan ALL instruments in parallel using analyzeInstrument() for each one
+- [x] Collect ALL BUY/SELL signals across all instruments in one cycle
+- [x] Apply correlation filter across the collected signals (not just open positions)
+- [x] Execute ALL valid signals up to maxOpenPositions limit simultaneously
+- [x] Remove the `foundOpportunity` break that stops after first trade
+- [x] Log "Scanning X instruments..." and "Found Y opportunities" in Decision Log

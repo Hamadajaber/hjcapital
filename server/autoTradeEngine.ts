@@ -317,7 +317,7 @@ async function runCycle() {
       }
     }
 
-    // 4. Analyze each instrument for new entry
+    // 4. Analyze ALL instruments in parallel and execute ALL valid trades
     const risk = await getRiskSettings();
     const openCount = openPositions.length;
 
@@ -325,68 +325,124 @@ async function runCycle() {
       // Get list of currently open instrument epics for correlation filter
       const openInstruments = openPositions.map((p) => p.epic);
 
-      const decision = await analyzeMarket(marketContext, risk, openInstruments, dynamicThreshold.threshold);
+      // How many more positions can we open?
+      const remainingSlots = risk.maxOpenPositions - openCount;
 
-      if (decision.action !== "HOLD" && decision.action !== "SKIP") {
-        // Found a trade from the main analysis — execute it
-        if (decision.instrument !== "NONE" && !isMarketOpen(decision.instrument)) {
-          await logDecision(_engineState.sessionId, {
-            ...decision,
-            action: "SKIP",
-            reasoning: `Market closed: ${decision.instrument} is not tradeable right now. ${decision.reasoning}`,
-          }, "skipped", `Market closed: ${decision.instrument}`);
-        } else {
-          await executeDecision(decision, _engineState.sessionId, _engineState.mode);
-        }
+      // Get all currently open markets
+      const allInstruments = getOpenMarkets(["EURUSD", "GBPUSD", "GOLD", "US500", "BTC"]);
+
+      // Filter out instruments already in open positions
+      const candidateInstruments = allInstruments.filter((inst) => !openInstruments.includes(inst));
+
+      if (candidateInstruments.length === 0) {
+        await logDecision(_engineState.sessionId, {
+          instrument: "ALL",
+          action: "SKIP",
+          confidence: 0,
+          reasoning: "All open-market instruments already have open positions",
+        }, "skipped", "All instruments already in open positions");
       } else {
-        // Main analysis returned HOLD — scan each instrument individually for an opportunity
-        console.log(`[AutoTrade] Main analysis: HOLD. Starting opportunity scanner across all instruments...`);
-        await logDecision(_engineState.sessionId, decision, "skipped",
-          `Main analysis: HOLD. Scanning individual instruments...`);
+        // Log that we're scanning all instruments
+        await logDecision(_engineState.sessionId, {
+          instrument: "ALL",
+          action: "HOLD",
+          confidence: 0,
+          reasoning: `🔍 فحص ${candidateInstruments.length} أداة بالتوازي: ${candidateInstruments.join(", ")} — بحثاً عن أفضل الفرص...`,
+        }, "skipped", `Scanning ${candidateInstruments.length} instruments in parallel`);
 
-        const allInstruments = getOpenMarkets(["EURUSD", "GBPUSD", "GOLD", "US500", "BTC"]);
-        let foundOpportunity = false;
+        console.log(`[AutoTrade] Scanning ${candidateInstruments.length} instruments in parallel: ${candidateInstruments.join(", ")}`);
 
-        for (const inst of allInstruments) {
-          if (foundOpportunity) break;
+        // Analyze ALL candidate instruments in parallel
+        const scanResults = await Promise.allSettled(
+          candidateInstruments.map((inst) =>
+            analyzeInstrument(inst, marketContext, risk, openInstruments, dynamicThreshold.threshold)
+          )
+        );
 
-          // Skip instruments already in open positions
-          if (openInstruments.includes(inst)) {
-            console.log(`[AutoTrade] Scanner: skipping ${inst} (already have open position)`);
-            continue;
-          }
-
-          console.log(`[AutoTrade] Scanner: analyzing ${inst}...`);
-          const scanDecision = await analyzeInstrument(
-            inst, marketContext, risk, openInstruments, dynamicThreshold.threshold
-          );
-
-          if (scanDecision.action !== "HOLD" && scanDecision.action !== "SKIP" && scanDecision.instrument !== "NONE") {
-            console.log(`[AutoTrade] Scanner: found opportunity on ${inst} — ${scanDecision.action} @ ${scanDecision.confidence}%`);
-            foundOpportunity = true;
-
-            if (!isMarketOpen(inst)) {
-              await logDecision(_engineState.sessionId, {
-                ...scanDecision,
-                action: "SKIP",
-                reasoning: `Market closed: ${inst} is not tradeable right now. ${scanDecision.reasoning}`,
-              }, "skipped", `Market closed: ${inst}`);
+        // Collect all valid BUY/SELL opportunities
+        const opportunities: TradeDecision[] = [];
+        for (let i = 0; i < scanResults.length; i++) {
+          const result = scanResults[i];
+          const inst = candidateInstruments[i];
+          if (result.status === "fulfilled") {
+            const d = result.value;
+            if (d.action !== "HOLD" && d.action !== "SKIP" && d.instrument !== "NONE") {
+              console.log(`[AutoTrade] Opportunity found: ${inst} ${d.action} @ ${d.confidence}%`);
+              opportunities.push(d);
             } else {
-              await executeDecision(scanDecision, _engineState.sessionId, _engineState.mode);
+              console.log(`[AutoTrade] No opportunity on ${inst}: ${d.reasoning?.slice(0, 80)}`);
             }
           } else {
-            console.log(`[AutoTrade] Scanner: no opportunity on ${inst} — ${scanDecision.reasoning?.slice(0, 80)}`);
+            console.error(`[AutoTrade] Analysis failed for ${inst}:`, result.reason);
           }
         }
 
-        if (!foundOpportunity) {
-          console.log(`[AutoTrade] Scanner: no opportunities found across all instruments — waiting for next cycle`);
+        if (opportunities.length === 0) {
+          console.log(`[AutoTrade] No opportunities found across all instruments — waiting for next cycle`);
           await logDecision(_engineState.sessionId, {
             instrument: "ALL",
             action: "HOLD",
             confidence: 0,
-            reasoning: `Opportunity scanner found no trades across ${allInstruments.join(", ")} — market conditions not favorable`,
-          }, "skipped", "No opportunities found after full scan");
+            reasoning: `لا توجد فرص عبر ${candidateInstruments.join(", ")} — السوق غير مناسب للتداول الآن`,
+          }, "skipped", "No opportunities found after full parallel scan");
+        } else {
+          // Sort by confidence descending — best opportunities first
+          opportunities.sort((a, b) => b.confidence - a.confidence);
+
+          console.log(`[AutoTrade] Found ${opportunities.length} opportunities, executing up to ${remainingSlots} trades`);
+
+          // Log found-opportunities summary to Decision Log (visible in UI)
+          await logDecision(_engineState.sessionId, {
+            instrument: "ALL",
+            action: "HOLD",
+            confidence: 0,
+            reasoning: `✅ وجدنا ${opportunities.length} فرصة: ${opportunities.map((o) => `${o.instrument} ${o.action} (${o.confidence}%)`).join(" | ")} — ننفذ أفضل ${Math.min(opportunities.length, remainingSlots)} منها`,
+          }, "skipped", `Found ${opportunities.length} opportunities`);
+
+          // Apply correlation filter across the new opportunities themselves
+          // (avoid opening EURUSD + GBPUSD in the same cycle)
+          const executedInstruments: string[] = [...openInstruments];
+          const tradesToExecute: TradeDecision[] = [];
+
+          for (const opp of opportunities) {
+            if (tradesToExecute.length >= remainingSlots) break;
+
+            // Check correlation against already-queued instruments this cycle
+            const corrCheck = isCorrelatedWithOpenPositions(opp.instrument, executedInstruments);
+            if (corrCheck.correlated) {
+              console.log(`[AutoTrade] Skipping ${opp.instrument} — correlated with ${corrCheck.conflictsWith}`);
+              await logDecision(_engineState.sessionId, {
+                ...opp,
+                action: "SKIP",
+                reasoning: `تم تخطي ${opp.instrument} — مرتبط بـ ${corrCheck.conflictsWith} المفتوح بالفعل`,
+              }, "skipped", `Correlated with ${corrCheck.conflictsWith}`);
+              continue;
+            }
+
+            // Check market is open
+            if (!isMarketOpen(opp.instrument)) {
+              await logDecision(_engineState.sessionId, {
+                ...opp,
+                action: "SKIP",
+                reasoning: `السوق مغلق: ${opp.instrument} غير متاح للتداول الآن. ${opp.reasoning}`,
+              }, "skipped", `Market closed: ${opp.instrument}`);
+              continue;
+            }
+
+            tradesToExecute.push(opp);
+            executedInstruments.push(opp.instrument);
+          }
+
+          // Execute all valid trades simultaneously
+          if (tradesToExecute.length > 0) {
+            console.log(`[AutoTrade] Executing ${tradesToExecute.length} trade(s) simultaneously: ${tradesToExecute.map((t) => t.instrument).join(", ")}`);
+            await Promise.allSettled(
+              tradesToExecute.map((opp) =>
+                executeDecision(opp, _engineState!.sessionId, _engineState!.mode)
+              )
+            );
+            console.log(`[AutoTrade] Executed ${tradesToExecute.length} trade(s) this cycle`);
+          }
         }
       }
     } else {
