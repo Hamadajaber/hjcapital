@@ -118,3 +118,9 @@
 - [x] Telegram Bot Commands: /start, /stop, /status, /balance commands via webhook
 - [x] Price Alerts: DB table + UI to set price alerts, checked each engine cycle
 - [x] Daily Summary: auto Telegram message at end of each trading day with session stats
+
+## Round 10 — Code Quality & Testing
+
+- [x] Read autoTradeEngine.ts data flow: gatherMarketContext → analyzeMarket → executeDecision → logDecision
+- [x] Add Unit Tests for technicalAnalysis.ts — 55 tests covering all 7 exported functions (RSI, MACD, Bollinger, Patterns, Correlation, Summary, Formatter)
+- [x] Total test suite: 71 tests, 71 passing (4 test files)
