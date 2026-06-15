@@ -29,6 +29,14 @@ import {
   testConnection,
   INSTRUMENT_EPICS,
   getMarketPrice,
+  getActivityHistory,
+  getTransactionHistory,
+  getWorkingOrders,
+  getClientSentiment,
+  getAccountPreferences,
+  searchMarkets,
+  getWatchlists,
+  getWatchlistDetail,
 } from "./capitalcom";
 import {
   startAutoTrade,
@@ -352,6 +360,96 @@ export const appRouter = router({
         return [];
       }
     }),
+
+    // Fetch account activity history (opened/closed positions)
+    activityHistory: ownerProcedure
+      .input(z.object({
+        from: z.string().optional(),
+        to: z.string().optional(),
+        maxResults: z.number().min(1).max(500).default(100),
+      }))
+      .query(async ({ input }) => {
+        try {
+          return await getActivityHistory(input.from, input.to, input.maxResults);
+        } catch (err) {
+          return [];
+        }
+      }),
+
+    // Fetch transaction history (P&L, deposits, withdrawals)
+    transactionHistory: ownerProcedure
+      .input(z.object({
+        from: z.string().optional(),
+        to: z.string().optional(),
+        maxResults: z.number().min(1).max(500).default(100),
+      }))
+      .query(async ({ input }) => {
+        try {
+          return await getTransactionHistory(input.from, input.to, input.maxResults);
+        } catch (err) {
+          return [];
+        }
+      }),
+
+    // Fetch working orders (pending limit/stop orders)
+    workingOrders: ownerProcedure.query(async () => {
+      try {
+        return await getWorkingOrders();
+      } catch (err) {
+        return [];
+      }
+    }),
+
+    // Fetch client sentiment for instruments
+    clientSentiment: ownerProcedure
+      .input(z.object({ instruments: z.array(z.string()).default(["EURUSD", "GBPUSD", "GOLD", "US500", "BITCOIN"]) }))
+      .query(async ({ input }) => {
+        try {
+          return await getClientSentiment(input.instruments);
+        } catch (err) {
+          return [];
+        }
+      }),
+
+    // Fetch account preferences (leverage, hedging mode)
+    accountPreferences: ownerProcedure.query(async () => {
+      try {
+        return await getAccountPreferences();
+      } catch (err) {
+        return { leverages: {}, hedgingMode: false, trailingStopsEnabled: false };
+      }
+    }),
+
+    // Search for markets by name/symbol
+    searchMarkets: ownerProcedure
+      .input(z.object({ searchTerm: z.string().min(1).max(50) }))
+      .query(async ({ input }) => {
+        try {
+          return await searchMarkets(input.searchTerm);
+        } catch (err) {
+          return [];
+        }
+      }),
+
+    // Fetch all watchlists
+    watchlists: ownerProcedure.query(async () => {
+      try {
+        return await getWatchlists();
+      } catch (err) {
+        return [];
+      }
+    }),
+
+    // Fetch watchlist detail with markets
+    watchlistDetail: ownerProcedure
+      .input(z.object({ watchlistId: z.string() }))
+      .query(async ({ input }) => {
+        try {
+          return await getWatchlistDetail(input.watchlistId);
+        } catch (err) {
+          return null;
+        }
+      }),
   }),
 
   // ─── AI Advisor ──────────────────────────────────────────────────────────────

@@ -502,7 +502,267 @@ export async function getCandles(
   }
 }
 
-// ─── Market Hours Check ───────────────────────────────────────────────────────
+// ─── Activity History ───────────────────────────────────────────────────────
+
+export interface ActivityRecord {
+  date: string;
+  epic: string;
+  dealId: string;
+  dealReference: string;
+  action: string; // "POSITION_OPENED" | "POSITION_CLOSED" | "WORKING_ORDER_CREATED" etc.
+  status: string;
+  size: number;
+  level: number;
+  profit?: number;
+  currency: string;
+  channel: string;
+}
+
+export async function getActivityHistory(from?: string, to?: string, maxResults = 50): Promise<ActivityRecord[]> {
+  const params = new URLSearchParams();
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  params.set("pageSize", String(maxResults));
+  const data = await capitalRequest<{
+    activities: Array<{
+      date: string;
+      epic: string;
+      dealId: string;
+      dealReference: string;
+      action: string;
+      status: string;
+      details?: {
+        size?: number;
+        level?: number;
+        currency?: string;
+        channel?: string;
+      };
+    }>;
+  }>(`/api/v1/history/activity?${params.toString()}`);
+  return (data.activities ?? []).map((a) => ({
+    date: a.date,
+    epic: a.epic,
+    dealId: a.dealId,
+    dealReference: a.dealReference,
+    action: a.action,
+    status: a.status,
+    size: a.details?.size ?? 0,
+    level: a.details?.level ?? 0,
+    currency: a.details?.currency ?? "USD",
+    channel: a.details?.channel ?? "API",
+  }));
+}
+
+// ─── Transaction History ──────────────────────────────────────────────────────
+
+export interface TransactionRecord {
+  date: string;
+  type: string; // "TRADE" | "DEPOSIT" | "WITHDRAWAL" | "DIVIDEND" etc.
+  reference: string;
+  openLevel?: number;
+  closeLevel?: number;
+  size?: number;
+  currency: string;
+  profitAndLoss: string; // e.g. "USD 1.23"
+  cashTransaction: boolean;
+  instrumentName: string;
+}
+
+export async function getTransactionHistory(from?: string, to?: string, maxResults = 50): Promise<TransactionRecord[]> {
+  const params = new URLSearchParams();
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  params.set("pageSize", String(maxResults));
+  const data = await capitalRequest<{
+    transactions: Array<{
+      date: string;
+      type: string;
+      reference: string;
+      openLevel?: string;
+      closeLevel?: string;
+      size?: string;
+      currency: string;
+      profitAndLoss: string;
+      cashTransaction: boolean;
+      instrumentName: string;
+    }>;
+  }>(`/api/v1/history/transactions?${params.toString()}`);
+  return (data.transactions ?? []).map((t) => ({
+    date: t.date,
+    type: t.type,
+    reference: t.reference,
+    openLevel: t.openLevel ? parseFloat(t.openLevel) : undefined,
+    closeLevel: t.closeLevel ? parseFloat(t.closeLevel) : undefined,
+    size: t.size ? parseFloat(t.size) : undefined,
+    currency: t.currency,
+    profitAndLoss: t.profitAndLoss,
+    cashTransaction: t.cashTransaction,
+    instrumentName: t.instrumentName,
+  }));
+}
+
+// ─── Working Orders ───────────────────────────────────────────────────────────
+
+export interface WorkingOrder {
+  dealId: string;
+  epic: string;
+  direction: "BUY" | "SELL";
+  size: number;
+  level: number; // trigger level
+  orderType: string; // "LIMIT" | "STOP"
+  stopLevel?: number;
+  profitLevel?: number;
+  currency: string;
+  createdDate: string;
+  marketStatus: string;
+}
+
+export async function getWorkingOrders(): Promise<WorkingOrder[]> {
+  const data = await capitalRequest<{
+    workingOrders: Array<{
+      workingOrderData: {
+        dealId: string;
+        direction: "BUY" | "SELL";
+        size: number;
+        level: number;
+        orderType: string;
+        stopLevel?: number;
+        profitLevel?: number;
+        currency: string;
+        createdDateUTC: string;
+      };
+      marketData: {
+        epic: string;
+        marketStatus: string;
+      };
+    }>;
+  }>("/api/v1/workingorders");
+  return (data.workingOrders ?? []).map((w) => ({
+    dealId: w.workingOrderData.dealId,
+    epic: w.marketData.epic,
+    direction: w.workingOrderData.direction,
+    size: w.workingOrderData.size,
+    level: w.workingOrderData.level,
+    orderType: w.workingOrderData.orderType,
+    stopLevel: w.workingOrderData.stopLevel,
+    profitLevel: w.workingOrderData.profitLevel,
+    currency: w.workingOrderData.currency,
+    createdDate: w.workingOrderData.createdDateUTC,
+    marketStatus: w.marketData.marketStatus,
+  }));
+}
+
+// ─── Client Sentiment ─────────────────────────────────────────────────────────
+
+export interface ClientSentiment {
+  marketId: string;
+  longPositionPercentage: number;
+  shortPositionPercentage: number;
+}
+
+export async function getClientSentiment(marketIds: string[]): Promise<ClientSentiment[]> {
+  const ids = marketIds.join(",");
+  const data = await capitalRequest<{
+    clientSentiments: Array<{
+      marketId: string;
+      longPositionPercentage: number;
+      shortPositionPercentage: number;
+    }>;
+  }>(`/api/v1/clientsentiment?marketIds=${ids}`);
+  return data.clientSentiments ?? [];
+}
+
+// ─── Account Preferences ─────────────────────────────────────────────────────
+
+export interface AccountPreferences {
+  leverages: Record<string, number>;
+  hedgingMode: boolean;
+  trailingStopsEnabled: boolean;
+}
+
+export async function getAccountPreferences(): Promise<AccountPreferences> {
+  const data = await capitalRequest<{
+    leverages: Record<string, number>;
+    hedgingMode: boolean;
+    trailingStopsEnabled: boolean;
+  }>("/api/v1/accounts/preferences");
+  return {
+    leverages: data.leverages ?? {},
+    hedgingMode: data.hedgingMode ?? false,
+    trailingStopsEnabled: data.trailingStopsEnabled ?? false,
+  };
+}
+
+// ─── Market Search ────────────────────────────────────────────────────────────
+
+export interface MarketSearchResult {
+  epic: string;
+  instrumentName: string;
+  instrumentType: string;
+  expiry: string;
+  high: number;
+  low: number;
+  percentageChange: number;
+  netChange: number;
+  bid: number;
+  offer: number;
+  updateTime: string;
+  marketStatus: string;
+  scalingFactor: number;
+}
+
+export async function searchMarkets(searchTerm: string): Promise<MarketSearchResult[]> {
+  const data = await capitalRequest<{
+    markets: Array<{
+      epic: string;
+      instrumentName: string;
+      instrumentType: string;
+      expiry: string;
+      high: number;
+      low: number;
+      percentageChange: number;
+      netChange: number;
+      bid: number;
+      offer: number;
+      updateTime: string;
+      marketStatus: string;
+      scalingFactor: number;
+    }>;
+  }>(`/api/v1/markets?searchTerm=${encodeURIComponent(searchTerm)}`);
+  return data.markets ?? [];
+}
+
+// ─── Watchlists ───────────────────────────────────────────────────────────────
+
+export interface Watchlist {
+  id: string;
+  name: string;
+  editable: boolean;
+  deleteable: boolean;
+  defaultSystemWatchlist: boolean;
+}
+
+export interface WatchlistDetail {
+  id: string;
+  name: string;
+  markets: MarketSearchResult[];
+}
+
+export async function getWatchlists(): Promise<Watchlist[]> {
+  const data = await capitalRequest<{ watchlists: Watchlist[] }>("/api/v1/watchlists");
+  return data.watchlists ?? [];
+}
+
+export async function getWatchlistDetail(watchlistId: string): Promise<WatchlistDetail> {
+  const data = await capitalRequest<{
+    id: string;
+    name: string;
+    markets: MarketSearchResult[];
+  }>(`/api/v1/watchlists/${watchlistId}`);
+  return data;
+}
+
+// ─── Market Hours Check ─────────────────────────────────────────────────────────
 
 /**
  * Check if a given instrument is currently tradeable based on its known schedule.

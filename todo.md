@@ -190,3 +190,23 @@
 - [x] Execute ALL valid signals up to maxOpenPositions limit simultaneously
 - [x] Remove the `foundOpportunity` break that stops after first trade
 - [x] Log "Scanning X instruments..." and "Found Y opportunities" in Decision Log
+
+## Round 14 — Capital.com Full API Integration + Scroll Fix + Min Confidence
+
+- [x] Fix scroll lock in Decision Log (use scrollTop on container, not scrollIntoView)
+- [x] Remove Paper Trading balance from Dashboard and Sidebar
+- [x] Fix Min AI Confidence fallback from 72 to 55 in RiskSettings.tsx
+- [x] Update DB: minConfidenceThreshold = 55
+- [x] Add BTC to gatherMarketContext instrument list
+- [x] Add getActivityHistory() to capitalcom.ts
+- [x] Add getTransactionHistory() to capitalcom.ts
+- [x] Add getWorkingOrders() to capitalcom.ts
+- [x] Add getClientSentiment() to capitalcom.ts (new tRPC endpoint)
+- [x] Add getAccountPreferences() to capitalcom.ts
+- [x] Add searchMarkets() to capitalcom.ts
+- [x] Add getWatchlists() / getWatchlistDetail() to capitalcom.ts
+- [x] Expose all new endpoints via tRPC procedures in routers.ts
+- [x] Add Client Sentiment panel to Dashboard
+- [x] Add Working Orders panel to Dashboard
+- [x] Add Capital.com Activity History tab to Trade History page
+- [x] Add Capital.com Transaction History tab to Trade History page

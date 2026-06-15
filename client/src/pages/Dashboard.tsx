@@ -6,6 +6,7 @@ import {
 import {
   DollarSign, TrendingUp, Target, Activity,
   RefreshCw, ArrowUpRight, ArrowDownRight, BarChart3,
+  Users, Clock, Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -124,6 +125,17 @@ export default function Dashboard() {
   const liveBalance   = liveBalanceQuery.data?.balance;
   const livePnl       = liveBalanceQuery.data?.profitLoss;
   const liveAvailable = liveBalanceQuery.data?.available;
+
+  const sentimentQuery = trpc.capitalcom.clientSentiment.useQuery(
+    { instruments: ["EURUSD", "GBPUSD", "GOLD", "US500", "BITCOIN"] },
+    { refetchInterval: 120000, retry: false }
+  );
+  const workingOrdersQuery = trpc.capitalcom.workingOrders.useQuery(
+    undefined,
+    { refetchInterval: 30000, retry: false }
+  );
+  const sentiments = sentimentQuery.data ?? [];
+  const workingOrders = workingOrdersQuery.data ?? [];
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
@@ -329,6 +341,90 @@ export default function Dashboard() {
                     <span style={{ fontSize: "0.6875rem", fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", minWidth: "2.25rem", textAlign: "right" }}>
                       {s.confidence}%
                     </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Client Sentiment + Working Orders */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+        {/* Client Sentiment */}
+        <div className="rounded-2xl p-5" style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)" }}>
+          <div className="flex items-center gap-2 mb-4">
+            <Users size={14} style={{ color: "var(--color-accent)" }} />
+            <p style={{ fontWeight: 600, fontSize: "0.9375rem", color: "var(--color-text-primary)" }}>Client Sentiment</p>
+            <span style={{ fontSize: "0.625rem", color: "var(--color-text-tertiary)", marginLeft: "auto" }}>Capital.com live</span>
+          </div>
+          {sentimentQuery.isLoading ? (
+            <div className="space-y-3">{[...Array(5)].map((_, i) => (
+              <div key={i} className="animate-pulse flex items-center gap-3">
+                <div className="h-4 w-16 rounded" style={{ background: "var(--color-bg-overlay)" }} />
+                <div className="flex-1 h-3 rounded" style={{ background: "var(--color-bg-overlay)" }} />
+              </div>
+            ))}</div>
+          ) : sentiments.length === 0 ? (
+            <p style={{ fontSize: "0.8125rem", color: "var(--color-text-tertiary)", textAlign: "center", padding: "1.5rem 0" }}>No sentiment data</p>
+          ) : (
+            <div className="space-y-3">
+              {sentiments.map((s) => {
+                const longPct = Math.round(s.longPositionPercentage);
+                const shortPct = Math.round(s.shortPositionPercentage);
+                const name = s.marketId === "BITCOIN" ? "BTC" : s.marketId;
+                return (
+                  <div key={s.marketId}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--color-text-primary)" }}>{name}</span>
+                      <div className="flex items-center gap-3">
+                        <span style={{ fontSize: "0.6875rem", color: "var(--color-profit)", fontWeight: 600 }}>{longPct}% Long</span>
+                        <span style={{ fontSize: "0.6875rem", color: "var(--color-loss)", fontWeight: 600 }}>{shortPct}% Short</span>
+                      </div>
+                    </div>
+                    <div className="flex rounded-full overflow-hidden" style={{ height: 6, background: "var(--color-bg-overlay)" }}>
+                      <div style={{ width: `${longPct}%`, background: "var(--color-profit)", transition: "width 0.5s ease" }} />
+                      <div style={{ width: `${shortPct}%`, background: "var(--color-loss)", transition: "width 0.5s ease" }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Working Orders */}
+        <div className="rounded-2xl p-5" style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)" }}>
+          <div className="flex items-center gap-2 mb-4">
+            <Layers size={14} style={{ color: "var(--color-accent)" }} />
+            <p style={{ fontWeight: 600, fontSize: "0.9375rem", color: "var(--color-text-primary)" }}>Working Orders</p>
+            <span style={{ fontSize: "0.625rem", color: "var(--color-text-tertiary)", marginLeft: "auto" }}>Pending limit/stop</span>
+          </div>
+          {workingOrdersQuery.isLoading ? (
+            <div className="space-y-2">{[...Array(3)].map((_, i) => (
+              <div key={i} className="animate-pulse h-12 rounded-xl" style={{ background: "var(--color-bg-overlay)" }} />
+            ))}</div>
+          ) : workingOrders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <Clock size={22} style={{ color: "var(--color-text-tertiary)", marginBottom: "0.5rem" }} />
+              <p style={{ fontSize: "0.8125rem", color: "var(--color-text-tertiary)" }}>No pending orders</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {workingOrders.map((o) => (
+                <div key={o.dealId} className="flex items-center justify-between p-3 rounded-xl"
+                  style={{ background: "var(--color-bg-elevated)", border: "1px solid var(--color-border-subtle)" }}>
+                  <div className="flex items-center gap-2">
+                    <span className={o.direction === "BUY" ? "signal-buy" : "signal-sell"}>{o.direction}</span>
+                    <span style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--color-text-primary)" }}>{o.epic}</span>
+                    <span style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)" }}>{o.orderType}</span>
+                  </div>
+                  <div className="text-right">
+                    <p className="tabular-nums" style={{ fontSize: "0.8125rem", fontFamily: "var(--font-mono)", color: "var(--color-text-secondary)" }}>
+                      @ {o.level.toFixed(5)}
+                    </p>
+                    <p style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)" }}>Size: {o.size}</p>
                   </div>
                 </div>
               ))}

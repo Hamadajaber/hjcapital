@@ -887,7 +887,7 @@ export default function AutoTrade() {
         <div className="lg:col-span-2">
           <div
             className="hj-card flex flex-col"
-            style={{ minHeight: "clamp(400px, 60vh, 600px)" }}
+            style={{ height: "clamp(400px, 60vh, 680px)", maxHeight: "680px" }}
           >
             {/* Log header */}
             <div

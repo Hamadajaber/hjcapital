@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Filter, TrendingUp, TrendingDown, Clock, ChevronDown, ChevronUp } from "lucide-react";
+import { Filter, TrendingUp, TrendingDown, Clock, ChevronDown, ChevronUp, Activity, ArrowLeftRight } from "lucide-react";
 
 const INSTRUMENTS = ["All", "EURUSD", "GBPUSD", "GOLD", "US500", "BTC"];
 const STATUSES = ["All", "open", "closed", "cancelled"] as const;
@@ -199,7 +199,181 @@ function TradeRow({ trade }: { trade: {
   );
 }
 
+// ─── Capital.com Activity History Tab ───────────────────────────────────────
+function ActivityHistoryTab() {
+  const activityQuery = trpc.capitalcom.activityHistory.useQuery(
+    { maxResults: 100 },
+    { retry: false }
+  );
+  const activities = activityQuery.data ?? [];
+
+  const actionLabel: Record<string, string> = {
+    POSITION_OPENED: "Opened",
+    POSITION_CLOSED: "Closed",
+    WORKING_ORDER_CREATED: "Order Created",
+    WORKING_ORDER_DELETED: "Order Deleted",
+    WORKING_ORDER_AMENDED: "Order Amended",
+    POSITION_AMENDED: "Amended",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Activity size={14} style={{ color: "var(--color-accent)" }} />
+        <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-text-primary)" }}>Account Activity</span>
+        <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", marginLeft: "auto" }}>Direct from Capital.com</span>
+      </div>
+      {activityQuery.isLoading ? (
+        <div className="space-y-2">{[...Array(5)].map((_, i) => (
+          <div key={i} className="animate-pulse h-14 rounded-xl" style={{ background: "var(--color-bg-elevated)" }} />
+        ))}</div>
+      ) : activities.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 rounded-2xl" style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)" }}>
+          <Activity size={28} style={{ color: "var(--color-text-tertiary)", marginBottom: "0.75rem" }} />
+          <p style={{ fontSize: "0.875rem", color: "var(--color-text-tertiary)" }}>No activity history</p>
+        </div>
+      ) : (
+        <div className="rounded-2xl overflow-hidden" style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)" }}>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--color-border-subtle)", background: "var(--color-bg-elevated)" }}>
+                  {["Action", "Instrument", "Size", "Level", "Status", "Date"].map(h => (
+                    <th key={h} className="px-4 py-3 text-left" style={{ fontSize: "0.6875rem", fontWeight: 600, color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {activities.map((a, i) => (
+                  <tr key={`${a.dealId}-${i}`} style={{ borderBottom: "1px solid var(--color-border-subtle)" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "var(--color-bg-elevated)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                    <td className="px-4 py-3">
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{
+                        background: a.action.includes("OPENED") || a.action.includes("CREATED") ? "var(--color-accent-dim)" : "var(--color-bg-elevated)",
+                        color: a.action.includes("OPENED") || a.action.includes("CREATED") ? "var(--color-accent)" : "var(--color-text-tertiary)",
+                        border: `1px solid ${a.action.includes("OPENED") || a.action.includes("CREATED") ? "var(--color-accent)" : "var(--color-border-subtle)"}`,
+                      }}>{actionLabel[a.action] ?? a.action}</span>
+                    </td>
+                    <td className="px-4 py-3" style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--color-text-primary)" }}>{a.epic}</td>
+                    <td className="px-4 py-3 tabular-nums" style={{ fontSize: "0.8125rem", fontFamily: "var(--font-mono)", color: "var(--color-text-secondary)" }}>{a.size || "—"}</td>
+                    <td className="px-4 py-3 tabular-nums" style={{ fontSize: "0.8125rem", fontFamily: "var(--font-mono)", color: "var(--color-text-secondary)" }}>{a.level ? a.level.toFixed(5) : "—"}</td>
+                    <td className="px-4 py-3">
+                      <span style={{ fontSize: "0.75rem", color: a.status === "ACCEPTED" ? "var(--color-profit)" : "var(--color-text-tertiary)" }}>{a.status}</span>
+                    </td>
+                    <td className="px-4 py-3" style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>
+                      {new Date(a.date).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Capital.com Transaction History Tab ─────────────────────────────────────
+function TransactionHistoryTab() {
+  const txQuery = trpc.capitalcom.transactionHistory.useQuery(
+    { maxResults: 100 },
+    { retry: false }
+  );
+  const transactions = txQuery.data ?? [];
+
+  const parsePnl = (pnlStr: string) => {
+    const match = pnlStr?.match(/[-\d.]+/);
+    return match ? parseFloat(match[0]) : 0;
+  };
+
+  const totalPnl = transactions
+    .filter(t => t.type === "TRADE" && !t.cashTransaction)
+    .reduce((sum, t) => sum + parsePnl(t.profitAndLoss), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <ArrowLeftRight size={14} style={{ color: "var(--color-accent)" }} />
+        <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-text-primary)" }}>Transaction History</span>
+        <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", marginLeft: "auto" }}>Direct from Capital.com</span>
+      </div>
+      {!txQuery.isLoading && transactions.length > 0 && (
+        <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)" }}>
+          <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>Total Realized P&L:</span>
+          <span className="tabular-nums" style={{ fontSize: "1rem", fontWeight: 700, fontFamily: "var(--font-serif)", color: totalPnl >= 0 ? "var(--color-profit)" : "var(--color-loss)" }}>
+            {totalPnl >= 0 ? "+" : ""}${totalPnl.toFixed(2)}
+          </span>
+        </div>
+      )}
+      {txQuery.isLoading ? (
+        <div className="space-y-2">{[...Array(5)].map((_, i) => (
+          <div key={i} className="animate-pulse h-14 rounded-xl" style={{ background: "var(--color-bg-elevated)" }} />
+        ))}</div>
+      ) : transactions.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 rounded-2xl" style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)" }}>
+          <ArrowLeftRight size={28} style={{ color: "var(--color-text-tertiary)", marginBottom: "0.75rem" }} />
+          <p style={{ fontSize: "0.875rem", color: "var(--color-text-tertiary)" }}>No transactions found</p>
+        </div>
+      ) : (
+        <div className="rounded-2xl overflow-hidden" style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)" }}>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--color-border-subtle)", background: "var(--color-bg-elevated)" }}>
+                  {["Type", "Instrument", "Open", "Close", "P&L", "Date"].map(h => (
+                    <th key={h} className="px-4 py-3 text-left" style={{ fontSize: "0.6875rem", fontWeight: 600, color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.map((t, i) => {
+                  const pnl = parsePnl(t.profitAndLoss);
+                  return (
+                    <tr key={`${t.reference}-${i}`} style={{ borderBottom: "1px solid var(--color-border-subtle)" }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "var(--color-bg-elevated)")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                      <td className="px-4 py-3">
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{
+                          background: t.type === "TRADE" ? "var(--color-accent-dim)" : "var(--color-bg-elevated)",
+                          color: t.type === "TRADE" ? "var(--color-accent)" : "var(--color-text-tertiary)",
+                          border: `1px solid ${t.type === "TRADE" ? "var(--color-accent)" : "var(--color-border-subtle)"}`,
+                        }}>{t.type}</span>
+                      </td>
+                      <td className="px-4 py-3" style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--color-text-primary)", maxWidth: "10rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {t.instrumentName || "—"}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums" style={{ fontSize: "0.8125rem", fontFamily: "var(--font-mono)", color: "var(--color-text-secondary)" }}>
+                        {t.openLevel ? t.openLevel.toFixed(5) : "—"}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums" style={{ fontSize: "0.8125rem", fontFamily: "var(--font-mono)", color: "var(--color-text-secondary)" }}>
+                        {t.closeLevel ? t.closeLevel.toFixed(5) : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        {t.profitAndLoss ? (
+                          <span className="tabular-nums" style={{ fontSize: "0.875rem", fontWeight: 600, fontFamily: "var(--font-serif)", color: pnl >= 0 ? "var(--color-profit)" : "var(--color-loss)" }}>
+                            {pnl >= 0 ? "+" : ""}{t.profitAndLoss}
+                          </span>
+                        ) : "—"}
+                      </td>
+                      <td className="px-4 py-3" style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>
+                        {new Date(t.date).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TradeHistory() {
+  const [activeTab, setActiveTab] = useState<"platform" | "activity" | "transactions">("platform");
   const [instrumentFilter, setInstrumentFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState<"All" | "open" | "closed" | "cancelled">("All");
   const [dateFrom, setDateFrom] = useState("");
@@ -230,6 +404,33 @@ export default function TradeHistory() {
           Complete log of all your trading activity
         </p>
       </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 rounded-xl" style={{ background: "var(--color-bg-elevated)", border: "1px solid var(--color-border-subtle)", width: "fit-content" }}>
+        {([
+          { key: "platform", label: "Platform Trades", icon: TrendingUp },
+          { key: "activity", label: "Capital.com Activity", icon: Activity },
+          { key: "transactions", label: "Transactions", icon: ArrowLeftRight },
+        ] as const).map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all"
+            style={{
+              background: activeTab === key ? "var(--color-accent)" : "transparent",
+              color: activeTab === key ? "#fff" : "var(--color-text-tertiary)",
+            }}
+          >
+            <Icon size={12} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "activity" && <ActivityHistoryTab />}
+      {activeTab === "transactions" && <TransactionHistoryTab />}
+
+      {activeTab === "platform" && <>
 
       {/* Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -333,6 +534,7 @@ export default function TradeHistory() {
           </div>
         )}
       </div>
+      </>}
     </div>
   );
 }

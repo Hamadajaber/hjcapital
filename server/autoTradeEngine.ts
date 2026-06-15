@@ -483,7 +483,7 @@ async function gatherMarketContext(): Promise<Record<string, unknown>> {
   ]);
 
   // Fetch multi-timeframe candles + technical analysis for open markets
-  const allTopInstruments = ["EURUSD", "GOLD", "US500", "GBPUSD"];
+  const allTopInstruments = ["EURUSD", "GOLD", "US500", "GBPUSD", "BTC"];
   const topInstruments = getOpenMarkets(allTopInstruments);
 
   const technicalData: Record<string, MultiTimeframeData> = {};

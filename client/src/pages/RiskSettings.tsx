@@ -279,7 +279,7 @@ export default function RiskSettings() {
             label="Min AI Confidence"
             description="Only execute trades when AI confidence is above this threshold"
             value={settings.minConfidenceThreshold}
-            onChange={(v) => setSettings(s => ({ ...s, minConfidenceThreshold: parseInt(v) || 72 }))}
+            onChange={(v) => setSettings(s => ({ ...s, minConfidenceThreshold: parseInt(v) || 55 }))}
             min={50} max={95} step={1} suffix="%"
           />
           <SettingRow
