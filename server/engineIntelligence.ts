@@ -381,6 +381,59 @@ export function calculateATRStopLoss(
 }
 
 /**
+ * Calculate position size based on ATR and account balance.
+ * Risk 1% of balance per trade, size = (balance × riskPct) / (ATR × 1.5)
+ * This equalizes risk across all instruments regardless of their volatility.
+ */
+export function calculateATRPositionSize(
+  candles: Candle[],
+  accountBalance: number,
+  riskPct = 0.01 // 1% of balance per trade
+): { size: number; atr: number; riskAmount: number } {
+  const n = candles.length;
+  const riskAmount = accountBalance * riskPct;
+
+  if (n < 14 || accountBalance <= 0) {
+    return { size: 1, atr: 0, riskAmount };
+  }
+
+  // Calculate ATR (14-period)
+  const closes = candles.map((c) => c.close);
+  const highs = candles.map((c) => c.high);
+  const lows = candles.map((c) => c.low);
+
+  let atrSum = 0;
+  for (let i = n - 14; i < n; i++) {
+    const prevClose = i > 0 ? closes[i - 1] : closes[i];
+    const tr = Math.max(
+      highs[i] - lows[i],
+      Math.abs(highs[i] - prevClose),
+      Math.abs(lows[i] - prevClose)
+    );
+    atrSum += tr;
+  }
+  const atr = atrSum / 14;
+
+  // Stop loss distance = 1.5 × ATR
+  const slDistance = atr * 1.5;
+
+  if (slDistance <= 0) {
+    return { size: 1, atr: 0, riskAmount };
+  }
+
+  // Size = risk amount / SL distance
+  // Clamp between 0.01 (min) and 10 (max) to prevent extreme sizes
+  const rawSize = riskAmount / slDistance;
+  const size = Math.max(0.01, Math.min(10, parseFloat(rawSize.toFixed(2))));
+
+  return {
+    size,
+    atr: Math.round(atr * 100000) / 100000,
+    riskAmount: Math.round(riskAmount * 100) / 100,
+  };
+}
+
+/**
  * Calculate trailing stop level based on current profit.
  * - At 50% of target → move SL to breakeven
  * - At 75% of target → move SL to +25% of original target

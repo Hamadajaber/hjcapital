@@ -266,3 +266,13 @@
 - [x] Fix confidence always showing 55%: removed effectiveThreshold from prompt rule #8 (AI was anchoring to it)
 - [x] Add price sanity check: warn if AI entry estimate deviates >20% from live price (uses live price)
 - [x] Verified GOLD/NASDAQ epics via live API call — both correct (CFD pricing)
+
+## Round 21 — 3 Profit-Enhancement Strategies
+- [x] Fix 1 — Risk:Reward 1:2: enforce TP = 2× SL in AI prompt for both analyzeMarket and analyzeInstrument
+- [x] Fix 1 — Risk:Reward 1:2: add post-processing guard in executeDecision — auto-recalculate TP if R:R < 1.5
+- [x] Fix 2 — Trailing Stop Loss: add stopLoss + takeProfit columns to trades table (schema + SQL migration)
+- [x] Fix 2 — Trailing Stop Loss: implement trailing stop logic in position monitoring loop (break-even at 1R, then trail)
+- [x] Fix 3 — ATR Position Sizing: calculateATRPositionSize() in engineIntelligence.ts
+- [x] Fix 3 — ATR Position Sizing: risk 1% of balance per trade, size = (balance × 0.01) / (ATR × 1.5)
+- [x] Save stopLoss + takeProfit in DB when recording new trade
+- [x] 77/77 tests passing (added 4 new ATR position sizing tests), TypeScript 0 errors

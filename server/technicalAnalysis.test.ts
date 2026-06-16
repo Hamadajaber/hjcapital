@@ -545,3 +545,63 @@ describe("formatTechnicalSummaryForPrompt", () => {
     expect(output).toContain("Doji");
   });
 });
+
+// ─── ATR Position Sizing Tests ────────────────────────────────────────────────
+
+import { calculateATRPositionSize } from "./engineIntelligence";
+
+describe("calculateATRPositionSize", () => {
+  it("returns size=1 for insufficient candle data", () => {
+    const result = calculateATRPositionSize([], 200);
+    expect(result.size).toBe(1);
+  });
+
+  it("clamps size between 0.01 and 10", () => {
+    // Extreme volatility candles
+    const extremeCandles = Array.from({ length: 20 }, (_, i) => ({
+      open: 1000 + i * 100,
+      high: 1200 + i * 100,
+      low: 800 + i * 100,
+      close: 1100 + i * 100,
+    }));
+    const result = calculateATRPositionSize(extremeCandles, 200);
+    expect(result.size).toBeGreaterThanOrEqual(0.01);
+    expect(result.size).toBeLessThanOrEqual(10);
+  });
+
+  it("returns smaller size for high-volatility instruments vs low-volatility", () => {
+    // High volatility: GOLD-like (ATR ~20)
+    const highVolCandles = Array.from({ length: 20 }, (_, i) => ({
+      open: 4300 + i,
+      high: 4320 + i,
+      low: 4280 + i,
+      close: 4310 + i,
+    }));
+    const highVol = calculateATRPositionSize(highVolCandles, 200);
+
+    // Low volatility: EURUSD-like (ATR ~0.001)
+    const lowVolCandles = Array.from({ length: 20 }, (_, i) => ({
+      open: 1.0800 + i * 0.0001,
+      high: 1.0810 + i * 0.0001,
+      low: 1.0790 + i * 0.0001,
+      close: 1.0805 + i * 0.0001,
+    }));
+    const lowVol = calculateATRPositionSize(lowVolCandles, 200);
+
+    // High-volatility instrument should get smaller position size
+    expect(highVol.size).toBeLessThan(lowVol.size);
+  });
+
+  it("returns atr and riskAmount in result", () => {
+    const candles = Array.from({ length: 20 }, (_, i) => ({
+      open: 1.0800 + i * 0.001,
+      high: 1.0820 + i * 0.001,
+      low: 1.0780 + i * 0.001,
+      close: 1.0810 + i * 0.001,
+    }));
+    const result = calculateATRPositionSize(candles, 500);
+    expect(result.atr).toBeGreaterThan(0);
+    expect(result.riskAmount).toBeGreaterThan(0);
+    expect(result.size).toBeGreaterThan(0);
+  });
+});

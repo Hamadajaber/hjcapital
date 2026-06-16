@@ -43,6 +43,13 @@
       "when": 1781542803860,
       "tag": "0005_premium_hawkeye",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1781629684950,
+      "tag": "0006_warm_natasha_romanoff",
+      "breakpoints": true
     }
   ]
 }

@@ -54,8 +54,12 @@ export const trades = mysqlTable("trades", {
   openedAt: timestamp("openedAt").defaultNow().notNull(),
   closedAt: timestamp("closedAt"),
   mode: mysqlEnum("mode", ["paper", "live"]).notNull().default("paper"),
+  // Stop loss and take profit levels (for trailing stop tracking)
+  stopLoss: decimal("stopLoss", { precision: 12, scale: 5 }),
+  takeProfit: decimal("takeProfit", { precision: 12, scale: 5 }),
   // Auto trade reference
   autoTradeSessionId: int("autoTradeSessionId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 export type Trade = typeof trades.$inferSelect;

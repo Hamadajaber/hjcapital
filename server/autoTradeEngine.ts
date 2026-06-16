@@ -57,6 +57,7 @@ import {
   detectMarketRegime,
   formatRegimeForPrompt,
   calculateATRStopLoss,
+  calculateATRPositionSize,
   calculateTrailingStop,
   getClientSentiment,
   formatSentimentSignalForPrompt,
@@ -370,6 +371,61 @@ async function runCycle() {
       : [];
 
     for (const pos of openPositions) {
+      // ███ TRAILING STOP LOGIC ███
+      // Before asking AI to close, check if we should move SL to protect profits
+      // This runs every cycle (every 15 min) to lock in gains as price moves in our favor
+      try {
+        const dbTs = await getDb();
+        if (dbTs && pos.openLevel && pos.currentLevel) {
+          // Get the original trade from DB to find original SL and TP
+          const { trades: tradesTable } = await import("../drizzle/schema");
+          const { eq, and, desc } = await import("drizzle-orm");
+          const [openTrade] = await dbTs
+            .select()
+            .from(tradesTable)
+            .where(and(
+              eq(tradesTable.status, "open"),
+              eq(tradesTable.instrument, pos.epic)
+            ))
+            .orderBy(desc(tradesTable.createdAt))
+            .limit(1);
+
+          if (openTrade && openTrade.stopLoss && openTrade.takeProfit) {
+            const originalSL = parseFloat(openTrade.stopLoss);
+            const takeProfit = parseFloat(openTrade.takeProfit);
+            const direction = pos.direction as "BUY" | "SELL";
+
+            const { newSL, reason } = calculateTrailingStop(
+              direction,
+              pos.openLevel,
+              pos.currentLevel,
+              originalSL,
+              takeProfit
+            );
+
+            // Only update if SL has improved (moved in favor of the trade)
+            const slImproved = direction === "BUY"
+              ? newSL > originalSL
+              : newSL < originalSL;
+
+            if (slImproved) {
+              console.log(`[AutoTrade] TRAILING STOP: ${pos.epic} ${direction} — SL moved from ${originalSL} to ${newSL} (${reason})`);
+              // Update in DB
+              await dbTs.update(tradesTable)
+                .set({ stopLoss: newSL.toFixed(5) })
+                .where(eq(tradesTable.id, openTrade.id));
+              // Notify owner
+              await notifyOwner({
+                title: `🛡️ Trailing Stop Updated: ${pos.epic}`,
+                content: `${reason}. New SL: ${newSL.toFixed(5)} (was ${originalSL.toFixed(5)}). Current P&L: $${pos.profitLoss?.toFixed(2)}`,
+              }).catch(() => {});
+            }
+          }
+        }
+      } catch (trailErr) {
+        console.warn(`[AutoTrade] Trailing stop error for ${pos.epic}:`, trailErr);
+      }
+
       const closeDecision = await analyzeForClose(pos, marketContext);
       if (closeDecision.action === "CLOSE") {
         await executeDecision(closeDecision, _engineState.sessionId, _engineState.mode);
@@ -762,7 +818,10 @@ PORTFOLIO MANAGER RULES:
 4. Use the current session to bias direction: ${sessionMain} — trend following in London/NY, range in Asian
 5. DO NOT open a position in an instrument marked as ⚠️ CORRELATED with an open position
 6. ONLY trade instruments listed in CURRENTLY OPEN MARKETS above
-7. Always include stop loss and take profit levels
+7. MANDATORY RISK:REWARD RULE — takeProfit MUST be at least 2× the distance of stopLoss from entry:
+   - BUY example: entry=1.1000, stopLoss=1.0950 (50 pips risk) → takeProfit MUST be ≥1.1100 (100 pips reward)
+   - SELL example: entry=1.1000, stopLoss=1.1050 (50 pips risk) → takeProfit MUST be ≤1.0900 (100 pips reward)
+   - This is NON-NEGOTIABLE — never set takeProfit closer than 2× the stop loss distance
 8. Missing a trade is also a cost — if you see ANY clear setup, TAKE IT. Report your TRUE confidence (not a minimum threshold number)
 
 Respond in this EXACT JSON format (no markdown, no explanation outside JSON):
@@ -946,7 +1005,10 @@ PORTFOLIO MANAGER RULES:
 3. Confidence scale: 35-50% = valid trade (small size), 50-70% = good trade, 70%+ = strong trade
 4. Even 1 timeframe alignment is enough to act — wait for 2+ only for larger size
 5. Use the current session to bias direction: London/NY = trend following, Asian = range trading
-6. Always provide entry, stop loss, and take profit — use ATR-based levels if unsure
+6. MANDATORY RISK:REWARD RULE — takeProfit MUST be at least 2× the distance of stopLoss from entry:
+   - BUY: if entry=1.1000 and stopLoss=1.0950 (50 pips risk) → takeProfit MUST be ≥1.1100 (100 pips reward)
+   - SELL: if entry=1.1000 and stopLoss=1.1050 (50 pips risk) → takeProfit MUST be ≤1.0900 (100 pips reward)
+   - This is NON-NEGOTIABLE — never set takeProfit closer than 2× the stop loss distance
 7. Prefer the direction of the higher timeframe (4H > 1H > 5min)
 
 Respond in this EXACT JSON format:
@@ -1007,7 +1069,21 @@ Only use HOLD if truly no directional bias exists:
     }
   }
 
-  const adjustedSize = Math.max(0.1, (parsed.size ?? 1) * sizeMultiplier);
+  // ███ ATR-BASED POSITION SIZING ███
+  // Risk exactly 1% of balance per trade, adjusted for instrument volatility
+  // High-volatility instruments (GOLD, NASDAQ) get smaller size; low-volatility (EURUSD) get larger
+  let atrSize = parsed.size ?? 1;
+  if (instTechnical && instTechnical.candles1h.length >= 14) {
+    const candles = instTechnical.candles1h.map((c: OHLCVCandle) => ({
+      open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume, timestamp: c.timestamp
+    }));
+    const accountBalance = await getCurrentBalance("live").catch(() => 200);
+    const { size: calculatedSize, atr, riskAmount } = calculateATRPositionSize(candles, accountBalance);
+    atrSize = calculatedSize;
+    console.log(`[AutoTrade] ATR SIZE: ${instrument} — ATR=${atr}, risk=$${riskAmount}, size=${calculatedSize} (vs AI suggested: ${parsed.size ?? 1})`);
+  }
+
+  const adjustedSize = Math.max(0.1, atrSize * sizeMultiplier);
 
   return {
     instrument,
@@ -1107,10 +1183,11 @@ Respond in JSON:
 // ─── Trade Execution ──────────────────────────────────────────────────────────
 
 async function executeDecision(
-  decision: TradeDecision,
+  decisionInput: TradeDecision,
   sessionId: number,
   mode: "paper" | "live"
 ): Promise<void> {
+  let decision: TradeDecision = decisionInput;
   const risk = await getRiskSettings();
 
   // Confidence check
@@ -1185,6 +1262,26 @@ async function executeDecision(
       const balance = await getCurrentBalance(mode);
       const size = decision.size ?? 1;
 
+      // ███ RISK:REWARD ENFORCEMENT GUARD ███
+      // Ensure takeProfit is always at least 1.5× the stop loss distance (target 2×)
+      if (decision.entryPrice && decision.stopLoss && decision.takeProfit) {
+        const entry = decision.entryPrice;
+        const sl = decision.stopLoss;
+        const tp = decision.takeProfit;
+        const slDistance = Math.abs(entry - sl);
+        const tpDistance = Math.abs(entry - tp);
+        const currentRR = slDistance > 0 ? tpDistance / slDistance : 0;
+
+        if (currentRR < 1.5 && slDistance > 0) {
+          // Recalculate TP to enforce 2:1 R:R
+          const newTP = decision.action === "BUY"
+            ? entry + (slDistance * 2)
+            : entry - (slDistance * 2);
+          console.log(`[AutoTrade] R:R GUARD: ${decision.instrument} R:R was ${currentRR.toFixed(2)} — recalculating TP from ${tp} to ${newTP.toFixed(5)} (2× SL distance)`);
+          decision = { ...decision, takeProfit: parseFloat(newTP.toFixed(5)) } as TradeDecision;
+        }
+      }
+
       let tradeId: number | undefined;
       let actualEntry = decision.entryPrice ?? 0;
 
@@ -1251,7 +1348,7 @@ async function executeDecision(
         }
         const result = await placeOrder({
           epic,
-          direction: decision.action,
+          direction: decision.action as "BUY" | "SELL",
           size: adjustedSize,
           stopLoss: decision.stopLoss,
           takeProfit: decision.takeProfit,
@@ -1288,7 +1385,7 @@ async function executeDecision(
       if (!dbExec2) throw new Error("DB not available");
       const [tradeResult] = await dbExec2.insert(trades).values({
         instrument: decision.instrument,
-        direction: decision.action,
+        direction: decision.action as "BUY" | "SELL",
         openPrice: actualEntry.toFixed(5),
         size: size.toFixed(4),
         status: "open",
@@ -1296,6 +1393,9 @@ async function executeDecision(
         aiConfidence: decision.confidence,
         mode,
         autoTradeSessionId: sessionId,
+        // Store SL/TP for trailing stop tracking
+        stopLoss: decision.stopLoss ? decision.stopLoss.toFixed(5) : null,
+        takeProfit: decision.takeProfit ? decision.takeProfit.toFixed(5) : null,
       });
 
       tradeId = (tradeResult as any).insertId;
