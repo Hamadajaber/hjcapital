@@ -201,7 +201,7 @@ export async function getRiskSettings(): Promise<RiskSettings | undefined> {
     dailyLossLimitPct: "25.00",
     stopLossPerTrade: "1.00",
     maxRiskPerTrade: "1.00",
-    minConfidenceThreshold: 72,
+    minConfidenceThreshold: 45, // Portfolio manager default: take calculated risks
     maxOpenPositions: 3,
   });
   const seeded = await db.select().from(riskSettings).limit(1);
@@ -223,7 +223,7 @@ export async function updateRiskSettings(settings: Partial<{
       dailyLossLimitPct: settings.dailyLossLimitPct ?? "25.00",
       stopLossPerTrade: settings.stopLossPerTrade ?? "1.00",
       maxRiskPerTrade: settings.maxRiskPerTrade ?? "1.00",
-      minConfidenceThreshold: settings.minConfidenceThreshold ?? 72,
+      minConfidenceThreshold: settings.minConfidenceThreshold ?? 45,
       maxOpenPositions: settings.maxOpenPositions ?? 3,
     });
   } else {

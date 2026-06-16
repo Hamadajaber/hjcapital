@@ -169,7 +169,7 @@ export const INSTRUMENT_EPICS: Record<string, string> = {
   XAGUSD: "SILVER",
   OIL_CRUDE: "OIL_CRUDE",
   US500: "US500",
-  GER40: "GER40",
+  GER40: "DE40",   // Capital.com uses DE40 for DAX 40 (Germany 40 index)
   NASDAQ: "US100",
 
   // ─── Rotating universe: Major Forex ──────────────────────────────────────
@@ -894,8 +894,8 @@ export function isMarketOpen(instrument: string): boolean {
     return true;
   }
 
-  if (epic === "GER40" || epic === "DE30") {
-    // DAX 40 (GER40): Mon–Fri 07:00–21:00 UTC (Xetra hours)
+  if (epic === "GER40" || epic === "DE30" || epic === "DE40") {
+    // DAX 40 (GER40 / DE40): Mon–Fri 07:00–21:00 UTC (Xetra hours)
     if (day === 0 || day === 6) return false;
     return timeMinutes >= 7 * 60 && timeMinutes < 21 * 60;
   }

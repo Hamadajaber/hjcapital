@@ -236,3 +236,24 @@
 - [x] Fix GER40 epic: DE30 → GER40 (correct Capital.com epic for DAX 40)
 - [x] Expand CORRELATION_GROUPS to cover all 65+ instruments in rotating universe
 - [x] 71/71 tests passing, TypeScript 0 errors
+
+## Round 19 — Portfolio Manager Engine Fix (Zero-Trade Diagnosis)
+
+### Root Causes Identified:
+# 1. Ensemble returns BUY @ 0% — the prompt asks for confidence but models return 0 because they have no real data
+# 2. analyzeInstrument: if sizeMultiplier=0 OR action=HOLD → returns HOLD (0% confidence blocks everything)
+# 3. getEnsembleSizeMultiplier: split agreement with Claude <60% → returns 0 (HOLD) — too aggressive
+# 4. minConfidenceThreshold default is 72% — extremely high bar for AI that returns 0-40% normally
+# 5. GER40 epic still 404 on Capital.com (wrong epic used in candle fetch)
+# 6. Engine ran cycles but log was truncated — actual 3h gap was sandbox hibernation
+
+### Fixes:
+- [ ] Fix prompt: remove confidence-gate from analyzeInstrument prompt — AI should always return its TRUE confidence
+- [ ] Fix getEnsembleSizeMultiplier: split with ANY confidence ≥40% → 0.7x (not 0); only pure HOLD → 0
+- [ ] Lower default minConfidenceThreshold from 72% to 45% (portfolio manager takes calculated risks)
+- [ ] Fix getDynamicConfidenceThreshold: <5 trades → use 40% (not 55%) to allow early trades
+- [ ] Add direct-execution path: if ensemble says BUY/SELL with ≥40% confidence, execute immediately
+- [ ] Fix GER40 epic: try "GER40" then fallback to "DE30" with checkMarketTradeable
+- [ ] Add maxOpenPositions guard bypass: if 0 open positions, always allow at least 1 trade
+- [ ] Improve prompt: give AI explicit market context about current session (London/NY/Asian)
+- [ ] Add cycle heartbeat log: every cycle logs "Cycle N complete: X trades, Y skipped (reason)"

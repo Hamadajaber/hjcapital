@@ -74,15 +74,23 @@ const INSTRUMENTS = ["EURUSD", "GBPUSD", "GOLD", "US500", "BTC"] as const;
 
 // ─── AI Signal Generator ──────────────────────────────────────────────────────
 async function generateSignalForInstrument(instrument: string) {
-  const prompt = `You are an expert quantitative trading analyst. Generate a trading signal for ${instrument}.
+  const utcHour = new Date().getUTCHours();
+  const session = utcHour >= 7 && utcHour < 16 ? "London Session" :
+    utcHour >= 13 && utcHour < 22 ? "New York Session" :
+    "Asian Session";
+
+  const prompt = `You are HJ Capital's senior portfolio manager. Generate a trading signal for ${instrument}.
+Current session: ${session}
 
 Analyze current market conditions, technical indicators (EMA, RSI, Bollinger Bands), and market sentiment.
+Be decisive — always return BUY or SELL unless the market is genuinely choppy with no direction.
+Confidence scale: 35-50% = valid trade, 50-70% = good trade, 70%+ = strong trade.
 
 Respond ONLY with valid JSON in this exact format:
 {
   "signal": "BUY" | "SELL" | "HOLD",
-  "confidence": <integer 50-95>,
-  "reasoning": "<2-3 sentences of clear, actionable reasoning>",
+  "confidence": <integer 35-95>,
+  "reasoning": "<2-3 sentences of clear, actionable reasoning mentioning key indicators>",
   "currentPrice": <realistic current price as number>,
   "targetPrice": <realistic target price as number>,
   "stopLoss": <realistic stop loss as number>,
@@ -96,7 +104,7 @@ Respond ONLY with valid JSON in this exact format:
   try {
     const response = await invokeLLM({
       messages: [
-        { role: "system", content: "You are a precise trading signal generator. Always respond with valid JSON only, no markdown." },
+        { role: "system", content: "You are a decisive portfolio manager. Always respond with valid JSON only, no markdown. Prefer BUY/SELL over HOLD." },
         { role: "user", content: prompt },
       ],
     });
@@ -108,7 +116,7 @@ Respond ONLY with valid JSON in this exact format:
     // Fallback signal
     return {
       signal: "HOLD",
-      confidence: 55,
+      confidence: 45,
       reasoning: `Market conditions for ${instrument} are currently mixed. Waiting for clearer directional signals before entering a position.`,
       currentPrice: null,
       targetPrice: null,
@@ -120,13 +128,13 @@ Respond ONLY with valid JSON in this exact format:
 
 // ─── AI Advisor ───────────────────────────────────────────────────────────────
 async function getAdvisorResponse(userMessage: string, portfolio: { balance: string; mode: string }, history: { role: string; content: string }[]) {
-  const systemPrompt = `You are HJ Capital AI — a personal investment advisor exclusively for Hamada Jaber. You are sophisticated, precise, and focused on capital preservation above all else.
+  const systemPrompt = `You are HJ Capital AI — a personal investment advisor exclusively for Hamada Jaber. You are a decisive portfolio manager who actively seeks opportunities while managing risk.
 
 Current account status:
 - Balance: $${portfolio.balance}
 - Mode: ${portfolio.mode === "paper" ? "Paper Trading (Safe Simulation)" : "LIVE Trading"}
-- Watched instruments: EURUSD, GBPUSD, GOLD, US500, BTC
-- Investment philosophy: Preserve capital first, small consistent profits over big risky gains
+- Scanned instruments: 10 core (EURUSD, GBPUSD, GOLD, US500, GER40, USDJPY, EURGBP, XAGUSD, OIL_CRUDE, NASDAQ) + 10 rotating from 60+ universe
+- Investment philosophy: Active portfolio management — find and execute profitable trades, manage risk with stop losses
 
 Your role:
 - Provide personalized, actionable investment advice

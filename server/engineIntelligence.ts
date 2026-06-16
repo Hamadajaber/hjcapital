@@ -171,29 +171,29 @@ export async function getDynamicConfidenceThreshold(): Promise<{
   try {
     const { winRate, totalTrades } = await get7DayWinRate();
 
-    // Not enough data — use a lower default to allow early trades and build history
+    // Not enough data — use a low default to allow early trades and build history
     if (totalTrades < 5) {
-      return { threshold: 55, shouldStop: false, reason: "Insufficient data (< 5 trades) — using 55% to allow early trades", winRate, totalTrades };
+      return { threshold: 40, shouldStop: false, reason: "Insufficient data (< 5 trades) — using 40% to allow early trades and build history", winRate, totalTrades };
     }
 
     let threshold: number;
     let reason: string;
 
     if (winRate >= 70) {
-      threshold = 50;
-      reason = `Win rate ${winRate}% (excellent) — threshold lowered to 50% to capture more opportunities`;
+      threshold = 35;
+      reason = `Win rate ${winRate}% (excellent) — threshold lowered to 35% to maximize opportunities`;
     } else if (winRate >= 60) {
-      threshold = 55;
-      reason = `Win rate ${winRate}% (good) — threshold at 55%`;
+      threshold = 40;
+      reason = `Win rate ${winRate}% (good) — threshold at 40%`;
     } else if (winRate >= 50) {
-      threshold = 60;
-      reason = `Win rate ${winRate}% (normal) — standard threshold 60%`;
+      threshold = 45;
+      reason = `Win rate ${winRate}% (normal) — standard threshold 45%`;
     } else if (winRate >= 40) {
-      threshold = 70;
-      reason = `Win rate ${winRate}% (below average) — threshold raised to 70% (conservative mode)`;
+      threshold = 55;
+      reason = `Win rate ${winRate}% (below average) — threshold raised to 55% (conservative mode)`;
     } else {
       // Win rate < 40% — auto-stop
-      threshold = 95; // effectively blocks all trades
+      threshold = 80; // high bar but not 95 — still allows very high-confidence trades
       await notifyRiskAlert(
         `⚠️ تحذير: معدل الفوز في آخر 7 أيام ${winRate}% (أقل من 40%)\n` +
         `تم رفع الـ confidence threshold لـ 95% لحماية رأس المال.\n` +
@@ -722,9 +722,25 @@ export async function runEnsembleAnalysis(prompt: string): Promise<EnsembleResul
  *   Claude carries 70% weight, so if Claude says BUY with high confidence, we trust it
  */
 export function getEnsembleSizeMultiplier(result: EnsembleResult): number {
+  // Unanimous: both models agree → full size
   if (result.agreement === "unanimous") return 1.0;
-  // Split: trust Claude's lead — if Claude voted for the winning action with ≥60% confidence, allow 50% size
+
+  // Split: check if the winning action has meaningful confidence
   const claudeVote = result.votes.find((v) => v.model === "Claude Sonnet");
-  if (claudeVote && claudeVote.action === result.finalAction && claudeVote.confidence >= 60) return 0.5;
-  return 0; // Claude disagrees or low confidence → HOLD
+  const gptVote = result.votes.find((v) => v.model === "GPT-4o");
+
+  // If Claude (70% weight) agrees with the winning action at ≥40% confidence → 0.7x size
+  if (claudeVote && claudeVote.action === result.finalAction && claudeVote.confidence >= 40) return 0.7;
+
+  // If GPT-4o agrees with the winning action at ≥50% confidence → 0.5x size
+  if (gptVote && gptVote.action === result.finalAction && gptVote.confidence >= 50) return 0.5;
+
+  // If the winning action has at least 35% weighted confidence → 0.4x size (portfolio manager takes calculated risks)
+  const winningScore = result.votes
+    .filter((v) => v.action === result.finalAction)
+    .reduce((sum, v) => sum + (v.confidence / 100) * v.weight, 0);
+  if (winningScore >= 0.35 && result.finalAction !== "HOLD") return 0.4;
+
+  // Pure HOLD or no confidence → skip
+  return 0;
 }

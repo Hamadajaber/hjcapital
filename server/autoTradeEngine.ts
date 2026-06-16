@@ -712,8 +712,16 @@ async function analyzeMarket(
     Object.keys(technical).slice(0, 2).map((inst) => formatLessonsForPrompt(inst))
   ).then((arr) => arr.filter(Boolean).join("\n"));
 
+  // Determine trading session for context
+  const utcHourMain = new Date().getUTCHours();
+  const sessionMain = utcHourMain >= 7 && utcHourMain < 16 ? "London Session (high liquidity)" :
+    utcHourMain >= 13 && utcHourMain < 22 ? "New York Session (high liquidity)" :
+    utcHourMain >= 22 || utcHourMain < 7 ? "Asian Session (lower liquidity)" : "Session overlap";
+
   // Build the full enhanced prompt
-  const prompt = `You are HJ Capital's elite AI portfolio manager. Your PRIMARY GOAL is to find and execute profitable trades — not to avoid them. Markets always have opportunities; your job is to identify the BEST one right now.
+  const prompt = `You are HJ Capital's senior portfolio manager. Your PRIMARY GOAL is to find and execute profitable trades — not to avoid them. Markets always have opportunities; your job is to identify the BEST one right now.
+
+CURRENT SESSION: ${sessionMain}
 
 LIVE MARKET PRICES (right now):
 ${pricesSummary}
@@ -740,35 +748,34 @@ ${getOpenMarkets(["EURUSD", "GBPUSD", "USDJPY", "EURGBP", "GOLD", "XAGUSD", "OIL
 CURRENTLY OPEN POSITIONS (correlation filter — avoid correlated pairs):
 ${openInstruments.length > 0 ? openInstruments.join(", ") : "None"}
 
-TRADING RULES:
-- ONLY trade instruments listed in CURRENTLY OPEN MARKETS above — never trade closed markets
-- DO NOT open a position in an instrument marked as ⚠️ CORRELATED with an open position
-- Confidence threshold: ${effectiveThreshold}% (if you see a valid setup, report your TRUE confidence — do not artificially lower it)
-- Max risk per trade: ${risk.maxRiskPerTrade}% of account
-- IMPORTANT: Even partial confluence (2 out of 3 timeframes agreeing) is sufficient to recommend a trade
-- Prefer small, consistent profits over large risky gains — ANY profit is better than no trade
-- Always include stop loss and take profit levels
-- Consider both technical signals AND news sentiment
-- If you see a setup with ${effectiveThreshold}% or higher confidence, you MUST recommend it — missing a trade is also a cost
+PORTFOLIO MANAGER RULES:
+1. ALWAYS pick the BEST instrument from the open markets list and return BUY or SELL with your TRUE confidence
+2. Confidence scale: 35-50% = valid trade (small size), 50-70% = good trade, 70%+ = strong trade
+3. Even 1 timeframe alignment is enough to act — don't wait for perfect confluence
+4. Use the current session to bias direction: ${sessionMain} — trend following in London/NY, range in Asian
+5. DO NOT open a position in an instrument marked as ⚠️ CORRELATED with an open position
+6. ONLY trade instruments listed in CURRENTLY OPEN MARKETS above
+7. Always include stop loss and take profit levels
+8. Missing a trade is also a cost — if you see ANY setup with ${effectiveThreshold}%+ confidence, TAKE IT
 
 Respond in this EXACT JSON format (no markdown, no explanation outside JSON):
 {
   "instrument": "EURUSD",
   "action": "BUY",
-  "confidence": 78,
-  "reasoning": "Brief explanation of why (2-3 sentences max, mention key indicators)",
+  "confidence": 52,
+  "reasoning": "1H RSI oversold (32), price near key support, London session bullish bias. 4H trend up.",
   "entryPrice": 1.08450,
   "stopLoss": 1.08200,
   "takeProfit": 1.08750,
   "size": 1
 }
 
-Only use HOLD if there is genuinely NO setup meeting the threshold across ALL available instruments:
+Only use HOLD if ALL open markets are clearly choppy/ranging with no directional bias:
 {
   "instrument": "NONE",
   "action": "HOLD",
   "confidence": 0,
-  "reasoning": "Specific reason why no instrument has a valid setup right now"
+  "reasoning": "All markets in tight consolidation — no clear direction on any timeframe"
 }`;
 
   // Run Ensemble Analysis (3 AI models vote)
@@ -857,9 +864,8 @@ async function analyzeInstrument(
   const clientSentiment = (marketContext.clientSentiment as string) ?? "";
 
   const instTechnical = technical[instrument];
-  if (!instTechnical) {
-    return { instrument, action: "HOLD", confidence: 0, reasoning: "No technical data available" };
-  }
+  // Don't block on missing technical data — use price-only analysis for rotating instruments
+  // The AI can still make a decision based on price, news, and session context
 
   // Check correlation filter — skip if correlated with open position
   const corrCheck = isCorrelatedWithOpenPositions(instrument, openInstruments);
@@ -877,16 +883,16 @@ async function analyzeInstrument(
     ? `${instrument}: bid=${priceData.bid}, ask=${priceData.ask}, change=${priceData.pctChange?.toFixed(2)}%`
     : `${instrument}: price unavailable`;
 
-  // Build technical section for this instrument only
-  const technicalSection = [
+  // Build technical section for this instrument only (may be empty for rotating instruments)
+  const technicalSection = instTechnical ? [
     instTechnical.technicalSummary5m,
     instTechnical.technicalSummary1h,
     instTechnical.technicalSummary4h,
-  ].join("\n");
+  ].join("\n") : "";
 
   // Regime for this instrument
   let regimeSection = "";
-  if (instTechnical.candles1h.length >= 20) {
+  if (instTechnical && instTechnical.candles1h.length >= 20) {
     const candles = instTechnical.candles1h.map((c: OHLCVCandle) => ({
       open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume, timestamp: c.timestamp
     }));
@@ -897,52 +903,63 @@ async function analyzeInstrument(
   const lessonsSection = await formatLessonsForPrompt(instrument).catch(() => "");
   const sentimentLine = sentiment[instrument] ?? "";
 
-  const prompt = `You are HJ Capital's elite AI trading analyst. Focus ONLY on ${instrument}.
+  // Determine trading session for context
+  const utcHour = new Date().getUTCHours();
+  const session = utcHour >= 7 && utcHour < 16 ? "London Session (high liquidity)" :
+    utcHour >= 13 && utcHour < 22 ? "New York Session (high liquidity)" :
+    utcHour >= 22 || utcHour < 7 ? "Asian Session (lower liquidity)" : "Session overlap";
+
+  const prompt = `You are HJ Capital's senior portfolio manager. Your job is to find and execute profitable trades — not to avoid them.
+
+INSTRUMENT: ${instrument}
+CURRENT SESSION: ${session}
 
 LIVE PRICE:
 ${priceLine}
 
 MULTI-TIMEFRAME TECHNICAL ANALYSIS:
-${technicalSection}
+${technicalSection || `${instrument}: no candle data yet — use price action and session context`}
 
 NEWS SENTIMENT:
-${sentimentLine || "No sentiment data"}
+${sentimentLine || "Neutral — no specific news"}
 
 MARKET REGIME:
-${regimeSection || "No regime data"}
-${clientSentiment ? `\nCAPITAL.COM CLIENT SENTIMENT (Contrarian):${clientSentiment}` : ""}
+${regimeSection || "Unknown — assume normal trending conditions"}
+${clientSentiment ? `\nCAPITAL.COM CLIENT SENTIMENT (Contrarian signal):\n${clientSentiment}` : ""}
 
 PAST LESSONS:
-${lessonsSection || "No lessons yet"}
+${lessonsSection || "No lessons yet — build history by trading"}
 
 LATEST NEWS:
-${news.slice(0, 3).join("\n")}
+${news.slice(0, 3).join("\n") || "No recent news"}
 
-TRADING RULES:
-- ONLY analyze ${instrument} — do not suggest other instruments
-- Only recommend a trade if confidence is ${effectiveThreshold}% or higher
-- Max risk per trade: ${risk.maxRiskPerTrade}% of account
-- Use multi-timeframe confluence: prefer trades where 5min + 1H + 4H all agree
-- Always include stop loss and take profit levels
+PORTFOLIO MANAGER RULES:
+1. ALWAYS return a BUY or SELL decision with your TRUE confidence level (even if it's 40-60%)
+2. Only return HOLD if the instrument is clearly in a choppy/ranging market with no directional bias
+3. Confidence scale: 35-50% = valid trade (small size), 50-70% = good trade, 70%+ = strong trade
+4. Even 1 timeframe alignment is enough to act — wait for 2+ only for larger size
+5. Use the current session to bias direction: London/NY = trend following, Asian = range trading
+6. Always provide entry, stop loss, and take profit — use ATR-based levels if unsure
+7. Prefer the direction of the higher timeframe (4H > 1H > 5min)
 
 Respond in this EXACT JSON format:
 {
   "instrument": "${instrument}",
   "action": "BUY",
-  "confidence": 78,
-  "reasoning": "Brief explanation (2-3 sentences, mention key indicators)",
+  "confidence": 52,
+  "reasoning": "1H RSI oversold (32), price near key support, London session bias bullish. 4H trend up.",
   "entryPrice": 1.08450,
   "stopLoss": 1.08200,
   "takeProfit": 1.08750,
   "size": 1
 }
 
-If no good opportunity exists:
+Only use HOLD if truly no directional bias exists:
 {
   "instrument": "NONE",
   "action": "HOLD",
   "confidence": 0,
-  "reasoning": "No high-confidence setup found at this time"
+  "reasoning": "Market is choppy and ranging — no clear direction on any timeframe"
 }`;
 
   const ensemble = await runEnsembleAnalysis(prompt);
@@ -972,7 +989,7 @@ If no good opportunity exists:
   let stopLoss = parsed.stopLoss;
   let takeProfit = parsed.takeProfit;
 
-  if (instTechnical.candles1h.length >= 14 && parsed.entryPrice) {
+  if (instTechnical && instTechnical.candles1h.length >= 14 && parsed.entryPrice) {
     const candles = instTechnical.candles1h.map((c: OHLCVCandle) => ({
       open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume, timestamp: c.timestamp
     }));
