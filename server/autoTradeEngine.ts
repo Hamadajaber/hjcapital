@@ -763,7 +763,7 @@ PORTFOLIO MANAGER RULES:
 5. DO NOT open a position in an instrument marked as ⚠️ CORRELATED with an open position
 6. ONLY trade instruments listed in CURRENTLY OPEN MARKETS above
 7. Always include stop loss and take profit levels
-8. Missing a trade is also a cost — if you see ANY setup with ${effectiveThreshold}%+ confidence, TAKE IT
+8. Missing a trade is also a cost — if you see ANY clear setup, TAKE IT. Report your TRUE confidence (not a minimum threshold number)
 
 Respond in this EXACT JSON format (no markdown, no explanation outside JSON):
 {
@@ -1200,6 +1200,49 @@ async function executeDecision(
           }, "skipped", `Live market check: ${decision.instrument} not tradeable`);
           return;
         }
+
+        // ███ ZERO-PRICE GUARD: Fetch live price BEFORE placing order ███
+        // Prevents catastrophic losses from orders placed with entry=0
+        let livePrice: number;
+        try {
+          const priceData = await getMarketPrice(epic);
+          livePrice = decision.action === "BUY" ? priceData.ask : priceData.bid;
+        } catch (priceErr) {
+          await logDecision(sessionId, {
+            ...decision,
+            action: "SKIP",
+            reasoning: `Price fetch failed for ${decision.instrument} before order — aborting to prevent zero-price trade. Error: ${String(priceErr)}`,
+          }, "skipped", `Price fetch failed: ${String(priceErr)}`);
+          console.warn(`[AutoTrade] ZERO-PRICE GUARD: Blocked ${decision.instrument} — could not fetch live price`);
+          return;
+        }
+
+        // Sanity check: live price must be > 0
+        if (!livePrice || livePrice <= 0 || isNaN(livePrice)) {
+          await logDecision(sessionId, {
+            ...decision,
+            action: "SKIP",
+            reasoning: `Zero/invalid price for ${decision.instrument} (got: ${livePrice}) — aborting trade to prevent loss`,
+          }, "skipped", `Zero price guard: ${decision.instrument} price=${livePrice}`);
+          console.warn(`[AutoTrade] ZERO-PRICE GUARD: Blocked ${decision.instrument} — price=${livePrice}`);
+          return;
+        }
+
+        // Sanity check: AI entry estimate vs live price (max 20% deviation)
+        // If AI estimated a price that's wildly off from current market, the analysis was based on stale data
+        if (decision.entryPrice && decision.entryPrice > 0) {
+          const deviation = Math.abs(livePrice - decision.entryPrice) / livePrice;
+          if (deviation > 0.20) {
+            await logDecision(sessionId, {
+              ...decision,
+              action: "SKIP",
+              reasoning: `Price deviation too large: ${decision.instrument} AI estimated ${decision.entryPrice}, live=${livePrice.toFixed(5)} (${(deviation * 100).toFixed(1)}% diff > 20% max) — analysis based on stale data, skipping`,
+            }, "skipped", `Price deviation ${(deviation * 100).toFixed(1)}% > 20% max`);
+            console.warn(`[AutoTrade] PRICE DEVIATION GUARD: Blocked ${decision.instrument} — AI=${decision.entryPrice}, live=${livePrice} (${(deviation * 100).toFixed(1)}% diff)`);
+            return;
+          }
+        }
+
         // Enforce minimum deal size from Capital.com API
         const minSize = await getMinDealSize(epic).catch(() => 1);
         const adjustedSize = Math.max(size, minSize);
@@ -1214,6 +1257,12 @@ async function executeDecision(
           takeProfit: decision.takeProfit,
         });
         actualEntry = result.level;
+
+        // Final zero-price check on broker-confirmed entry
+        if (!actualEntry || actualEntry <= 0 || isNaN(actualEntry)) {
+          console.warn(`[AutoTrade] ZERO-PRICE GUARD: Broker returned level=${actualEntry} for ${decision.instrument} — using live price ${livePrice}`);
+          actualEntry = livePrice; // Use the pre-fetched live price as fallback
+        }
       } else {
         // Paper trade — get current price
         try {
@@ -1221,6 +1270,17 @@ async function executeDecision(
           const price = await getMarketPrice(epic);
           actualEntry = decision.action === "BUY" ? price.ask : price.bid;
         } catch { /* use estimated entry */ }
+
+        // Paper trade zero-price guard
+        if (!actualEntry || actualEntry <= 0 || isNaN(actualEntry)) {
+          await logDecision(sessionId, {
+            ...decision,
+            action: "SKIP",
+            reasoning: `Zero/invalid price for ${decision.instrument} in paper mode (got: ${actualEntry}) — skipping to prevent false P&L`,
+          }, "skipped", `Zero price guard (paper): ${decision.instrument} price=${actualEntry}`);
+          console.warn(`[AutoTrade] ZERO-PRICE GUARD (paper): Blocked ${decision.instrument} — price=${actualEntry}`);
+          return;
+        }
       }
 
       // Record trade in DB
@@ -1303,14 +1363,14 @@ async function checkDailyRiskLimits(sessionId: number, mode: "paper" | "live"): 
 
 async function getRiskSettings() {
   const db = await getDb();
-  if (!db) return { dailyLossLimitPct: 25, stopLossPerTrade: 1, maxRiskPerTrade: 1, minConfidenceThreshold: 72, maxOpenPositions: 3 };
+  if (!db) return { dailyLossLimitPct: 25, stopLossPerTrade: 1, maxRiskPerTrade: 1, minConfidenceThreshold: 45, maxOpenPositions: 3 };
   const rows = await db.select().from(riskSettings).limit(1);
   const r = rows[0];
   return {
     dailyLossLimitPct: r ? parseFloat(r.dailyLossLimitPct) : 25,
     stopLossPerTrade: r ? parseFloat(r.stopLossPerTrade) : 1,
     maxRiskPerTrade: r ? parseFloat(r.maxRiskPerTrade) : 1,
-    minConfidenceThreshold: r ? r.minConfidenceThreshold : 72,
+    minConfidenceThreshold: r ? r.minConfidenceThreshold : 45,
     maxOpenPositions: r ? r.maxOpenPositions : 3,
   };
 }

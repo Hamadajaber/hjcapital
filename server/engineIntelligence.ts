@@ -189,8 +189,8 @@ export async function getDynamicConfidenceThreshold(): Promise<{
       threshold = 45;
       reason = `Win rate ${winRate}% (normal) — standard threshold 45%`;
     } else if (winRate >= 40) {
-      threshold = 55;
-      reason = `Win rate ${winRate}% (below average) — threshold raised to 55% (conservative mode)`;
+      threshold = 50;
+      reason = `Win rate ${winRate}% (below average) — threshold raised to 50% (conservative mode)`;
     } else {
       // Win rate < 40% — auto-stop
       threshold = 80; // high bar but not 95 — still allows very high-confidence trades
@@ -218,7 +218,7 @@ export async function getDynamicConfidenceThreshold(): Promise<{
     return { threshold, shouldStop: false, reason, winRate, totalTrades };
   } catch (err) {
     console.error("[Intelligence] Dynamic threshold error:", err);
-    return { threshold: 72, shouldStop: false, reason: "Error — using default", winRate: 0, totalTrades: 0 };
+    return { threshold: 45, shouldStop: false, reason: "Error — using default 45%", winRate: 0, totalTrades: 0 };
   }
 }
 

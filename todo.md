@@ -257,3 +257,12 @@
 - [x] Add maxOpenPositions guard bypass: analyzeInstrument no longer blocks on missing technical data
 - [x] Improve prompt: give AI explicit market context about current session (London/NY/Asian)
 - [x] Add cycle heartbeat log: every cycle logs "Cycle N complete: X trades, Y skipped (reason)"
+
+## Round 20 — Critical Trading Bugs Fix (Zero Price + Wrong Epics + Confidence)
+- [x] Add zero-price guard in executeDecision: reject any trade where actualEntry = 0 or NaN
+- [x] Fix GOLD epic: GOLD on Capital.com = 4345 (CFD pricing, correct) — no change needed
+- [x] Fix NASDAQ epic: US100 on Capital.com = 30210 (CFD pricing, correct) — no change needed
+- [x] Fix getRiskSettings fallback: changed hardcoded 72 to 45 in both fallback locations
+- [x] Fix confidence always showing 55%: removed effectiveThreshold from prompt rule #8 (AI was anchoring to it)
+- [x] Add price sanity check: warn if AI entry estimate deviates >20% from live price (uses live price)
+- [x] Verified GOLD/NASDAQ epics via live API call — both correct (CFD pricing)
