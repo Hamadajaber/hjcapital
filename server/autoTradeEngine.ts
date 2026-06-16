@@ -104,6 +104,65 @@ export interface EngineState {
 let _engineState: EngineState | null = null;
 let _cycleTimer: ReturnType<typeof setTimeout> | null = null;
 
+// ─── Instrument Universe ─────────────────────────────────────────────────────
+
+/**
+ * Core instruments: always scanned every cycle for consistency.
+ * These are the most liquid and well-tracked instruments.
+ */
+export const CORE_INSTRUMENTS = [
+  "EURUSD", "GBPUSD", "USDJPY", "EURGBP",
+  "GOLD", "XAGUSD", "OIL_CRUDE",
+  "US500", "GER40", "NASDAQ",
+];
+
+/**
+ * Rotating universe: scanned in batches of 10 per cycle.
+ * Covers major forex crosses, global indices, commodities, US tech stocks, and crypto.
+ * The engine rotates through this list so every instrument gets scanned periodically.
+ */
+export const ROTATING_UNIVERSE = [
+  // Major Forex crosses
+  "AUDUSD", "USDCAD", "USDCHF", "NZDUSD",
+  "EURJPY", "GBPJPY", "AUDJPY", "EURAUD",
+  "EURCAD", "EURCHF", "GBPAUD", "GBPCAD",
+  "GBPCHF", "CADJPY", "CHFJPY", "AUDCAD",
+  "AUDCHF", "NZDJPY", "NZDCAD", "NZDCHF",
+  // Global indices
+  "US30", "UK100", "FRA40", "AUS200",
+  "JPN225", "HK50", "SPAIN35", "SWISS20",
+  "NETH25", "SING30",
+  // Additional commodities
+  "NGAS", "COPPER", "PLATINUM", "PALLADIUM",
+  "WHEAT", "CORN", "SUGAR", "COFFEE",
+  "COCOA", "COTTON",
+  // US Tech stocks
+  "AAPL", "MSFT", "NVDA", "AMZN",
+  "GOOGL", "META", "TSLA", "NFLX",
+  "AMD", "INTC",
+  // Crypto (24/7)
+  "ETHUSD", "XRPUSD", "LTCUSD", "ADAUSD", "SOLUSD",
+  // Additional global indices
+  "POLAND20", "TURKEY30", "INDIA50", "BRAZIL60", "CHINA50",
+];
+
+/** Rotation cursor — advances by ROTATION_BATCH_SIZE each cycle, resets at end */
+const ROTATION_BATCH_SIZE = 10;
+let _rotationIndex = 0;
+
+/**
+ * Get the next batch of instruments from the rotating universe.
+ * Returns ROTATION_BATCH_SIZE instruments, wrapping around as needed.
+ */
+function getNextRotatingBatch(): string[] {
+  const batch: string[] = [];
+  for (let i = 0; i < ROTATION_BATCH_SIZE; i++) {
+    batch.push(ROTATING_UNIVERSE[(_rotationIndex + i) % ROTATING_UNIVERSE.length]);
+  }
+  _rotationIndex = (_rotationIndex + ROTATION_BATCH_SIZE) % ROTATING_UNIVERSE.length;
+  return batch;
+}
+
 // ─── Engine Control ───────────────────────────────────────────────────────────
 
 export async function startAutoTrade(mode: "paper" | "live", cycleIntervalMinutes = 15): Promise<EngineState> {
@@ -328,8 +387,10 @@ async function runCycle() {
       // How many more positions can we open?
       const remainingSlots = risk.maxOpenPositions - openCount;
 
-      // Get all currently open markets
-      const allInstruments = getOpenMarkets(["EURUSD", "GBPUSD", "USDJPY", "EURGBP", "GOLD", "XAGUSD", "OIL_CRUDE", "US500", "GER40", "NASDAQ"]);
+      // Build this cycle's instrument list: core instruments + rotating batch
+      const rotatingBatch = getNextRotatingBatch();
+      const cycleInstruments = [...new Set([...CORE_INSTRUMENTS, ...rotatingBatch])];
+      const allInstruments = getOpenMarkets(cycleInstruments);
 
       // Filter out instruments already in open positions
       const candidateInstruments = allInstruments.filter((inst) => !openInstruments.includes(inst));
@@ -342,15 +403,17 @@ async function runCycle() {
           reasoning: "All open-market instruments already have open positions",
         }, "skipped", "All instruments already in open positions");
       } else {
-        // Log that we're scanning all instruments
+        // Log that we're scanning all instruments (core + rotating batch)
+        const rotatingInBatch = rotatingBatch.filter(r => candidateInstruments.includes(r));
+        const coreInBatch = CORE_INSTRUMENTS.filter(c => candidateInstruments.includes(c));
         await logDecision(_engineState.sessionId, {
           instrument: "ALL",
           action: "HOLD",
           confidence: 0,
-          reasoning: `🔍 فحص ${candidateInstruments.length} أداة بالتوازي: ${candidateInstruments.join(", ")} — بحثاً عن أفضل الفرص...`,
-        }, "skipped", `Scanning ${candidateInstruments.length} instruments in parallel`);
+          reasoning: `🔍 فحص ${candidateInstruments.length} أداة (${coreInBatch.length} أساسية + ${rotatingInBatch.length} دوارة): ${candidateInstruments.join(", ")} — بحثاً عن أفضل الفرص...`,
+        }, "skipped", `Scanning ${coreInBatch.length} core + ${rotatingInBatch.length} rotating instruments`);
 
-        console.log(`[AutoTrade] Scanning ${candidateInstruments.length} instruments in parallel: ${candidateInstruments.join(", ")}`);
+        console.log(`[AutoTrade] Scanning ${candidateInstruments.length} instruments (${coreInBatch.length} core + ${rotatingInBatch.length} rotating, cursor=${_rotationIndex}): ${candidateInstruments.join(", ")}`);
 
         // Analyze ALL candidate instruments in parallel
         const scanResults = await Promise.allSettled(

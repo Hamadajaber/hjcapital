@@ -160,19 +160,90 @@ export interface MarketPrice {
 
 // Mapping from our instrument names to Capital.com epics
 export const INSTRUMENT_EPICS: Record<string, string> = {
-  // Forex
+  // ─── Core instruments (always scanned every cycle) ───────────────────────
   EURUSD: "EURUSD",
   GBPUSD: "GBPUSD",
   USDJPY: "USDJPY",
   EURGBP: "EURGBP",
-  // Commodities
   GOLD: "GOLD",
   XAGUSD: "SILVER",
   OIL_CRUDE: "OIL_CRUDE",
-  // Indices
   US500: "US500",
-  GER40: "DE30",
+  GER40: "GER40",
   NASDAQ: "US100",
+
+  // ─── Rotating universe: Major Forex ──────────────────────────────────────
+  AUDUSD: "AUDUSD",
+  USDCAD: "USDCAD",
+  USDCHF: "USDCHF",
+  NZDUSD: "NZDUSD",
+  EURJPY: "EURJPY",
+  GBPJPY: "GBPJPY",
+  AUDJPY: "AUDJPY",
+  EURAUD: "EURAUD",
+  EURCAD: "EURCAD",
+  EURCHF: "EURCHF",
+  GBPAUD: "GBPAUD",
+  GBPCAD: "GBPCAD",
+  GBPCHF: "GBPCHF",
+  CADJPY: "CADJPY",
+  CHFJPY: "CHFJPY",
+  AUDCAD: "AUDCAD",
+  AUDCHF: "AUDCHF",
+  NZDJPY: "NZDJPY",
+  NZDCAD: "NZDCAD",
+  NZDCHF: "NZDCHF",
+
+  // ─── Rotating universe: Global Indices ───────────────────────────────────
+  US30: "US30",
+  UK100: "UK100",
+  FRA40: "FRA40",
+  AUS200: "AUS200",
+  JPN225: "JPN225",
+  HK50: "HK50",
+  SPAIN35: "SPAIN35",
+  SWISS20: "SWISS20",
+  NETH25: "NETH25",
+  SING30: "SING30",
+
+  // ─── Rotating universe: Additional Commodities ───────────────────────────
+  NGAS: "NGAS",
+  COPPER: "COPPER",
+  PLATINUM: "PLATINUM",
+  PALLADIUM: "PALLADIUM",
+  WHEAT: "WHEAT",
+  CORN: "CORN",
+  SUGAR: "SUGAR",
+  COFFEE: "COFFEE",
+  COCOA: "COCOA",
+  COTTON: "COTTON",
+
+  // ─── Rotating universe: US Tech Stocks ───────────────────────────────────
+  AAPL: "AAPL",
+  MSFT: "MSFT",
+  NVDA: "NVDA",
+  AMZN: "AMZN",
+  GOOGL: "GOOGL",
+  META: "META",
+  TSLA: "TSLA",
+  NFLX: "NFLX",
+  AMD: "AMD",
+  INTC: "INTC",
+
+  // ─── Rotating universe: Crypto ────────────────────────────────────────────
+  ETHUSD: "ETHUSD",
+  XRPUSD: "XRPUSD",
+  LTCUSD: "LTCUSD",
+  ADAUSD: "ADAUSD",
+  SOLUSD: "SOLUSD",
+
+  // Additional global indices (emerging markets)
+  POLAND20: "POLAND20",
+  TURKEY30: "TURKEY30",
+  INDIA50: "INDIA50",
+  BRAZIL60: "BRAZIL60",
+  CHINA50: "CHINA50",
+
   // Legacy (kept for backward compat)
   BTC: "BITCOIN",
 };
@@ -823,18 +894,15 @@ export function isMarketOpen(instrument: string): boolean {
     return true;
   }
 
-  if (epic === "DE30") {
-    // DAX 40: Mon–Fri 07:00–21:00 UTC (Xetra hours)
+  if (epic === "GER40" || epic === "DE30") {
+    // DAX 40 (GER40): Mon–Fri 07:00–21:00 UTC (Xetra hours)
     if (day === 0 || day === 6) return false;
     return timeMinutes >= 7 * 60 && timeMinutes < 21 * 60;
   }
 
-  if (epic === "NDAQ100") {
-    // NASDAQ 100: same as US500 — Mon 21:05 – Fri 21:00, daily break 21:00–21:05
-    if (day === 0) return false;
-    if (day === 5 && timeMinutes >= 21 * 60) return false;
-    if (timeMinutes >= 21 * 60 && timeMinutes < 21 * 60 + 5) return false;
-    if (day === 1 && timeMinutes < 21 * 60 + 5) return false;
+  if (epic === "NDAQ100" || epic === "US100" || epic === "US30" || epic === "UK100" || epic === "FRA40" || epic === "AUS200" || epic === "JPN225" || epic === "HK50" || epic === "SPAIN35" || epic === "SWISS20" || epic === "NETH25" || epic === "SING30") {
+    // Global indices: Mon–Fri, use weekday default (each has different hours but Capital.com handles status)
+    if (day === 0 || day === 6) return false;
     return true;
   }
 
@@ -845,6 +913,31 @@ export function isMarketOpen(instrument: string): boolean {
     // Daily maintenance break: 21:00 – 21:05 UTC
     if (timeMinutes >= 21 * 60 && timeMinutes < 21 * 60 + 5) return false;
     if (day === 1 && timeMinutes < 21 * 60 + 5) return false; // Mon before 21:05
+    return true;
+  }
+
+  // Crypto: 24/7 (check common crypto epics)
+  if (epic === "ETHUSD" || epic === "XRPUSD" || epic === "LTCUSD" || epic === "ADAUSD" || epic === "SOLUSD" || epic === "BITCOIN") {
+    return true;
+  }
+
+  // US stocks: Mon–Fri 13:30–20:00 UTC (NYSE/NASDAQ regular hours)
+  const US_STOCKS = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "NFLX", "AMD", "INTC"];
+  if (US_STOCKS.includes(epic)) {
+    if (day === 0 || day === 6) return false;
+    return timeMinutes >= 13 * 60 + 30 && timeMinutes < 20 * 60;
+  }
+
+  // Agricultural commodities: Mon–Fri (Capital.com handles specific hours)
+  const AGRI = ["WHEAT", "CORN", "SUGAR", "COFFEE", "COCOA", "COTTON"];
+  if (AGRI.includes(epic)) {
+    if (day === 0 || day === 6) return false;
+    return true;
+  }
+
+  // Metals/energy extras: Mon–Fri
+  if (epic === "COPPER" || epic === "PLATINUM" || epic === "PALLADIUM" || epic === "NGAS") {
+    if (day === 0 || day === 6) return false;
     return true;
   }
 

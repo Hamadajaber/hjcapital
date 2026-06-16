@@ -225,3 +225,14 @@
 - [x] Update isMarketOpen() to add market hours for new instruments
 - [x] Update Signals page instrument filter list
 - [x] Update TradeHistory page instrument filter list
+
+## Round 18 — 2-Model Ensemble + Rotating Instrument Scan
+- [x] Switch ensemble to Claude Sonnet (70%) + GPT-4o (30%) — remove Gemini Flash
+- [x] Update getEnsembleSizeMultiplier for 2-model agreement logic
+- [x] Build ROTATING_UNIVERSE: curated list of 60+ Capital.com instruments across Forex/Commodities/Indices/Stocks
+- [x] Implement rotation batch system: 10 core instruments always + 10 rotating per cycle
+- [x] Persist rotation cursor in memory (resets on server restart)
+- [x] Update Decision Log scan message to show rotation batch info
+- [x] Fix GER40 epic: DE30 → GER40 (correct Capital.com epic for DAX 40)
+- [x] Expand CORRELATION_GROUPS to cover all 65+ instruments in rotating universe
+- [x] 71/71 tests passing, TypeScript 0 errors

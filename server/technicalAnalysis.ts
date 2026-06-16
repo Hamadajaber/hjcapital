@@ -341,12 +341,31 @@ export function buildTechnicalSummary(candles: Candle[]): TechnicalSummary {
 
 // Instruments that are highly correlated — avoid opening both simultaneously
 const CORRELATION_GROUPS: string[][] = [
-  ["EURUSD", "GBPUSD", "EURGBP", "AUDUSD", "NZDUSD"], // EUR/GBP/USD pairs (all move together)
-  ["USDCHF", "USDJPY", "USDCAD"],                      // USD strength pairs
-  ["GOLD", "XAGUSD"],                                   // Precious metals (Gold + Silver)
-  ["US500", "NASDAQ", "US100", "US30"],                 // US indices (S&P + NASDAQ)
-  ["GER40"],                                            // European indices (standalone)
-  ["OIL_CRUDE"],                                        // Oil (standalone)
+  // Forex: EUR/GBP/AUD/NZD vs USD (all move together when USD moves)
+  ["EURUSD", "GBPUSD", "EURGBP", "AUDUSD", "NZDUSD", "EURAUD", "GBPAUD", "EURJPY", "GBPJPY"],
+  // Forex: USD strength pairs (inverse correlation with above)
+  ["USDCHF", "USDJPY", "USDCAD"],
+  // Forex: AUD/NZD crosses
+  ["AUDJPY", "NZDJPY", "AUDCAD", "AUDCHF", "NZDCAD", "NZDCHF"],
+  // Forex: EUR/GBP crosses
+  ["EURCAD", "EURCHF", "GBPCAD", "GBPCHF", "CADJPY", "CHFJPY"],
+  // Precious metals (Gold + Silver + Platinum + Palladium)
+  // XAGUSD is our instrument name; SILVER is the Capital.com epic — include both for correlation
+  ["GOLD", "XAGUSD", "SILVER", "PLATINUM", "PALLADIUM", "COPPER"],
+  // US indices (S&P 500, NASDAQ, Dow Jones)
+  ["US500", "NASDAQ", "US100", "US30"],
+  // European indices
+  ["GER40", "FRA40", "UK100", "SPAIN35", "SWISS20", "NETH25"],
+  // Asia-Pacific indices
+  ["JPN225", "AUS200", "HK50", "SING30"],
+  // Oil and energy
+  ["OIL_CRUDE", "NGAS"],
+  // Agricultural commodities
+  ["WHEAT", "CORN", "SUGAR", "COFFEE", "COCOA", "COTTON"],
+  // US Tech stocks (highly correlated with NASDAQ)
+  ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "NFLX", "AMD", "INTC"],
+  // Crypto
+  ["ETHUSD", "XRPUSD", "LTCUSD", "ADAUSD", "SOLUSD"],
 ];
 
 export function isCorrelatedWithOpenPositions(

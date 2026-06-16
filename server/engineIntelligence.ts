@@ -606,10 +606,11 @@ export async function checkEconomicCalendar(): Promise<{
  * Weights: Claude 40%, GPT-4o 35%, Gemini Flash 25%
  */
 export async function runEnsembleAnalysis(prompt: string): Promise<EnsembleResult> {
+  // 2-model ensemble: Claude leads (70%) + GPT-4o confirms (30%)
+  // Gemini Flash removed — Claude provides deeper financial reasoning
   const models = [
-    { id: "claude-sonnet-4-5", name: "Claude Sonnet", weight: 0.40 },
-    { id: "gpt-4o", name: "GPT-4o", weight: 0.35 },
-    { id: "gemini-2.0-flash", name: "Gemini Flash", weight: 0.25 },
+    { id: "claude-sonnet-4-5", name: "Claude Sonnet", weight: 0.70 },
+    { id: "gpt-4o", name: "GPT-4o", weight: 0.30 },
   ];
 
   const systemPrompt = "You are a professional forex and commodities trader. You respond only in valid JSON.";
@@ -708,25 +709,22 @@ export async function runEnsembleAnalysis(prompt: string): Promise<EnsembleResul
   );
   const combinedReasoning = `Ensemble (${agreement}):\n${reasoningLines.join("\n")}`;
 
-  console.log(`[Intelligence] Ensemble: ${finalAction} @ ${finalConfidence}% (${agreement}) — ${votes.length}/3 models responded`);
+  console.log(`[Intelligence] Ensemble: ${finalAction} @ ${finalConfidence}% (${agreement}) — ${votes.length}/2 models responded`);
 
   return { finalAction, finalConfidence, agreement, votes, combinedReasoning };
 }
 
 /**
  * Determine trade size multiplier based on ensemble agreement.
- * - Unanimous → full size (1.0×)
- * - Majority → 70% size (0.7×) — was 0.5, increased to capture more majority opportunities
- * - Split → 30% size (0.3×) — was 0 (blocked), now allows small exploratory trades
- *   BUT only if the winning action has confidence ≥ 60% from at least one model
+ * 2-model ensemble (Claude 70% + GPT-4o 30%):
+ * - Unanimous (both agree) → full size (1.0×)
+ * - Split (disagree) → allow trade at 50% size if Claude (the lead model) is confident
+ *   Claude carries 70% weight, so if Claude says BUY with high confidence, we trust it
  */
 export function getEnsembleSizeMultiplier(result: EnsembleResult): number {
   if (result.agreement === "unanimous") return 1.0;
-  if (result.agreement === "majority") return 0.7;
-  // Split: allow a small trade only if the best vote is confident enough
-  const bestVoteForAction = result.votes
-    .filter((v) => v.action === result.finalAction)
-    .sort((a, b) => b.confidence - a.confidence)[0];
-  if (bestVoteForAction && bestVoteForAction.confidence >= 65) return 0.3;
-  return 0; // split with low confidence → HOLD
+  // Split: trust Claude's lead — if Claude voted for the winning action with ≥60% confidence, allow 50% size
+  const claudeVote = result.votes.find((v) => v.model === "Claude Sonnet");
+  if (claudeVote && claudeVote.action === result.finalAction && claudeVote.confidence >= 60) return 0.5;
+  return 0; // Claude disagrees or low confidence → HOLD
 }
