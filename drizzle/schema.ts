@@ -59,7 +59,6 @@ export const trades = mysqlTable("trades", {
   takeProfit: decimal("takeProfit", { precision: 12, scale: 5 }),
   // Auto trade reference
   autoTradeSessionId: int("autoTradeSessionId"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 export type Trade = typeof trades.$inferSelect;

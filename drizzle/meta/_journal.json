@@ -50,6 +50,13 @@
       "when": 1781629684950,
       "tag": "0006_warm_natasha_romanoff",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1781653613247,
+      "tag": "0007_aspiring_jack_flag",
+      "breakpoints": true
     }
   ]
 }

@@ -387,7 +387,7 @@ async function runCycle() {
               eq(tradesTable.status, "open"),
               eq(tradesTable.instrument, pos.epic)
             ))
-            .orderBy(desc(tradesTable.createdAt))
+            .orderBy(desc(tradesTable.openedAt))
             .limit(1);
 
           if (openTrade && openTrade.stopLoss && openTrade.takeProfit) {
