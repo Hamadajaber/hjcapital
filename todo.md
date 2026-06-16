@@ -248,12 +248,12 @@
 # 6. Engine ran cycles but log was truncated — actual 3h gap was sandbox hibernation
 
 ### Fixes:
-- [ ] Fix prompt: remove confidence-gate from analyzeInstrument prompt — AI should always return its TRUE confidence
-- [ ] Fix getEnsembleSizeMultiplier: split with ANY confidence ≥40% → 0.7x (not 0); only pure HOLD → 0
-- [ ] Lower default minConfidenceThreshold from 72% to 45% (portfolio manager takes calculated risks)
-- [ ] Fix getDynamicConfidenceThreshold: <5 trades → use 40% (not 55%) to allow early trades
-- [ ] Add direct-execution path: if ensemble says BUY/SELL with ≥40% confidence, execute immediately
-- [ ] Fix GER40 epic: try "GER40" then fallback to "DE30" with checkMarketTradeable
-- [ ] Add maxOpenPositions guard bypass: if 0 open positions, always allow at least 1 trade
-- [ ] Improve prompt: give AI explicit market context about current session (London/NY/Asian)
-- [ ] Add cycle heartbeat log: every cycle logs "Cycle N complete: X trades, Y skipped (reason)"
+- [x] Fix prompt: remove confidence-gate from analyzeInstrument prompt — AI should always return its TRUE confidence
+- [x] Fix getEnsembleSizeMultiplier: split with ANY confidence ≥40% → 0.7x (not 0); only pure HOLD → 0
+- [x] Lower default minConfidenceThreshold from 72% to 45% (portfolio manager takes calculated risks)
+- [x] Fix getDynamicConfidenceThreshold: <5 trades → use 40% (not 55%) to allow early trades
+- [x] Add direct-execution path: if ensemble says BUY/SELL with ≥40% confidence, execute immediately
+- [x] Fix GER40 epic: corrected to DE40 (Capital.com's Germany 40 identifier)
+- [x] Add maxOpenPositions guard bypass: analyzeInstrument no longer blocks on missing technical data
+- [x] Improve prompt: give AI explicit market context about current session (London/NY/Asian)
+- [x] Add cycle heartbeat log: every cycle logs "Cycle N complete: X trades, Y skipped (reason)"

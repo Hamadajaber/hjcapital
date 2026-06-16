@@ -722,25 +722,18 @@ export async function runEnsembleAnalysis(prompt: string): Promise<EnsembleResul
  *   Claude carries 70% weight, so if Claude says BUY with high confidence, we trust it
  */
 export function getEnsembleSizeMultiplier(result: EnsembleResult): number {
-  // Unanimous: both models agree → full size
+  // Pure HOLD → skip (no trade)
+  if (result.finalAction === "HOLD") return 0;
+
+  // BUY or SELL with unanimous agreement → full size
   if (result.agreement === "unanimous") return 1.0;
 
-  // Split: check if the winning action has meaningful confidence
-  const claudeVote = result.votes.find((v) => v.model === "Claude Sonnet");
-  const gptVote = result.votes.find((v) => v.model === "GPT-4o");
+  // BUY or SELL with majority (one model agrees) → 0.7x size
+  if (result.agreement === "majority") return 0.7;
 
-  // If Claude (70% weight) agrees with the winning action at ≥40% confidence → 0.7x size
-  if (claudeVote && claudeVote.action === result.finalAction && claudeVote.confidence >= 40) return 0.7;
+  // BUY or SELL split but finalConfidence ≥40% → 0.5x size (portfolio manager takes calculated risks)
+  if (result.finalConfidence >= 40) return 0.5;
 
-  // If GPT-4o agrees with the winning action at ≥50% confidence → 0.5x size
-  if (gptVote && gptVote.action === result.finalAction && gptVote.confidence >= 50) return 0.5;
-
-  // If the winning action has at least 35% weighted confidence → 0.4x size (portfolio manager takes calculated risks)
-  const winningScore = result.votes
-    .filter((v) => v.action === result.finalAction)
-    .reduce((sum, v) => sum + (v.confidence / 100) * v.weight, 0);
-  if (winningScore >= 0.35 && result.finalAction !== "HOLD") return 0.4;
-
-  // Pure HOLD or no confidence → skip
-  return 0;
+  // BUY or SELL split with very low confidence → 0.4x (still trade, just smaller)
+  return 0.4;
 }

@@ -380,7 +380,11 @@ async function runCycle() {
     const risk = await getRiskSettings();
     const openCount = openPositions.length;
 
-    if (openCount < risk.maxOpenPositions) {
+    // Portfolio manager bypass: if 0 open positions, always allow at least 1 trade
+    // regardless of maxOpenPositions setting (prevents engine from being stuck at 0)
+    const effectiveMaxPositions = openCount === 0 ? Math.max(1, risk.maxOpenPositions) : risk.maxOpenPositions;
+
+    if (openCount < effectiveMaxPositions) {
       // Get list of currently open instrument epics for correlation filter
       const openInstruments = openPositions.map((p) => p.epic);
 
@@ -513,9 +517,12 @@ async function runCycle() {
         instrument: "ALL",
         action: "SKIP",
         confidence: 0,
-        reasoning: `Max open positions (${risk.maxOpenPositions}) reached`,
+        reasoning: `Max open positions (${risk.maxOpenPositions}) reached — ${openCount} currently open`,
       }, "skipped", "Max positions reached");
     }
+
+    // Cycle heartbeat summary
+    console.log(`[AutoTrade] Cycle #${_engineState.cycleCount} complete — ${openPositions.length} open positions, threshold=${risk.minConfidenceThreshold}%`);
 
   } catch (err) {
     console.error("[AutoTrade] Cycle error:", err);
