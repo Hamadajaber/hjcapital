@@ -318,3 +318,15 @@
 - [x] Fix "invalid open level data" auto-close — removed auto-close, openLevel now normalized in capitalcom.ts
 - [x] Fix error.invalid.stoploss.maxvalue — added SL direction guard (BUY SL must be below price)
 - [x] 77/77 tests still passing after fix
+
+## Round 28 — Strategy Overhaul: Trend Following + MTF Confirmation
+
+- [x] Define new strategy: Trend Following + Multi-Timeframe Confirmation (3 rules must ALL pass)
+- [x] Fix 10 instruments: EURUSD, GBPUSD, USDJPY, AUDUSD, GOLD, XAGUSD, US500, NASDAQ, GER40, ETHUSD (no OIL_CRUDE)
+- [x] Session filter: AI prompt includes session context (London/NY/Asian) for directional bias
+- [x] Rule 1: EMA50 vs EMA200 on 4H (trend direction filter)
+- [x] Rule 2: MACD histogram + RSI on 1H (entry confirmation)
+- [x] Rule 3: Candlestick pattern or RSI momentum on 5m (trigger)
+- [x] Risk: ATR-based SL/TP (1.5x ATR stop, 3x ATR target = 2:1 R:R minimum)
+- [x] AI role: confirmation only — reviews 3-rule signal, provides confidence + entry/SL/TP, can veto
+- [x] 77/77 tests still passing after overhaul, TypeScript 0 errors

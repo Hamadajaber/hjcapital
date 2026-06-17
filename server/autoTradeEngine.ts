@@ -44,6 +44,9 @@ import {
   buildTechnicalSummary,
   formatTechnicalSummaryForPrompt,
   isCorrelatedWithOpenPositions,
+  getEMATrend,
+  calculateRSI,
+  calculateMACD,
 } from "./technicalAnalysis";
 import type { Candle } from "./technicalAnalysis";
 import {
@@ -109,61 +112,32 @@ let _cycleTimer: ReturnType<typeof setTimeout> | null = null;
 // ─── Instrument Universe ─────────────────────────────────────────────────────
 
 /**
- * Core instruments: always scanned every cycle for consistency.
- * These are the most liquid and well-tracked instruments.
+ * Strategy: Trend Following with Multi-Timeframe Confirmation
+ * ─────────────────────────────────────────────────────────────
+ * 10 fixed instruments selected for:
+ *  - High liquidity (tight spreads)
+ *  - Strong trending behavior
+ *  - Low correlation to each other (risk distribution)
+ *  - 24h availability (Forex) + session-based (Indices, Gold)
+ *
+ * NO OIL_CRUDE (has restricted trading hours causing 400 errors)
  */
 export const CORE_INSTRUMENTS = [
-  "EURUSD", "GBPUSD", "USDJPY", "EURGBP",
-  "GOLD", "XAGUSD", "OIL_CRUDE",
-  "US500", "GER40", "NASDAQ",
+  // Forex (4 pairs — diversified across USD, EUR, GBP, JPY)
+  "EURUSD",   // Most liquid forex pair
+  "GBPUSD",   // High volatility, strong trends
+  "USDJPY",   // USD strength proxy
+  "AUDUSD",   // Risk-on/risk-off indicator
+  // Commodities (2 — safe haven + inflation hedge)
+  "GOLD",     // Safe haven, strong trends
+  "XAGUSD",   // Silver — follows Gold with higher beta
+  // Indices (3 — US + Europe + Asia)
+  "US500",    // S&P 500 — primary US market
+  "NASDAQ",   // Tech-heavy, strong trends
+  "GER40",    // DAX — European market leader
+  // Crypto (1 — 24/7 market)
+  "ETHUSD",   // Ethereum — strong trends, high liquidity
 ];
-
-/**
- * Rotating universe: scanned in batches of 10 per cycle.
- * Covers major forex crosses, global indices, commodities, US tech stocks, and crypto.
- * The engine rotates through this list so every instrument gets scanned periodically.
- */
-export const ROTATING_UNIVERSE = [
-  // Major Forex crosses
-  "AUDUSD", "USDCAD", "USDCHF", "NZDUSD",
-  "EURJPY", "GBPJPY", "AUDJPY", "EURAUD",
-  "EURCAD", "EURCHF", "GBPAUD", "GBPCAD",
-  "GBPCHF", "CADJPY", "CHFJPY", "AUDCAD",
-  "AUDCHF", "NZDJPY", "NZDCAD", "NZDCHF",
-  // Global indices
-  "US30", "UK100", "FRA40", "AUS200",
-  "JPN225", "HK50", "SPAIN35", "SWISS20",
-  "NETH25", "SING30",
-  // Additional commodities
-  "NGAS", "COPPER", "PLATINUM", "PALLADIUM",
-  "WHEAT", "CORN", "SUGAR", "COFFEE",
-  "COCOA", "COTTON",
-  // US Tech stocks
-  "AAPL", "MSFT", "NVDA", "AMZN",
-  "GOOGL", "META", "TSLA", "NFLX",
-  "AMD", "INTC",
-  // Crypto (24/7)
-  "ETHUSD", "XRPUSD", "LTCUSD", "ADAUSD", "SOLUSD",
-  // Additional global indices
-  "POLAND20", "TURKEY30", "INDIA50", "BRAZIL60", "CHINA50",
-];
-
-/** Rotation cursor — advances by ROTATION_BATCH_SIZE each cycle, resets at end */
-const ROTATION_BATCH_SIZE = 10;
-let _rotationIndex = 0;
-
-/**
- * Get the next batch of instruments from the rotating universe.
- * Returns ROTATION_BATCH_SIZE instruments, wrapping around as needed.
- */
-function getNextRotatingBatch(): string[] {
-  const batch: string[] = [];
-  for (let i = 0; i < ROTATION_BATCH_SIZE; i++) {
-    batch.push(ROTATING_UNIVERSE[(_rotationIndex + i) % ROTATING_UNIVERSE.length]);
-  }
-  _rotationIndex = (_rotationIndex + ROTATION_BATCH_SIZE) % ROTATING_UNIVERSE.length;
-  return batch;
-}
 
 // ─── Engine Control ───────────────────────────────────────────────────────────
 
@@ -456,10 +430,8 @@ async function runCycle() {
       // How many more positions can we open?
       const remainingSlots = risk.maxOpenPositions - openCount;
 
-      // Build this cycle's instrument list: core instruments + rotating batch
-      const rotatingBatch = getNextRotatingBatch();
-      const cycleInstruments = [...new Set([...CORE_INSTRUMENTS, ...rotatingBatch])];
-      const allInstruments = getOpenMarkets(cycleInstruments);
+      // Build this cycle's instrument list: fixed 10 instruments only
+      const allInstruments = getOpenMarkets(CORE_INSTRUMENTS);
 
       // Filter out instruments already in open positions
       const candidateInstruments = allInstruments.filter((inst) => !openInstruments.includes(inst));
@@ -472,17 +444,14 @@ async function runCycle() {
           reasoning: "All open-market instruments already have open positions",
         }, "skipped", "All instruments already in open positions");
       } else {
-        // Log that we're scanning all instruments (core + rotating batch)
-        const rotatingInBatch = rotatingBatch.filter(r => candidateInstruments.includes(r));
-        const coreInBatch = CORE_INSTRUMENTS.filter(c => candidateInstruments.includes(c));
         await logDecision(_engineState.sessionId, {
           instrument: "ALL",
           action: "HOLD",
           confidence: 0,
-          reasoning: `🔍 فحص ${candidateInstruments.length} أداة (${coreInBatch.length} أساسية + ${rotatingInBatch.length} دوارة): ${candidateInstruments.join(", ")} — بحثاً عن أفضل الفرص...`,
-        }, "skipped", `Scanning ${coreInBatch.length} core + ${rotatingInBatch.length} rotating instruments`);
+          reasoning: `🔍 فحص ${candidateInstruments.length} أداة: ${candidateInstruments.join(", ")} — بحثاً عن أفضل الفرص...`,
+        }, "skipped", `Scanning ${candidateInstruments.length} instruments`);
 
-        console.log(`[AutoTrade] Scanning ${candidateInstruments.length} instruments (${coreInBatch.length} core + ${rotatingInBatch.length} rotating, cursor=${_rotationIndex}): ${candidateInstruments.join(", ")}`);
+        console.log(`[AutoTrade] Scanning ${candidateInstruments.length} instruments: ${candidateInstruments.join(", ")}`);
 
         // Analyze ALL candidate instruments in parallel
         const scanResults = await Promise.allSettled(
@@ -621,8 +590,7 @@ async function gatherMarketContext(): Promise<Record<string, unknown>> {
   ]);
 
   // Fetch multi-timeframe candles + technical analysis for open markets
-  const allTopInstruments = ["EURUSD", "GBPUSD", "USDJPY", "EURGBP", "GOLD", "XAGUSD", "OIL_CRUDE", "US500", "GER40", "NASDAQ"];
-  const topInstruments = getOpenMarkets(allTopInstruments);
+  const topInstruments = getOpenMarkets(CORE_INSTRUMENTS);
 
   const technicalData: Record<string, MultiTimeframeData> = {};
   const sentimentData: Record<string, string> = {};
@@ -927,6 +895,29 @@ Only use HOLD if ALL open markets are clearly choppy/ranging with no directional
  * Analyze a SINGLE specific instrument for a trade opportunity.
  * Used by the opportunity scanner when the main analysis returns HOLD.
  */
+/**
+ * NEW STRATEGY: Trend Following with Multi-Timeframe Confirmation
+ * ─────────────────────────────────────────────────────────────
+ * Rules (ALL 3 must pass to generate a signal):
+ *
+ * RULE 1 — Daily Trend Filter (EMA 50 vs EMA 200 on 4H candles)
+ *   - EMA50 > EMA200 on 4H → only BUY signals allowed
+ *   - EMA50 < EMA200 on 4H → only SELL signals allowed
+ *   - Neutral (insufficient data) → allow both directions
+ *
+ * RULE 2 — 1H Entry Confirmation (MACD crossover + RSI not extreme)
+ *   - BUY: MACD histogram > 0 (bullish cross) AND RSI 40–70 (not overbought)
+ *   - SELL: MACD histogram < 0 (bearish cross) AND RSI 30–60 (not oversold)
+ *
+ * RULE 3 — 5min Trigger (candlestick pattern or momentum confirmation)
+ *   - BUY: bullish pattern (Hammer, Bullish Engulfing, Morning Star, Marubozu) OR RSI < 45
+ *   - SELL: bearish pattern (Shooting Star, Bearish Engulfing, Evening Star) OR RSI > 55
+ *
+ * AI ROLE: Confirmation only (not primary signal generator)
+ *   - AI reviews the 3 rules and provides final confidence score
+ *   - AI can veto a signal if macro context is clearly unfavorable
+ *   - AI suggests precise entry/SL/TP based on current price
+ */
 async function analyzeInstrument(
   instrument: string,
   marketContext: Record<string, unknown>,
@@ -936,14 +927,10 @@ async function analyzeInstrument(
 ): Promise<TradeDecision> {
   const effectiveThreshold = dynamicThreshold ?? risk.minConfidenceThreshold;
   const prices = (marketContext.prices as any[]) ?? [];
-  const news = (marketContext.news as string[]) ?? [];
   const technical = marketContext.technical as Record<string, MultiTimeframeData>;
-  const sentiment = marketContext.sentiment as Record<string, string>;
   const clientSentiment = (marketContext.clientSentiment as string) ?? "";
 
   const instTechnical = technical[instrument];
-  // Don't block on missing technical data — use price-only analysis for rotating instruments
-  // The AI can still make a decision based on price, news, and session context
 
   // Check correlation filter — skip if correlated with open position
   const corrCheck = isCorrelatedWithOpenPositions(instrument, openInstruments);
@@ -956,156 +943,218 @@ async function analyzeInstrument(
     };
   }
 
+  // ─── RULE 1: Daily Trend Filter (EMA50 vs EMA200 on 4H candles) ────────────────────
+  let trendDirection: "up" | "down" | "neutral" = "neutral";
+  let trendDescription = "No 4H data";
+
+  if (instTechnical && instTechnical.candles4h.length >= 20) {
+    const candles4h = instTechnical.candles4h.map((c: OHLCVCandle) => ({
+      open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume, timestamp: c.timestamp
+    }));
+    const emaTrend = getEMATrend(candles4h);
+    trendDirection = emaTrend.trend;
+    trendDescription = emaTrend.description;
+  }
+
+  // ─── RULE 2: 1H Entry Confirmation (MACD + RSI) ────────────────────────────────
+  let macd1hBullish = false;
+  let macd1hBearish = false;
+  let rsi1h = 50;
+  let macdDescription = "No 1H data";
+
+  if (instTechnical && instTechnical.candles1h.length >= 35) {
+    const candles1h = instTechnical.candles1h.map((c: OHLCVCandle) => ({
+      open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume, timestamp: c.timestamp
+    }));
+    const macd1h = calculateMACD(candles1h);
+    const rsi1hResult = calculateRSI(candles1h);
+    rsi1h = rsi1hResult.value;
+
+    macd1hBullish = macd1h.histogram > 0 && rsi1h >= 40 && rsi1h <= 70;
+    macd1hBearish = macd1h.histogram < 0 && rsi1h >= 30 && rsi1h <= 60;
+    macdDescription = `MACD hist=${macd1h.histogram.toFixed(5)} (${macd1h.trend}), RSI=${rsi1h.toFixed(1)}`;
+  }
+
+  // ─── RULE 3: 5min Trigger (candlestick pattern or momentum) ──────────────────────
+  let trigger5mBullish = false;
+  let trigger5mBearish = false;
+  let triggerDescription = "No 5m data";
+
+  if (instTechnical && instTechnical.candles5m.length >= 10) {
+    const candles5m = instTechnical.candles5m.map((c: OHLCVCandle) => ({
+      open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume, timestamp: c.timestamp
+    }));
+    const { buildTechnicalSummary: bts } = await import("./technicalAnalysis");
+    const summary5m = bts(candles5m);
+    const rsi5m = summary5m.rsi.value;
+    const bullishPatterns = summary5m.patterns.filter((p) => p.type === "bullish" && p.strength !== "weak");
+    const bearishPatterns = summary5m.patterns.filter((p) => p.type === "bearish" && p.strength !== "weak");
+
+    trigger5mBullish = bullishPatterns.length > 0 || rsi5m < 45;
+    trigger5mBearish = bearishPatterns.length > 0 || rsi5m > 55;
+    const patternNames = summary5m.patterns.map((p) => p.name).join(", ") || "none";
+    triggerDescription = `RSI5m=${rsi5m.toFixed(1)}, patterns=[${patternNames}]`;
+  }
+
+  // ─── Evaluate all 3 rules ──────────────────────────────────────────────────────────────
+  const buySignal = (trendDirection === "up" || trendDirection === "neutral") && macd1hBullish && trigger5mBullish;
+  const sellSignal = (trendDirection === "down" || trendDirection === "neutral") && macd1hBearish && trigger5mBearish;
+
+  // No signal — skip AI call entirely (saves credits + time)
+  if (!buySignal && !sellSignal) {
+    const rulesStatus = [
+      `Trend: ${trendDirection} (${trendDescription})`,
+      `1H MACD: bull=${macd1hBullish} bear=${macd1hBearish} (${macdDescription})`,
+      `5m Trigger: bull=${trigger5mBullish} bear=${trigger5mBearish} (${triggerDescription})`,
+    ].join(" | ");
+    return {
+      instrument,
+      action: "HOLD",
+      confidence: 0,
+      reasoning: `MTF rules not met — ${rulesStatus}`,
+    };
+  }
+
+  const proposedDirection = buySignal ? "BUY" : "SELL";
+  const rulesPassedSummary = [
+    `✅ Trend: ${trendDirection} (${trendDescription})`,
+    `✅ 1H: ${macdDescription}`,
+    `✅ 5m: ${triggerDescription}`,
+  ].join(" | ");
+
+  console.log(`[AutoTrade] MTF signal: ${instrument} ${proposedDirection} — ${rulesPassedSummary}`);
+
+  // Get current price for SL/TP calculation
   const priceData = prices.find((p: any) => p.epic === instrument || p.epic === (INSTRUMENT_EPICS[instrument] ?? instrument));
+  const livePrice = priceData ? (proposedDirection === "BUY" ? priceData.ask : priceData.bid) : 0;
   const priceLine = priceData
     ? `${instrument}: bid=${priceData.bid}, ask=${priceData.ask}, change=${priceData.pctChange?.toFixed(2)}%`
     : `${instrument}: price unavailable`;
 
-  // Build technical section for this instrument only (may be empty for rotating instruments)
-  const technicalSection = instTechnical ? [
-    instTechnical.technicalSummary5m,
-    instTechnical.technicalSummary1h,
-    instTechnical.technicalSummary4h,
-  ].join("\n") : "";
-
-  // Regime for this instrument
-  let regimeSection = "";
-  if (instTechnical && instTechnical.candles1h.length >= 20) {
-    const candles = instTechnical.candles1h.map((c: OHLCVCandle) => ({
-      open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume, timestamp: c.timestamp
-    }));
-    const regime = detectMarketRegime(candles);
-    regimeSection = formatRegimeForPrompt(instrument, regime);
-  }
-
-  const lessonsSection = await formatLessonsForPrompt(instrument).catch(() => "");
-  const sentimentLine = sentiment[instrument] ?? "";
-
   // Determine trading session for context
   const utcHour = new Date().getUTCHours();
-  const session = utcHour >= 7 && utcHour < 16 ? "London Session (high liquidity)" :
-    utcHour >= 13 && utcHour < 22 ? "New York Session (high liquidity)" :
-    utcHour >= 22 || utcHour < 7 ? "Asian Session (lower liquidity)" : "Session overlap";
+  const session = utcHour >= 7 && utcHour < 16 ? "London Session" :
+    utcHour >= 13 && utcHour < 22 ? "New York Session" :
+    "Asian Session (lower liquidity)";
 
-  const prompt = `You are HJ Capital's senior portfolio manager. Your job is to find and execute profitable trades — not to avoid them.
+  const lessonsSection = await formatLessonsForPrompt(instrument).catch(() => "");
 
-INSTRUMENT: ${instrument}
-CURRENT SESSION: ${session}
+  // ─── AI CONFIRMATION ONLY ──────────────────────────────────────────────────────────────
+  // The 3 MTF rules already confirmed a ${proposedDirection} signal.
+  // AI now reviews the signal and provides: confidence score, entry/SL/TP, and can veto if macro is unfavorable.
+  const confirmationPrompt = `You are HJ Capital's risk manager. Our technical system has generated a ${proposedDirection} signal for ${instrument}.
 
-LIVE PRICE:
-${priceLine}
+SIGNAL EVIDENCE:
+${rulesPassedSummary}
 
-MULTI-TIMEFRAME TECHNICAL ANALYSIS:
-${technicalSection || `${instrument}: no candle data yet — use price action and session context`}
+LIVE PRICE: ${priceLine}
+SESSION: ${session}
+${clientSentiment ? `\nCLIENT SENTIMENT (Contrarian): ${clientSentiment}` : ""}
+${lessonsSection ? `\nPAST LESSONS:\n${lessonsSection}` : ""}
 
-NEWS SENTIMENT:
-${sentimentLine || "Neutral — no specific news"}
+YOUR JOB:
+1. Confirm or veto the ${proposedDirection} signal based on macro context
+2. If confirming: provide confidence (55-85%), precise entry, stop loss (ATR-based), and take profit (2:1 R:R minimum)
+3. If vetoing: return HOLD with reason (e.g. "major news event in 30 min", "price at key resistance")
 
-MARKET REGIME:
-${regimeSection || "Unknown — assume normal trending conditions"}
-${clientSentiment ? `\nCAPITAL.COM CLIENT SENTIMENT (Contrarian signal):\n${clientSentiment}` : ""}
+RULES:
+- Stop loss distance = 1.5 × ATR (use technical data above)
+- Take profit = 3 × ATR (2:1 R:R minimum, NEVER less)
+- For BUY: stopLoss MUST be below current price, takeProfit MUST be above
+- For SELL: stopLoss MUST be above current price, takeProfit MUST be below
+- Confidence 55-65% = normal trade, 65-75% = strong trade, 75%+ = very strong
 
-PAST LESSONS:
-${lessonsSection || "No lessons yet — build history by trading"}
-
-LATEST NEWS:
-${news.slice(0, 3).join("\n") || "No recent news"}
-
-PORTFOLIO MANAGER RULES:
-1. ALWAYS return a BUY or SELL decision with your TRUE confidence level (even if it's 40-60%)
-2. Only return HOLD if the instrument is clearly in a choppy/ranging market with no directional bias
-3. Confidence scale: 35-50% = valid trade (small size), 50-70% = good trade, 70%+ = strong trade
-4. Even 1 timeframe alignment is enough to act — wait for 2+ only for larger size
-5. Use the current session to bias direction: London/NY = trend following, Asian = range trading
-6. MANDATORY RISK:REWARD RULE — takeProfit MUST be at least 2× the distance of stopLoss from entry:
-   - BUY: if entry=1.1000 and stopLoss=1.0950 (50 pips risk) → takeProfit MUST be ≥1.1100 (100 pips reward)
-   - SELL: if entry=1.1000 and stopLoss=1.1050 (50 pips risk) → takeProfit MUST be ≤1.0900 (100 pips reward)
-   - This is NON-NEGOTIABLE — never set takeProfit closer than 2× the stop loss distance
-7. Prefer the direction of the higher timeframe (4H > 1H > 5min)
-
-Respond in this EXACT JSON format:
+Respond in JSON:
 {
-  "instrument": "${instrument}",
-  "action": "BUY",
-  "confidence": 52,
-  "reasoning": "1H RSI oversold (32), price near key support, London session bias bullish. 4H trend up.",
-  "entryPrice": 1.08450,
-  "stopLoss": 1.08200,
-  "takeProfit": 1.08750,
-  "size": 1
-}
-
-Only use HOLD if truly no directional bias exists:
-{
-  "instrument": "NONE",
-  "action": "HOLD",
-  "confidence": 0,
-  "reasoning": "Market is choppy and ranging — no clear direction on any timeframe"
+  "action": "${proposedDirection}" or "HOLD",
+  "confidence": 65,
+  "reasoning": "All 3 MTF rules confirmed. 4H uptrend strong. Entry at current ask, SL below recent swing low.",
+  "entryPrice": ${livePrice || 0},
+  "stopLoss": 0,
+  "takeProfit": 0
 }`;
 
-  const ensemble = await runEnsembleAnalysis(prompt);
-  const sizeMultiplier = getEnsembleSizeMultiplier(ensemble);
+  let aiResponse: { action: string; confidence: number; reasoning: string; entryPrice?: number; stopLoss?: number; takeProfit?: number };
+  try {
+    const response = await invokeLLM({
+      model: "claude-sonnet-4-5",
+      messages: [
+        { role: "system", content: "You are a professional forex risk manager. Respond only in valid JSON." },
+        { role: "user", content: confirmationPrompt },
+      ],
+      response_format: { type: "json_object" } as any,
+    });
+    const content = response.choices?.[0]?.message?.content ?? "{}";
+    aiResponse = JSON.parse(typeof content === "string" ? content : JSON.stringify(content));
+  } catch {
+    // AI failed — use ATR-based SL/TP with default confidence
+    aiResponse = { action: proposedDirection, confidence: 60, reasoning: "AI confirmation unavailable — using ATR defaults" };
+  }
 
-  if (sizeMultiplier === 0 || ensemble.finalAction === "HOLD") {
+  // AI vetoed the signal
+  if (aiResponse.action === "HOLD") {
     return {
-      instrument: "NONE",
+      instrument,
       action: "HOLD",
-      confidence: ensemble.finalConfidence,
-      reasoning: `[SCAN:${instrument}] No opportunity: ${ensemble.combinedReasoning}`,
+      confidence: 0,
+      reasoning: `[MTF:${instrument}] AI vetoed ${proposedDirection} signal: ${aiResponse.reasoning}`,
     };
   }
 
-  // Get specific entry/SL/TP
-  const detailResponse = await invokeLLM({
-    messages: [
-      { role: "system", content: "You are a professional forex and commodities trader. You respond only in valid JSON." },
-      { role: "user", content: prompt + `\n\nEnsemble decided: ${ensemble.finalAction} @ ${ensemble.finalConfidence}% (${ensemble.agreement}). Provide specific entry, stop loss, and take profit.` },
-    ],
-    response_format: { type: "json_object" } as any,
-  });
+  // Check confidence threshold
+  const finalConfidence = aiResponse.confidence ?? 60;
+  if (finalConfidence < effectiveThreshold) {
+    return {
+      instrument,
+      action: "HOLD",
+      confidence: finalConfidence,
+      reasoning: `[MTF:${instrument}] Signal below threshold (${finalConfidence}% < ${effectiveThreshold}%): ${aiResponse.reasoning}`,
+    };
+  }
 
-  const detailContent = detailResponse.choices?.[0]?.message?.content ?? "{}";
-  const parsed = JSON.parse(typeof detailContent === "string" ? detailContent : JSON.stringify(detailContent));
+  // Calculate ATR-based SL/TP (override AI if needed)
+  let stopLoss = aiResponse.stopLoss ?? 0;
+  let takeProfit = aiResponse.takeProfit ?? 0;
+  const entryPrice = aiResponse.entryPrice ?? livePrice;
 
-  let stopLoss = parsed.stopLoss;
-  let takeProfit = parsed.takeProfit;
-
-  if (instTechnical && instTechnical.candles1h.length >= 14 && parsed.entryPrice) {
-    const candles = instTechnical.candles1h.map((c: OHLCVCandle) => ({
+  if (instTechnical && instTechnical.candles1h.length >= 14) {
+    const candles1h = instTechnical.candles1h.map((c: OHLCVCandle) => ({
       open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume, timestamp: c.timestamp
     }));
-    const atrSL = calculateATRStopLoss(candles, parsed.entryPrice, ensemble.finalAction as "BUY" | "SELL");
+    const atrSL = calculateATRStopLoss(candles1h, entryPrice, proposedDirection);
+    // Use ATR values if AI didn't provide valid ones
     if (!stopLoss || !takeProfit) {
       stopLoss = atrSL.stopLoss;
       takeProfit = atrSL.takeProfit;
     }
+    // Safety check: ensure SL direction is correct
+    if (proposedDirection === "BUY" && stopLoss >= entryPrice) stopLoss = atrSL.stopLoss;
+    if (proposedDirection === "SELL" && stopLoss <= entryPrice) stopLoss = atrSL.stopLoss;
+    if (proposedDirection === "BUY" && takeProfit <= entryPrice) takeProfit = atrSL.takeProfit;
+    if (proposedDirection === "SELL" && takeProfit >= entryPrice) takeProfit = atrSL.takeProfit;
   }
 
-  // ███ ATR-BASED POSITION SIZING ███
-  // Risk exactly 1% of balance per trade, adjusted for instrument volatility
-  // High-volatility instruments (GOLD, NASDAQ) get smaller size; low-volatility (EURUSD) get larger
-  let atrSize = parsed.size ?? 1;
+  // ATR-based position sizing (1% risk per trade)
+  let tradeSize = 1;
   if (instTechnical && instTechnical.candles1h.length >= 14) {
-    const candles = instTechnical.candles1h.map((c: OHLCVCandle) => ({
+    const candles1h = instTechnical.candles1h.map((c: OHLCVCandle) => ({
       open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume, timestamp: c.timestamp
     }));
     const accountBalance = await getCurrentBalance("live").catch(() => 200);
-    const { size: calculatedSize, atr, riskAmount } = calculateATRPositionSize(candles, accountBalance);
-    atrSize = calculatedSize;
-    console.log(`[AutoTrade] ATR SIZE: ${instrument} — ATR=${atr}, risk=$${riskAmount}, size=${calculatedSize} (vs AI suggested: ${parsed.size ?? 1})`);
+    const { size: calculatedSize, atr, riskAmount } = calculateATRPositionSize(candles1h, accountBalance);
+    tradeSize = calculatedSize;
+    console.log(`[AutoTrade] ATR SIZE: ${instrument} — ATR=${atr}, risk=$${riskAmount}, size=${calculatedSize}`);
   }
-
-  const adjustedSize = Math.max(0.1, atrSize * sizeMultiplier);
 
   return {
     instrument,
-    action: ensemble.finalAction,
-    confidence: ensemble.finalConfidence,
-    reasoning: `[SCAN:${instrument}] [${ensemble.agreement.toUpperCase()} ENSEMBLE] ${ensemble.combinedReasoning}`,
-    entryPrice: parsed.entryPrice,
+    action: proposedDirection,
+    confidence: finalConfidence,
+    reasoning: `[MTF:${instrument}] ${rulesPassedSummary} | AI: ${aiResponse.reasoning}`,
+    entryPrice,
     stopLoss,
     takeProfit,
-    size: adjustedSize,
+    size: tradeSize,
   };
 }
 

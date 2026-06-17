@@ -337,6 +337,55 @@ export function buildTechnicalSummary(candles: Candle[]): TechnicalSummary {
   return { rsi, macd, bollinger, patterns, overallBias, score };
 }
 
+// ─── EMA (Exponential Moving Average) ───────────────────────────────────────
+
+/**
+ * Calculate EMA for a given period. Used for trend direction filter.
+ * EMA 50 vs EMA 200 = primary trend direction.
+ */
+export function calculateEMA(candles: Candle[], period: number): number {
+  if (candles.length < period) return candles[candles.length - 1]?.close ?? 0;
+  const closes = candles.map((c) => c.close);
+  const k = 2 / (period + 1);
+  let emaVal = closes.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  for (let i = period; i < closes.length; i++) {
+    emaVal = closes[i] * k + emaVal * (1 - k);
+  }
+  return Math.round(emaVal * 100000) / 100000;
+}
+
+/**
+ * Get trend direction based on EMA 50 vs EMA 200.
+ * Returns: 'up' if EMA50 > EMA200, 'down' if EMA50 < EMA200, 'neutral' if insufficient data.
+ */
+export function getEMATrend(candles: Candle[]): {
+  trend: "up" | "down" | "neutral";
+  ema50: number;
+  ema200: number;
+  description: string;
+} {
+  if (candles.length < 200) {
+    // Not enough candles for EMA200 — use EMA50 vs SMA20 as fallback
+    if (candles.length >= 50) {
+      const ema50 = calculateEMA(candles, 50);
+      const sma20 = candles.slice(-20).reduce((a, c) => a + c.close, 0) / 20;
+      const trend = ema50 > sma20 ? "up" : "down";
+      return { trend, ema50, ema200: sma20, description: `EMA50(${ema50.toFixed(5)}) ${trend === "up" ? ">" : "<"} SMA20(${sma20.toFixed(5)}) — ${trend === "up" ? "Uptrend" : "Downtrend"}` };
+    }
+    return { trend: "neutral", ema50: 0, ema200: 0, description: "Insufficient data for trend detection" };
+  }
+  const ema50 = calculateEMA(candles, 50);
+  const ema200 = calculateEMA(candles, 200);
+  const trend = ema50 > ema200 ? "up" : "down";
+  const gap = Math.abs((ema50 - ema200) / ema200 * 100);
+  return {
+    trend,
+    ema50,
+    ema200,
+    description: `EMA50(${ema50.toFixed(5)}) ${trend === "up" ? ">" : "<"} EMA200(${ema200.toFixed(5)}) — ${trend === "up" ? "Uptrend" : "Downtrend"} (gap: ${gap.toFixed(3)}%)`,
+  };
+}
+
 // ─── Correlation Filter ───────────────────────────────────────────────────────
 
 // Instruments that are highly correlated — avoid opening both simultaneously
