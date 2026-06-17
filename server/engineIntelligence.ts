@@ -720,6 +720,13 @@ export async function runEnsembleAnalysis(prompt: string): Promise<EnsembleResul
   const finalConfidence = Math.round(bestVoteConfidence * 0.7 + weightedConfidence * 0.3);
 
   // Determine agreement level
+  // NOTE: With exactly 2 models, "majority" is mathematically impossible:
+  //   - Both agree on same action → "unanimous" (2/2)
+  //   - They disagree → "split" (1/2 each, no majority)
+  // We use weight-based agreement instead:
+  //   - Unanimous: both models chose the same action
+  //   - Split: models disagree (Claude 70% vs GPT-4o 30%)
+  //   - "majority" is kept in the type for forward compatibility (e.g. if 3rd model is re-added)
   const actionCounts = votes.reduce((acc, v) => {
     acc[v.action] = (acc[v.action] ?? 0) + 1;
     return acc;
@@ -728,9 +735,18 @@ export async function runEnsembleAnalysis(prompt: string): Promise<EnsembleResul
   const maxCount = Math.max(...Object.values(actionCounts));
   let agreement: "unanimous" | "majority" | "split";
 
-  if (maxCount === votes.length) {
+  if (votes.length <= 1) {
+    // Only one model responded — treat as unanimous (no comparison possible)
     agreement = "unanimous";
+  } else if (maxCount === votes.length) {
+    // All models agree
+    agreement = "unanimous";
+  } else if (votes.length === 2) {
+    // 2-model ensemble: if they disagree, it's always a split (no majority possible)
+    // The weighted score already handles this — Claude (70%) dominates
+    agreement = "split";
   } else if (maxCount > votes.length / 2) {
+    // 3+ models: true majority
     agreement = "majority";
   } else {
     agreement = "split";
