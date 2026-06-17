@@ -627,7 +627,7 @@ async function gatherMarketContext(): Promise<Record<string, unknown>> {
     await sleep(150);
     const c1h = await getCandles(epic, "HOUR", 50).catch(() => [] as OHLCVCandle[]);
     await sleep(150);
-    const c4h = await getCandles(epic, "HOUR_4", 30).catch(() => [] as OHLCVCandle[]);
+    const c4h = await getCandles(epic, "HOUR_4", 250).catch(() => [] as OHLCVCandle[]);
 
     // Convert to Candle format for technical analysis
     const toCandles = (arr: OHLCVCandle[]): Candle[] =>
@@ -1410,29 +1410,69 @@ async function executeDecision(
 
         // Recalculate SL/TP based on LIVE price to prevent invalid levels
         // AI estimates may differ from actual market price — always anchor to live price
-        let finalSL = decision.stopLoss;
-        let finalTP = decision.takeProfit;
-        if (decision.stopLoss && decision.takeProfit && livePrice > 0) {
-          const aiEntry = decision.entryPrice && decision.entryPrice > 0 ? decision.entryPrice : livePrice;
-          const slDistancePct = Math.abs(aiEntry - decision.stopLoss) / aiEntry; // SL as % of entry
-          const tpDistancePct = Math.abs(aiEntry - decision.takeProfit) / aiEntry; // TP as % of entry
-          // Recalculate from live price using same percentage distances
+        // ─── SL/TP Calculation ───────────────────────────────────────────────────
+        // Always anchor SL/TP to the LIVE price to prevent stale AI estimates.
+        // If AI provided valid levels, scale them proportionally from live price.
+        // If AI gave zero/invalid levels, fall back to ATR-based 1% risk.
+        const DEFAULT_SL_PCT = 0.01; // 1% from live price
+        const DEFAULT_TP_MULT = 2;   // 2:1 R:R
+
+        let finalSL: number;
+        let finalTP: number;
+
+        const aiEntry = decision.entryPrice && decision.entryPrice > 0 ? decision.entryPrice : livePrice;
+        const aiSL = decision.stopLoss && decision.stopLoss > 0 ? decision.stopLoss : 0;
+        const aiTP = decision.takeProfit && decision.takeProfit > 0 ? decision.takeProfit : 0;
+
+        // Validate AI SL: must be on correct side of entry price
+        const aiSLValid = aiSL > 0 &&
+          (decision.action === "BUY" ? aiSL < aiEntry : aiSL > aiEntry);
+        // Validate AI TP: must be on correct side of entry price
+        const aiTPValid = aiTP > 0 &&
+          (decision.action === "BUY" ? aiTP > aiEntry : aiTP < aiEntry);
+
+        if (aiSLValid && aiTPValid && livePrice > 0) {
+          // Scale AI levels proportionally from live price
+          const slDistancePct = Math.abs(aiEntry - aiSL) / aiEntry;
+          const tpDistancePct = Math.abs(aiEntry - aiTP) / aiEntry;
           finalSL = decision.action === "BUY"
             ? parseFloat((livePrice * (1 - slDistancePct)).toFixed(5))
             : parseFloat((livePrice * (1 + slDistancePct)).toFixed(5));
           finalTP = decision.action === "BUY"
             ? parseFloat((livePrice * (1 + tpDistancePct)).toFixed(5))
             : parseFloat((livePrice * (1 - tpDistancePct)).toFixed(5));
-          // Enforce minimum 1:2 R:R on live-adjusted levels
-          const liveSLDist = Math.abs(livePrice - finalSL);
-          const liveTPDist = Math.abs(livePrice - finalTP);
-          if (liveSLDist > 0 && liveTPDist / liveSLDist < 1.5) {
-            finalTP = decision.action === "BUY"
-              ? parseFloat((livePrice + liveSLDist * 2).toFixed(5))
-              : parseFloat((livePrice - liveSLDist * 2).toFixed(5));
-          }
-          console.log(`[AutoTrade] SL/TP adjusted to live price: ${decision.instrument} entry=${livePrice} SL=${finalSL} TP=${finalTP}`);
+        } else {
+          // Fallback: ATR-based 1% risk
+          const slDist = livePrice * DEFAULT_SL_PCT;
+          finalSL = decision.action === "BUY"
+            ? parseFloat((livePrice - slDist).toFixed(5))
+            : parseFloat((livePrice + slDist).toFixed(5));
+          finalTP = decision.action === "BUY"
+            ? parseFloat((livePrice + slDist * DEFAULT_TP_MULT).toFixed(5))
+            : parseFloat((livePrice - slDist * DEFAULT_TP_MULT).toFixed(5));
+          console.warn(`[AutoTrade] SL/TP FALLBACK: ${decision.instrument} AI gave invalid levels (SL=${aiSL}, TP=${aiTP}) — using 1% ATR fallback`);
         }
+
+        // Enforce minimum 1:2 R:R on final levels
+        const liveSLDist = Math.abs(livePrice - finalSL);
+        const liveTPDist = Math.abs(livePrice - finalTP);
+        if (liveSLDist > 0 && liveTPDist / liveSLDist < 1.5) {
+          finalTP = decision.action === "BUY"
+            ? parseFloat((livePrice + liveSLDist * 2).toFixed(5))
+            : parseFloat((livePrice - liveSLDist * 2).toFixed(5));
+        }
+
+        // Final sanity check: TP must be positive
+        if (finalTP <= 0) {
+          const slDist = livePrice * DEFAULT_SL_PCT;
+          finalTP = decision.action === "BUY"
+            ? parseFloat((livePrice + slDist * DEFAULT_TP_MULT).toFixed(5))
+            : parseFloat((livePrice - slDist * DEFAULT_TP_MULT).toFixed(5));
+          console.warn(`[AutoTrade] TP SANITY FIX: ${decision.instrument} TP was ${finalTP <= 0 ? 'negative/zero' : 'ok'} — reset to ${finalTP}`);
+        }
+
+        console.log(`[AutoTrade] SL/TP final: ${decision.instrument} ${decision.action} entry=${livePrice} SL=${finalSL} TP=${finalTP} (R:R=${liveSLDist > 0 ? (liveTPDist/liveSLDist).toFixed(2) : 'N/A'})`);
+        // ─────────────────────────────────────────────────────────────────────────
 
         // ███ SL DIRECTION GUARD ███
         // Capital.com rejects orders where SL is on the wrong side of the current price.

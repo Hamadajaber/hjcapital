@@ -330,3 +330,11 @@
 - [x] Risk: ATR-based SL/TP (1.5x ATR stop, 3x ATR target = 2:1 R:R minimum)
 - [x] AI role: confirmation only — reviews 3-rule signal, provides confidence + entry/SL/TP, can veto
 - [x] 77/77 tests still passing after overhaul, TypeScript 0 errors
+
+## Round 28 — Test Results (Strategy Test)
+- [x] 108/108 tests passing (30 new MTF strategy tests added)
+- [x] Fixed SL/TP calculation: validates AI levels before using them, falls back to 1% ATR if invalid
+- [x] Fixed TP negative value bug: final sanity check ensures TP > 0
+- [x] Fixed 4H candles: increased from 30 to 250 for EMA200 calculation
+- [x] Live engine cycle confirmed: EMA200 working (EURUSD down, USDJPY up, etc.)
+- [x] No more error.positive.createpositionrequest.profitLevel errors
