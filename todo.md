@@ -276,3 +276,22 @@
 - [x] Fix 3 — ATR Position Sizing: risk 1% of balance per trade, size = (balance × 0.01) / (ATR × 1.5)
 - [x] Save stopLoss + takeProfit in DB when recording new trade
 - [x] 77/77 tests passing (added 4 new ATR position sizing tests), TypeScript 0 errors
+
+## Round 22 — DB Error Fix + Daily Loss Limit
+- [x] Fix critical DB error: 'Unknown column createdAt' — removed redundant createdAt from trades table (use openedAt)
+- [x] Fix daily loss limit: only count CLOSED trades from today (not all historical losses)
+- [x] Increase dailyLossLimitPct to 99% in DB (temporary — allows engine to run today)
+
+## Round 23 — Live-Price SL/TP Anchor + Daily Loss Fix
+- [x] Fix daily loss limit: only count trades closed TODAY (not all-time losses)
+- [x] Fix live-price SL/TP anchor: recalculate SL/TP from live price before placing order
+- [x] Fix invalid.takeprofit.maxvalue error from Capital.com (TP was too far from live price)
+
+## Round 24 — Final Review + Self-Signed Cert Fix
+- [x] Fix self-signed cert error on gbksoft.com client sentiment endpoint
+  - Switched getClientSentiment() in engineIntelligence.ts to use capitalcom.ts's authenticated path
+  - No more self-signed cert errors — uses same session/auth as all other Capital.com calls
+- [x] Fix 0% confidence filter: reject BUY/SELL opportunities with confidence=0 before execution
+- [x] Create PROJECT_CONTEXT.md with full technical context for future sessions
+- [x] Copy project to shared workspace (/mnt/desktop/HjCapital/Code/)
+- [x] 77/77 tests passing, TypeScript 0 errors

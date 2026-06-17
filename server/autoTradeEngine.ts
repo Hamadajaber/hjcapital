@@ -482,16 +482,19 @@ async function runCycle() {
           )
         );
 
-        // Collect all valid BUY/SELL opportunities
+        // Collect all valid BUY/SELL opportunities (confidence > 0 required)
         const opportunities: TradeDecision[] = [];
         for (let i = 0; i < scanResults.length; i++) {
           const result = scanResults[i];
           const inst = candidateInstruments[i];
           if (result.status === "fulfilled") {
             const d = result.value;
-            if (d.action !== "HOLD" && d.action !== "SKIP" && d.instrument !== "NONE") {
+            if (d.action !== "HOLD" && d.action !== "SKIP" && d.instrument !== "NONE" && d.confidence > 0) {
               console.log(`[AutoTrade] Opportunity found: ${inst} ${d.action} @ ${d.confidence}%`);
               opportunities.push(d);
+            } else if (d.confidence === 0 && d.action !== "HOLD" && d.action !== "SKIP") {
+              // AI returned BUY/SELL but with 0% confidence — treat as HOLD
+              console.log(`[AutoTrade] Rejected ${inst} ${d.action} @ 0% confidence — AI uncertain, treating as HOLD`);
             } else {
               console.log(`[AutoTrade] No opportunity on ${inst}: ${d.reasoning?.slice(0, 80)}`);
             }

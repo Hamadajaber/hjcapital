@@ -22,6 +22,7 @@ import {
 } from "./db";
 import { notifyRiskAlert } from "./telegram";
 import type { Candle } from "./technicalAnalysis";
+import { getClientSentiment as capitalGetClientSentiment } from "./capitalcom";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -477,42 +478,21 @@ export function calculateTrailingStop(
 
 /**
  * Fetch Capital.com client sentiment data for multiple instruments.
- * Uses contrarian logic: if >75% of clients are long → bearish signal.
+ * Uses the authenticated Capital.com API (no self-signed cert issues).
+ * Applies contrarian logic: if >75% of clients are long → bearish signal.
  */
 export async function getClientSentiment(
-  sessionToken: string,
-  cst: string,
+  _sessionToken: string,
+  _cst: string,
   instruments: string[]
 ): Promise<Record<string, ClientSentiment>> {
   const result: Record<string, ClientSentiment> = {};
 
   try {
-    const marketIds = instruments.join(",");
-    const url = `https://api-capital.backend.gbksoft.com/api/v1/clientsentiment?marketIds=${marketIds}`;
+    // Use the authenticated Capital.com API path (avoids self-signed cert on gbksoft domain)
+    const rawItems = await capitalGetClientSentiment(instruments);
 
-    const response = await fetch(url, {
-      headers: {
-        "X-SECURITY-TOKEN": sessionToken,
-        "CST": cst,
-        "Content-Type": "application/json",
-      },
-      signal: AbortSignal.timeout(8000),
-    });
-
-    if (!response.ok) {
-      console.warn("[Intelligence] Client sentiment API returned:", response.status);
-      return result;
-    }
-
-    const data = await response.json() as {
-      clientSentiment: Array<{
-        marketId: string;
-        longPositionPercentage: number;
-        shortPositionPercentage: number;
-      }>;
-    };
-
-    for (const item of (data.clientSentiment ?? [])) {
+    for (const item of rawItems) {
       const longPct = item.longPositionPercentage;
       const shortPct = item.shortPositionPercentage;
 
