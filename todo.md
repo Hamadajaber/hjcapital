@@ -311,3 +311,10 @@
 - [x] Cap the max auto-escalation at 65% (not 95%) to allow trades to continue
 - [x] Engine never auto-stops due to win rate — only raises threshold to 65% (high-confidence mode)
 - [x] 77/77 tests still passing after fix
+
+## Round 27 — Floating Point & Invalid Open Level Fix
+
+- [x] Fix floating point entry price (1.4100000000000001) — getOpenPositions() now rounds all prices to 5dp
+- [x] Fix "invalid open level data" auto-close — removed auto-close, openLevel now normalized in capitalcom.ts
+- [x] Fix error.invalid.stoploss.maxvalue — added SL direction guard (BUY SL must be below price)
+- [x] 77/77 tests still passing after fix

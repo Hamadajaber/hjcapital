@@ -410,20 +410,29 @@ export async function getOpenPositions(): Promise<OpenPosition[]> {
   }>("/api/v1/positions");
 
   return (data.positions ?? []).map((p) => {
-    const currentLevel = (p.market.bid + p.market.offer) / 2;
+    // Round all prices to 5 decimal places to prevent floating point artifacts like 1.4100000000000001
+    const rawCurrentLevel = (p.market.bid + p.market.offer) / 2;
+    const currentLevel = parseFloat(rawCurrentLevel.toFixed(5));
+
+    // Safely handle missing/null openLevel from broker (Capital.com sometimes returns null)
+    const rawOpenLevel = p.position.openLevel;
+    const openLevel = (rawOpenLevel && !isNaN(rawOpenLevel) && rawOpenLevel > 0)
+      ? parseFloat(rawOpenLevel.toFixed(5))
+      : currentLevel; // fallback to current price — better than 0 or NaN
+
     const pnl =
       p.position.direction === "BUY"
-        ? (currentLevel - p.position.openLevel) * p.position.size
-        : (p.position.openLevel - currentLevel) * p.position.size;
+        ? (currentLevel - openLevel) * p.position.size
+        : (openLevel - currentLevel) * p.position.size;
 
     return {
       dealId: p.position.dealId,
       epic: p.market.epic,
       direction: p.position.direction,
       size: p.position.size,
-      openLevel: p.position.openLevel,
+      openLevel,
       currentLevel,
-      profitLoss: pnl,
+      profitLoss: parseFloat(pnl.toFixed(2)),
       currency: p.position.currency,
       createdDate: p.position.createdDateUTC,
     };

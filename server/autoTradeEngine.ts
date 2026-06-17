@@ -1126,19 +1126,13 @@ async function analyzeForClose(
     ? (posPrice.bid + posPrice.ask) / 2
     : (position.currentLevel && !isNaN(position.currentLevel) ? position.currentLevel : safeOpenLevel);
 
-  // If we don't have a valid open level, close immediately to avoid data-integrity issues
+  // NOTE: Invalid openLevel auto-close removed (Round 27).
+  // getOpenPositions() in capitalcom.ts now normalizes openLevel to currentLevel as fallback,
+  // so by the time we reach here, openLevel is always a valid number.
+  // Auto-closing positions due to missing data caused unnecessary losses.
   if (!position.openLevel || isNaN(position.openLevel)) {
-    console.warn(`[AutoTrade] Position ${position.dealId} has invalid openLevel (${position.openLevel}) — closing to prevent data corruption`);
-    return {
-      instrument: position.epic,
-      action: "CLOSE",
-      confidence: 100,
-      reasoning: "Position has invalid open level data — closing to prevent P&L calculation errors.",
-      closeDealId: position.dealId,
-      positionDirection: position.direction as "BUY" | "SELL",
-      positionOpenLevel: safeOpenLevel,
-      positionCurrentLevel: currentLevel,
-    };
+    // Log a warning but DO NOT close — just use safeOpenLevel for analysis
+    console.warn(`[AutoTrade] Position ${position.dealId} has invalid openLevel (${position.openLevel}) — using currentLevel as fallback for analysis`);
   }
 
   // Get technical analysis for the position's instrument
@@ -1389,6 +1383,30 @@ async function executeDecision(
               : parseFloat((livePrice - liveSLDist * 2).toFixed(5));
           }
           console.log(`[AutoTrade] SL/TP adjusted to live price: ${decision.instrument} entry=${livePrice} SL=${finalSL} TP=${finalTP}`);
+        }
+
+        // ███ SL DIRECTION GUARD ███
+        // Capital.com rejects orders where SL is on the wrong side of the current price.
+        // BUY: SL must be BELOW current price (stopLevel < livePrice)
+        // SELL: SL must be ABOVE current price (stopLevel > livePrice)
+        // Error: error.invalid.stoploss.maxvalue means SL is above price for a BUY order.
+        if (finalSL && livePrice > 0) {
+          const slIsInvalid = decision.action === "BUY"
+            ? finalSL >= livePrice   // BUY SL must be below price
+            : finalSL <= livePrice;  // SELL SL must be above price
+
+          if (slIsInvalid) {
+            // Recalculate SL as 1% below/above live price
+            const fallbackSLDist = livePrice * 0.01;
+            finalSL = decision.action === "BUY"
+              ? parseFloat((livePrice - fallbackSLDist).toFixed(5))
+              : parseFloat((livePrice + fallbackSLDist).toFixed(5));
+            // Recalculate TP to maintain 2:1 R:R
+            finalTP = decision.action === "BUY"
+              ? parseFloat((livePrice + fallbackSLDist * 2).toFixed(5))
+              : parseFloat((livePrice - fallbackSLDist * 2).toFixed(5));
+            console.warn(`[AutoTrade] SL DIRECTION GUARD: ${decision.instrument} ${decision.action} — SL ${finalSL} was on wrong side of price ${livePrice}. Recalculated to SL=${finalSL} TP=${finalTP}`);
+          }
         }
 
         // Enforce minimum deal size from Capital.com API
