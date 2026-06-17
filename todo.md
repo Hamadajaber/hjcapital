@@ -304,3 +304,10 @@
 - [x] Reduce dailyLossLimitPct from 99% to 45% in DB
 - [x] Fix Ensemble majority logic: with 2 models, "majority" is impossible — update agreement logic (unanimous=both agree, split=disagree, majority reserved for 3+ models)
 - [x] 77/77 tests still passing after fixes
+
+## Round 26 — Confidence Threshold Auto-Escalation Fix
+
+- [x] Fix: confidence threshold auto-escalates to 95% when win rate < 40% — blocks ALL trades
+- [x] Cap the max auto-escalation at 65% (not 95%) to allow trades to continue
+- [x] Engine never auto-stops due to win rate — only raises threshold to 65% (high-confidence mode)
+- [x] 77/77 tests still passing after fix

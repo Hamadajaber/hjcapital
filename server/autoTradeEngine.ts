@@ -302,17 +302,10 @@ async function runCycle() {
     }
 
     // 0b. Dynamic Confidence Threshold — auto-adjust based on 7-day win rate
+    // NOTE: shouldStop is always false now — engine never auto-stops due to win rate.
+    // Instead, threshold is raised to 65% when win rate < 40% (high-confidence mode).
     const dynamicThreshold = await getDynamicConfidenceThreshold();
-    if (dynamicThreshold.shouldStop) {
-      await logDecision(_engineState.sessionId, {
-        instrument: "ALL",
-        action: "SKIP",
-        confidence: 0,
-        reasoning: `Auto-stop: ${dynamicThreshold.reason}`,
-      }, "blocked_risk", dynamicThreshold.reason);
-      await stopAutoTrade(`Win rate protection: ${dynamicThreshold.reason}`);
-      return;
-    }
+    // (shouldStop check removed — engine always continues, just with higher threshold)
 
     // 1. Check risk limits first
     const riskCheck = await checkDailyRiskLimits(_engineState.sessionId, _engineState.mode);

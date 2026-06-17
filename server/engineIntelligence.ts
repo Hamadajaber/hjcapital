@@ -193,20 +193,16 @@ export async function getDynamicConfidenceThreshold(): Promise<{
       threshold = 50;
       reason = `Win rate ${winRate}% (below average) — threshold raised to 50% (conservative mode)`;
     } else {
-      // Win rate < 40% — auto-stop
-      threshold = 80; // high bar but not 95 — still allows very high-confidence trades
+      // Win rate < 40% — raise threshold to 65% (NOT 95%) and send warning, but NEVER auto-stop
+      // Auto-stopping means 0 trades = 0 chance to recover. Instead, require higher confidence.
+      // The engine will continue but only take very high-confidence setups.
+      threshold = 65;
+      reason = `Win rate ${winRate}% (below 40%) — threshold raised to 65% (high-confidence mode). Engine continues.`;
       await notifyRiskAlert(
-        `⚠️ تحذير: معدل الفوز في آخر 7 أيام ${winRate}% (أقل من 40%)\n` +
-        `تم رفع الـ confidence threshold لـ 95% لحماية رأس المال.\n` +
-        `يُنصح بمراجعة الاستراتيجية قبل الاستمرار.`
+        `⚠️ تحذير: معدل الفوز في آخر 7 أيام ${winRate.toFixed(1)}% (أقل من 40%)\n` +
+        `تم رفع الـ confidence threshold لـ 65% (وضع حذر عالي الثقة).\n` +
+        `المحرك يستمر بالعمل — فقط الصفقات عالية الثقة سيتم تنفيذها.`
       ).catch(() => {});
-      return {
-        threshold: 95,
-        shouldStop: true,
-        reason: `Win rate ${winRate}% is below 40% — engine auto-stopped for capital protection`,
-        winRate,
-        totalTrades,
-      };
     }
 
     // Persist to DB
