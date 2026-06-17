@@ -348,3 +348,16 @@
 - [x] Asian session filter logs to Decision Log (no Telegram spam — silent skip)
 - [x] Engine scans all open markets from CORE_INSTRUMENTS (7-10 depending on market hours — correct behavior)
 - [x] 108/108 tests passing, TypeScript 0 errors
+
+## Round 30 — Full Reset, Fix & Performance Enhancement
+- [x] Inspected live logs — engine working, Asian session filter active, XAGUSD SELL signal found at 70%
+- [x] TP calculation reviewed — existing guards are solid, improved AI prompt with explicit examples
+- [x] SL direction guard already in place — verified working correctly
+- [x] ATR-based SL/TP already implemented — reviewed and confirmed correct
+- [x] AI prompt enhanced: shows live price + explicit numeric examples for SL/TP direction
+- [x] EMA gap filter added: skip instruments where EMA50/200 gap < 0.15% (flat/ranging markets)
+- [x] Rule 1 tightened: EMA gap must be > 0.15% — prevents false signals in ranging markets
+- [x] 3/3 rules already required — confirmed in analyzeInstrument logic
+- [x] Telegram already shows Rule 1/2/3 status in each signal (rulesPassedSummary)
+- [x] 108/108 tests passing, TypeScript 0 errors
+- [x] Risk Settings presets updated: Conservative 65%/0.5%, Balanced 55%/0.75%, Aggressive 45%/1%

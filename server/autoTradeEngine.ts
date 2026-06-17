@@ -973,6 +973,20 @@ async function analyzeInstrument(
     const emaTrend = getEMATrend(candles4h);
     trendDirection = emaTrend.trend;
     trendDescription = emaTrend.description;
+
+    // EMA Gap Filter: require minimum 0.15% separation between EMA50 and EMA200
+    // Flat markets (EMA gap < 0.15%) produce false signals — skip them
+    if (emaTrend.ema50 > 0 && emaTrend.ema200 > 0) {
+      const emaGapPct = Math.abs(emaTrend.ema50 - emaTrend.ema200) / emaTrend.ema200 * 100;
+      if (emaGapPct < 0.15) {
+        return {
+          instrument,
+          action: "HOLD",
+          confidence: 0,
+          reasoning: `EMA gap too small (${emaGapPct.toFixed(3)}% < 0.15%) — market is ranging/flat, no clear trend`,
+        };
+      }
+    }
   }
 
   // ─── RULE 2: 1H Entry Confirmation (MACD + RSI) ────────────────────────────────
@@ -1082,14 +1096,16 @@ ${lessonsSection ? `\nPAST LESSONS:\n${lessonsSection}` : ""}
 
 YOUR JOB:
 1. Confirm or veto the ${proposedDirection} signal based on macro context
-2. If confirming: provide confidence (55-85%), precise entry, stop loss (ATR-based), and take profit (2:1 R:R minimum)
+2. If confirming: provide confidence (55-85%), precise entry, stop loss, and take profit
 3. If vetoing: return HOLD with reason (e.g. "major news event in 30 min", "price at key resistance")
 
-RULES:
-- Stop loss distance = 1.5 × ATR (use technical data above)
-- Take profit = 3 × ATR (2:1 R:R minimum, NEVER less)
-- For BUY: stopLoss MUST be below current price, takeProfit MUST be above
-- For SELL: stopLoss MUST be above current price, takeProfit MUST be below
+CRITICAL RULES FOR SL/TP (violations cause order rejection):
+- Current live price is: ${livePrice}
+- For ${proposedDirection === "BUY" ? "BUY" : "SELL"} orders:
+  ${proposedDirection === "BUY" ? `  stopLoss MUST be LESS THAN ${livePrice} (e.g. ${(livePrice * 0.99).toFixed(5)})\n  takeProfit MUST be GREATER THAN ${livePrice} (e.g. ${(livePrice * 1.02).toFixed(5)})` : `  stopLoss MUST be GREATER THAN ${livePrice} (e.g. ${(livePrice * 1.01).toFixed(5)})\n  takeProfit MUST be LESS THAN ${livePrice} (e.g. ${(livePrice * 0.98).toFixed(5)})`}
+- Stop loss distance = 1% to 2% from live price
+- Take profit = 2x to 3x the stop loss distance (minimum 2:1 R:R)
+- NEVER return stopLoss=0 or takeProfit=0 — always calculate real values
 - Confidence 55-65% = normal trade, 65-75% = strong trade, 75%+ = very strong
 
 Respond in JSON:

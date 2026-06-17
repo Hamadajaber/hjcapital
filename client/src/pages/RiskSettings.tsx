@@ -6,30 +6,30 @@ import { toast } from "sonner";
 const PRESETS = {
   conservative: {
     label: "Conservative — حماية رأس المال",
-    description: "Threshold 55% — فقط الصفقات عالية الثقة",
+    description: "Threshold 65% — فقط الصفقات عالية الثقة جداً — مناسب للبداية",
     icon: Lock,
     color: "var(--color-profit)",
     dimColor: "var(--color-profit-dim)",
     borderColor: "oklch(0.720 0.130 155 / 0.30)",
-    values: { minConfidenceThreshold: 55, maxRiskPerTrade: "0.50", maxOpenPositions: 2, stopLossPerTrade: "0.50", dailyLossLimitPct: "15.00" },
+    values: { minConfidenceThreshold: 65, maxRiskPerTrade: "0.50", maxOpenPositions: 2, stopLossPerTrade: "0.50", dailyLossLimitPct: "10.00" },
   },
   balanced: {
     label: "Balanced — مدير محفظة",
-    description: "Threshold 45% — توازن مثالي بين الفرص والحماية",
+    description: "Threshold 55% — توازن مثالي — موصى به للاستراتيجية الجديدة",
     icon: Scale,
     color: "var(--color-gold)",
     dimColor: "oklch(0.65 0.18 55 / 0.08)",
     borderColor: "oklch(0.65 0.18 55 / 0.30)",
-    values: { minConfidenceThreshold: 45, maxRiskPerTrade: "1.00", maxOpenPositions: 3, stopLossPerTrade: "1.00", dailyLossLimitPct: "25.00" },
+    values: { minConfidenceThreshold: 55, maxRiskPerTrade: "0.75", maxOpenPositions: 3, stopLossPerTrade: "0.75", dailyLossLimitPct: "20.00" },
   },
   aggressive: {
     label: "Aggressive — أقصى الفرص",
-    description: "Threshold 35% — يفتح أكثر الصفقات — مناسب للسوق النشط",
+    description: "Threshold 45% — يفتح أكثر الصفقات — للسوق النشط فقط",
     icon: Zap,
     color: "var(--color-loss)",
     dimColor: "var(--color-loss-dim)",
     borderColor: "oklch(0.660 0.155 20 / 0.30)",
-    values: { minConfidenceThreshold: 35, maxRiskPerTrade: "2.00", maxOpenPositions: 5, stopLossPerTrade: "1.50", dailyLossLimitPct: "35.00" },
+    values: { minConfidenceThreshold: 45, maxRiskPerTrade: "1.00", maxOpenPositions: 4, stopLossPerTrade: "1.00", dailyLossLimitPct: "30.00" },
   },
 } as const;
 
