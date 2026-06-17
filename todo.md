@@ -338,3 +338,13 @@
 - [x] Fixed 4H candles: increased from 30 to 250 for EMA200 calculation
 - [x] Live engine cycle confirmed: EMA200 working (EURUSD down, USDJPY up, etc.)
 - [x] No more error.positive.createpositionrequest.profitLevel errors
+
+## Round 29 — Test & Enhancement Pass
+- [x] Add Asian session filter: block trading 22:00-07:00 UTC (01:00-10:00 GMT+3) — low liquidity
+- [x] Add session-aware logging: Decision Log shows Arabic message when Asian session is active
+- [x] Improve Rule 2: MACD hist > -0.0005 (not strictly > 0), RSI bands widened (35-72 bull, 28-65 bear)
+- [x] Add Rule 3 enhancement: Doji + Hammer + Shooting Star patterns included, RSI bands 48/52
+- [x] Backtest panel updated: all 10 instruments + MTF Confirmation as default strategy
+- [x] Asian session filter logs to Decision Log (no Telegram spam — silent skip)
+- [x] Engine scans all open markets from CORE_INSTRUMENTS (7-10 depending on market hours — correct behavior)
+- [x] 108/108 tests passing, TypeScript 0 errors

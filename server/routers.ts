@@ -662,7 +662,7 @@ export const appRouter = router({
     run: ownerProcedure
       .input(z.object({
         instrument: z.string(),
-        strategy: z.enum(["rsi_macd", "bollinger", "trend_following"]).default("rsi_macd"),
+        strategy: z.enum(["rsi_macd", "bollinger", "trend_following", "mtf_confirmation"]).default("mtf_confirmation"),
         days: z.number().min(7).max(90).default(30),
         initialBalance: z.number().default(250),
       }))

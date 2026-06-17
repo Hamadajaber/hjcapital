@@ -275,6 +275,25 @@ async function runCycle() {
       return;
     }
 
+    // 0a. Asian Session Filter — skip trading during low-liquidity Asian session
+    // Asian session (22:00-07:00 UTC = 01:00-10:00 GMT+3) is characterized by:
+    // - Low liquidity and tight ranges
+    // - False breakouts and whipsaws
+    // - Most of our historical losses occurred during this window
+    const nowUtcHour = new Date().getUTCHours();
+    const isAsianSession = nowUtcHour >= 22 || nowUtcHour < 7; // 22:00-07:00 UTC
+    if (isAsianSession) {
+      const sessionMsg = `⏸️ Asian Session Filter: التداول متوقف مؤقتاً (${nowUtcHour}:00 UTC). يُستأنف في 07:00 UTC (10:00 GMT+3) عند بداية London Session.`;
+      await logDecision(_engineState.sessionId, {
+        instrument: "ALL",
+        action: "SKIP",
+        confidence: 0,
+        reasoning: sessionMsg,
+      }, "skipped", "Asian session — low liquidity");
+      console.log(`[AutoTrade] Cycle skipped: Asian session (${nowUtcHour}:00 UTC)`);
+      return;
+    }
+
     // 0b. Dynamic Confidence Threshold — auto-adjust based on 7-day win rate
     // NOTE: shouldStop is always false now — engine never auto-stops due to win rate.
     // Instead, threshold is raised to 65% when win rate < 40% (high-confidence mode).
@@ -970,8 +989,10 @@ async function analyzeInstrument(
     const rsi1hResult = calculateRSI(candles1h);
     rsi1h = rsi1hResult.value;
 
-    macd1hBullish = macd1h.histogram > 0 && rsi1h >= 40 && rsi1h <= 70;
-    macd1hBearish = macd1h.histogram < 0 && rsi1h >= 30 && rsi1h <= 60;
+    // Rule 2 relaxed: MACD histogram > -0.0005 (not strictly > 0) to catch early momentum shifts
+    // RSI ranges widened slightly to catch more valid setups
+    macd1hBullish = macd1h.histogram > -0.0005 && macd1h.trend !== "bearish" && rsi1h >= 35 && rsi1h <= 72;
+    macd1hBearish = macd1h.histogram < 0.0005 && macd1h.trend !== "bullish" && rsi1h >= 28 && rsi1h <= 65;
     macdDescription = `MACD hist=${macd1h.histogram.toFixed(5)} (${macd1h.trend}), RSI=${rsi1h.toFixed(1)}`;
   }
 
@@ -990,8 +1011,15 @@ async function analyzeInstrument(
     const bullishPatterns = summary5m.patterns.filter((p) => p.type === "bullish" && p.strength !== "weak");
     const bearishPatterns = summary5m.patterns.filter((p) => p.type === "bearish" && p.strength !== "weak");
 
-    trigger5mBullish = bullishPatterns.length > 0 || rsi5m < 45;
-    trigger5mBearish = bearishPatterns.length > 0 || rsi5m > 55;
+    // Rule 3 enhanced: include Doji + Hammer as valid triggers, wider RSI bands
+    const allBullishPatterns = summary5m.patterns.filter((p) =>
+      p.type === "bullish" || p.name.toLowerCase().includes("hammer") || p.name.toLowerCase().includes("doji")
+    );
+    const allBearishPatterns = summary5m.patterns.filter((p) =>
+      p.type === "bearish" || p.name.toLowerCase().includes("shooting") || p.name.toLowerCase().includes("doji")
+    );
+    trigger5mBullish = allBullishPatterns.length > 0 || rsi5m < 48;
+    trigger5mBearish = allBearishPatterns.length > 0 || rsi5m > 52;
     const patternNames = summary5m.patterns.map((p) => p.name).join(", ") || "none";
     triggerDescription = `RSI5m=${rsi5m.toFixed(1)}, patterns=[${patternNames}]`;
   }

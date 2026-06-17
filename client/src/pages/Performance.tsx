@@ -102,7 +102,7 @@ function HeatmapCell({ instrument, totalPnl, winRate, tradeCount, avgPnl }: {
 
 function BacktestPanel() {
   const [instrument, setInstrument] = useState("EURUSD");
-  const [strategy, setStrategy] = useState<"rsi_macd" | "bollinger" | "trend_following">("rsi_macd");
+  const [strategy, setStrategy] = useState<"rsi_macd" | "bollinger" | "trend_following" | "mtf_confirmation">("mtf_confirmation");
   const [days, setDays] = useState(30);
 
   const backtestMutation = trpc.backtest.run.useMutation();
@@ -110,9 +110,10 @@ function BacktestPanel() {
   const result = backtestMutation.data;
 
   const strategyLabels: Record<string, string> = {
+    mtf_confirmation: "MTF Confirmation (Active)",
+    trend_following: "Trend Following",
     rsi_macd: "RSI + MACD",
     bollinger: "Bollinger Bands",
-    trend_following: "Trend Following",
   };
 
   const recColor = result?.recommendation === "RECOMMENDED"
@@ -130,7 +131,7 @@ function BacktestPanel() {
           <select value={instrument} onChange={e => setInstrument(e.target.value)}
             className="block mt-1 rounded-lg px-3 py-2 text-sm"
             style={{ background: "var(--color-bg-elevated)", border: "1px solid var(--color-border-default)", color: "var(--color-text-primary)" }}>
-            {["EURUSD", "GBPUSD", "GOLD", "US500", "BTC"].map(i => <option key={i} value={i}>{i}</option>)}
+            {["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "GOLD", "XAGUSD", "US500", "NASDAQ", "GER40", "ETHUSD"].map(i => <option key={i} value={i}>{i}</option>)}
           </select>
         </div>
         <div>
