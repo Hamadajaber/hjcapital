@@ -295,3 +295,12 @@
 - [x] Create PROJECT_CONTEXT.md with full technical context for future sessions
 - [x] Copy project to shared workspace (/mnt/desktop/HjCapital/Code/)
 - [x] 77/77 tests passing, TypeScript 0 errors
+
+## Round 25 — Critical Security & Data Integrity Fixes
+
+- [x] Fix DB close bug: add tradeId filter in closeTrade() — currently updates ALL open trades with same PnL
+- [x] Fix Trailing Stop: send actual SL update to Capital.com API (currently only updates DB, not broker)
+- [x] Fix Daily Loss Limit: include unrealized PnL from open positions in daily loss calculation
+- [x] Reduce dailyLossLimitPct from 99% to 45% in DB
+- [ ] Fix Ensemble majority logic: with 2 models, "majority" is impossible — update agreement logic
+- [x] 77/77 tests still passing after fixes

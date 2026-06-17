@@ -502,6 +502,38 @@ export async function placeOrder(params: {
   };
 }
 
+// ─── Update Position Stop Loss (Trailing Stop) ──────────────────────────────
+
+/**
+ * Update the stop loss level of an open position on Capital.com.
+ * Used by the trailing stop logic to protect profits.
+ * Capital.com API: PUT /api/v1/positions/{dealId}
+ */
+export async function updatePositionStopLoss(
+  dealId: string,
+  newStopLevel: number
+): Promise<{ success: boolean; status?: string }> {
+  try {
+    const data = await capitalRequest<{ dealReference: string }>(
+      `/api/v1/positions/${dealId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ stopLevel: newStopLevel }),
+      }
+    );
+
+    // Confirm the update
+    const confirm = await capitalRequest<{ status: string }>(
+      `/api/v1/confirms/${data.dealReference}`
+    );
+
+    return { success: true, status: confirm.status };
+  } catch (err) {
+    console.warn(`[Capital.com] Failed to update stop loss for ${dealId}:`, err);
+    return { success: false };
+  }
+}
+
 // ─── Close Position ───────────────────────────────────────────────────────────
 
 export async function closePosition(dealId: string): Promise<{ status: string; pnl?: number; closeLevel?: number }> {

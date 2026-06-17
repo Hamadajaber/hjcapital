@@ -37,6 +37,7 @@ import {
   checkMarketTradeable,
   getMinDealSize,
   getSessionTokens,
+  updatePositionStopLoss,
 } from "./capitalcom";
 import type { OHLCVCandle } from "./capitalcom";
 import {
@@ -410,14 +411,29 @@ async function runCycle() {
 
             if (slImproved) {
               console.log(`[AutoTrade] TRAILING STOP: ${pos.epic} ${direction} — SL moved from ${originalSL} to ${newSL} (${reason})`);
-              // Update in DB
+
+              // ███ SEND REAL TRAILING STOP TO CAPITAL.COM BROKER ███
+              // This is critical — without this, the broker still uses the old SL
+              let brokerUpdateSuccess = false;
+              if (_engineState.mode === "live" && pos.dealId) {
+                const updateResult = await updatePositionStopLoss(pos.dealId, newSL);
+                brokerUpdateSuccess = updateResult.success;
+                if (!updateResult.success) {
+                  console.warn(`[AutoTrade] TRAILING STOP: Failed to update SL on Capital.com for ${pos.epic} (dealId: ${pos.dealId}) — DB updated but broker not notified`);
+                }
+              } else {
+                brokerUpdateSuccess = true; // Paper mode: DB only is fine
+              }
+
+              // Update in DB (always, even if broker update failed — for tracking)
               await dbTs.update(tradesTable)
                 .set({ stopLoss: newSL.toFixed(5) })
                 .where(eq(tradesTable.id, openTrade.id));
+
               // Notify owner
               await notifyOwner({
                 title: `🛡️ Trailing Stop Updated: ${pos.epic}`,
-                content: `${reason}. New SL: ${newSL.toFixed(5)} (was ${originalSL.toFixed(5)}). Current P&L: $${pos.profitLoss?.toFixed(2)}`,
+                content: `${reason}. New SL: ${newSL.toFixed(5)} (was ${originalSL.toFixed(5)}). Broker updated: ${brokerUpdateSuccess ? '✅' : '⚠️ DB only'}. Current P&L: $${pos.profitLoss?.toFixed(2)}`,
               }).catch(() => {});
             }
           }
@@ -1218,15 +1234,38 @@ async function executeDecision(
         confirmedCloseLevel = result.closeLevel;
       }
 
-      // Update trade record
+      // Update trade record — MUST filter by instrument to avoid updating ALL open trades
       const dbExec = await getDb();
       if (dbExec) {
-        await dbExec.update(trades)
-          .set({ status: "closed", closedAt: new Date(), pnl: pnl.toFixed(2) })
+        // First find the specific open trade for this instrument to get its ID
+        const [openTradeToClose] = await dbExec
+          .select()
+          .from(trades)
           .where(and(
             eq(trades.status, "open"),
-            eq(trades.mode, mode)
-          ));
+            eq(trades.mode, mode),
+            eq(trades.instrument, decision.instrument)
+          ))
+          .orderBy(desc(trades.openedAt))
+          .limit(1);
+
+        if (openTradeToClose) {
+          await dbExec.update(trades)
+            .set({ status: "closed", closedAt: new Date(), pnl: pnl.toFixed(2) })
+            .where(eq(trades.id, openTradeToClose.id));
+
+          // Learning Memory: pass actual tradeId
+          evaluateClosedTrade({
+            tradeId: openTradeToClose.id,
+            instrument: decision.instrument,
+            direction: decision.positionDirection ?? "BUY",
+            entryPrice: decision.positionOpenLevel ?? decision.entryPrice ?? 0,
+            exitPrice: confirmedCloseLevel ?? decision.positionCurrentLevel ?? decision.entryPrice ?? 0,
+            pnl,
+            originalReasoning: decision.reasoning,
+            marketConditionsAtEntry: `Mode: ${mode}, Confidence: ${decision.confidence}%`,
+          }).catch(() => {});
+        }
       }
 
       await logDecision(sessionId, decision, "closed", `Closed position. P&L: $${pnl.toFixed(2)}`, undefined, pnl);
@@ -1248,17 +1287,7 @@ async function executeDecision(
         mode,
       }).catch(() => {});
 
-      // Learning Memory: AI evaluates the closed trade and stores a lesson
-      evaluateClosedTrade({
-        tradeId: 0, // we don't have the exact tradeId here; use 0 as placeholder
-        instrument: decision.instrument,
-        direction: decision.positionDirection ?? "BUY",
-        entryPrice: decision.positionOpenLevel ?? decision.entryPrice ?? 0,
-        exitPrice: confirmedCloseLevel ?? decision.positionCurrentLevel ?? decision.entryPrice ?? 0,
-        pnl,
-        originalReasoning: decision.reasoning,
-        marketConditionsAtEntry: `Mode: ${mode}, Confidence: ${decision.confidence}%`,
-      }).catch((err) => console.warn("[AutoTrade] Trade evaluation error:", err));
+      // Learning Memory is now called inside the DB update block above (with correct tradeId)
 
     } else if (decision.action === "BUY" || decision.action === "SELL") {
       // Calculate size based on risk
@@ -1478,13 +1507,31 @@ async function checkDailyRiskLimits(sessionId: number, mode: "paper" | "live"): 
       gte(trades.closedAt!, todayStart)
     ));
 
-  const todayPnl = todayTrades.reduce((sum: number, t: typeof todayTrades[0]) => sum + parseFloat(t.pnl ?? "0"), 0);
+  const realizedPnl = todayTrades.reduce((sum: number, t: typeof todayTrades[0]) => sum + parseFloat(t.pnl ?? "0"), 0);
+
+  // ███ INCLUDE UNREALIZED P&L FROM OPEN POSITIONS ███
+  // Without this, a large losing open position is invisible to the daily loss limit
+  let unrealizedPnl = 0;
+  try {
+    if (mode === "live") {
+      const openPositions = await getOpenPositions();
+      unrealizedPnl = openPositions.reduce((sum, pos) => sum + (pos.profitLoss ?? 0), 0);
+    }
+  } catch {
+    // If we can't fetch open positions, fall back to realized PnL only
+    unrealizedPnl = 0;
+  }
+
+  const todayPnl = realizedPnl + unrealizedPnl;
 
   // Daily loss limit = X% of current capital
   const currentBalance = await getCurrentBalance(mode);
   const dailyLossLimitAbs = currentBalance * (risk.dailyLossLimitPct / 100);
   if (todayPnl <= -dailyLossLimitAbs) {
-    return { blocked: true, reason: `Daily loss limit reached: $${Math.abs(todayPnl).toFixed(2)} / $${dailyLossLimitAbs.toFixed(2)} (${risk.dailyLossLimitPct}% of capital)` };
+    return {
+      blocked: true,
+      reason: `Daily loss limit reached: $${Math.abs(todayPnl).toFixed(2)} / $${dailyLossLimitAbs.toFixed(2)} (${risk.dailyLossLimitPct}% of capital). Realized: $${realizedPnl.toFixed(2)}, Unrealized: $${unrealizedPnl.toFixed(2)}`
+    };
   }
 
   return { blocked: false, reason: "" };
