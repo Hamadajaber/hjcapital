@@ -1340,6 +1340,32 @@ async function executeDecision(
           }
         }
 
+        // Recalculate SL/TP based on LIVE price to prevent invalid levels
+        // AI estimates may differ from actual market price — always anchor to live price
+        let finalSL = decision.stopLoss;
+        let finalTP = decision.takeProfit;
+        if (decision.stopLoss && decision.takeProfit && livePrice > 0) {
+          const aiEntry = decision.entryPrice && decision.entryPrice > 0 ? decision.entryPrice : livePrice;
+          const slDistancePct = Math.abs(aiEntry - decision.stopLoss) / aiEntry; // SL as % of entry
+          const tpDistancePct = Math.abs(aiEntry - decision.takeProfit) / aiEntry; // TP as % of entry
+          // Recalculate from live price using same percentage distances
+          finalSL = decision.action === "BUY"
+            ? parseFloat((livePrice * (1 - slDistancePct)).toFixed(5))
+            : parseFloat((livePrice * (1 + slDistancePct)).toFixed(5));
+          finalTP = decision.action === "BUY"
+            ? parseFloat((livePrice * (1 + tpDistancePct)).toFixed(5))
+            : parseFloat((livePrice * (1 - tpDistancePct)).toFixed(5));
+          // Enforce minimum 1:2 R:R on live-adjusted levels
+          const liveSLDist = Math.abs(livePrice - finalSL);
+          const liveTPDist = Math.abs(livePrice - finalTP);
+          if (liveSLDist > 0 && liveTPDist / liveSLDist < 1.5) {
+            finalTP = decision.action === "BUY"
+              ? parseFloat((livePrice + liveSLDist * 2).toFixed(5))
+              : parseFloat((livePrice - liveSLDist * 2).toFixed(5));
+          }
+          console.log(`[AutoTrade] SL/TP adjusted to live price: ${decision.instrument} entry=${livePrice} SL=${finalSL} TP=${finalTP}`);
+        }
+
         // Enforce minimum deal size from Capital.com API
         const minSize = await getMinDealSize(epic).catch(() => 1);
         const adjustedSize = Math.max(size, minSize);
@@ -1350,8 +1376,8 @@ async function executeDecision(
           epic,
           direction: decision.action as "BUY" | "SELL",
           size: adjustedSize,
-          stopLoss: decision.stopLoss,
-          takeProfit: decision.takeProfit,
+          stopLoss: finalSL,
+          takeProfit: finalTP,
         });
         actualEntry = result.level;
 
@@ -1433,9 +1459,10 @@ async function executeDecision(
 async function checkDailyRiskLimits(sessionId: number, mode: "paper" | "live"): Promise<{ blocked: boolean; reason: string }> {
   const risk = await getRiskSettings();
 
-  // Calculate today's P&L from trades
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // Calculate today's P&L from CLOSED trades only, using closedAt timestamp
+  // This prevents historical losses from blocking the engine on new days
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
 
   const db = await getDb();
   if (!db) return { blocked: false, reason: "" };
@@ -1444,7 +1471,8 @@ async function checkDailyRiskLimits(sessionId: number, mode: "paper" | "live"): 
     .from(trades)
     .where(and(
       eq(trades.mode, mode),
-      gte(trades.openedAt, today)
+      eq(trades.status, "closed"),
+      gte(trades.closedAt!, todayStart)
     ));
 
   const todayPnl = todayTrades.reduce((sum: number, t: typeof todayTrades[0]) => sum + parseFloat(t.pnl ?? "0"), 0);
