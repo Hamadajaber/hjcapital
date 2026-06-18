@@ -1467,6 +1467,9 @@ async function executeDecision(
 
       let tradeId: number | undefined;
       let actualEntry = decision.entryPrice ?? 0;
+      // These will be set in live mode after the SL/TP calculation block
+      let finalSL: number | undefined;
+      let finalTP: number | undefined;
 
       if (mode === "live") {
         const epic = INSTRUMENT_EPICS[decision.instrument] ?? decision.instrument;
@@ -1532,9 +1535,7 @@ async function executeDecision(
         const DEFAULT_SL_PCT = 0.01; // 1% from live price
         const DEFAULT_TP_MULT = 2;   // 2:1 R:R
 
-        let finalSL: number;
-        let finalTP: number;
-
+        // finalSL and finalTP are declared at outer scope above
         const aiEntry = decision.entryPrice && decision.entryPrice > 0 ? decision.entryPrice : livePrice;
         const aiSL = decision.stopLoss && decision.stopLoss > 0 ? decision.stopLoss : 0;
         const aiTP = decision.takeProfit && decision.takeProfit > 0 ? decision.takeProfit : 0;
@@ -1656,6 +1657,15 @@ async function executeDecision(
       // Record trade in DB
       const dbExec2 = await getDb();
       if (!dbExec2) throw new Error("DB not available");
+      // IMPORTANT: Save finalSL/finalTP (the actual levels sent to Capital.com),
+      // NOT decision.stopLoss/takeProfit (which are the raw AI estimates, possibly invalid).
+      // finalSL/finalTP are only defined in live mode; for paper mode use decision values.
+      const dbSL = (mode === "live" && typeof finalSL !== "undefined" && finalSL > 0)
+        ? finalSL
+        : (decision.stopLoss && decision.stopLoss > 0 ? decision.stopLoss : null);
+      const dbTP = (mode === "live" && typeof finalTP !== "undefined" && finalTP > 0)
+        ? finalTP
+        : (decision.takeProfit && decision.takeProfit > 0 ? decision.takeProfit : null);
       const [tradeResult] = await dbExec2.insert(trades).values({
         instrument: decision.instrument,
         direction: decision.action as "BUY" | "SELL",
@@ -1666,9 +1676,9 @@ async function executeDecision(
         aiConfidence: decision.confidence,
         mode,
         autoTradeSessionId: sessionId,
-        // Store SL/TP for trailing stop tracking
-        stopLoss: decision.stopLoss ? decision.stopLoss.toFixed(5) : null,
-        takeProfit: decision.takeProfit ? decision.takeProfit.toFixed(5) : null,
+        // Store the ACTUAL SL/TP sent to the broker (not the raw AI estimate)
+        stopLoss: dbSL ? dbSL.toFixed(5) : null,
+        takeProfit: dbTP ? dbTP.toFixed(5) : null,
       });
 
       tradeId = (tradeResult as any).insertId;
@@ -1676,19 +1686,24 @@ async function executeDecision(
       await logDecision(sessionId, decision, "opened",
         `Opened ${decision.action} ${decision.instrument} @ ${actualEntry.toFixed(5)}, size=${size}`, tradeId);
 
+      // Use finalSL/finalTP (actual broker levels) for owner notification
+      const notifySL = (finalSL && finalSL > 0) ? finalSL : decision.stopLoss;
+      const notifyTP = (finalTP && finalTP > 0) ? finalTP : decision.takeProfit;
       await notifyOwner({
         title: `🤖 Auto Trade: ${decision.action} ${decision.instrument}`,
-        content: `Entry: ${actualEntry.toFixed(5)} | Stop: ${decision.stopLoss?.toFixed(5) ?? "N/A"} | Target: ${decision.takeProfit?.toFixed(5) ?? "N/A"} | Confidence: ${decision.confidence}%\n\nReasoning: ${decision.reasoning}`,
+        content: `Entry: ${actualEntry.toFixed(5)} | Stop: ${notifySL?.toFixed(5) ?? "N/A"} | Target: ${notifyTP?.toFixed(5) ?? "N/A"} | Confidence: ${decision.confidence}%\n\nReasoning: ${decision.reasoning}`,
       }).catch(() => {});
 
-      // Telegram notification
+      // Telegram notification — use finalSL/finalTP (actual broker levels) if available
+      const telegramSL = (finalSL && finalSL > 0) ? finalSL : (decision.stopLoss ?? actualEntry * 0.999);
+      const telegramTP = (finalTP && finalTP > 0) ? finalTP : (decision.takeProfit ?? actualEntry * 1.002);
       await notifyTradeOpened({
         instrument: decision.instrument,
         direction: decision.action as "BUY" | "SELL",
         size,
         entryPrice: actualEntry,
-        stopLoss: decision.stopLoss ?? actualEntry * 0.999,
-        takeProfit: decision.takeProfit ?? actualEntry * 1.002,
+        stopLoss: telegramSL,
+        takeProfit: telegramTP,
         confidence: decision.confidence,
         reasoning: decision.reasoning,
         mode,

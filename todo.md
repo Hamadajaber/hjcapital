@@ -367,3 +367,9 @@
 - [x] Add auto-apply Balanced preset when win rate > 50% (smart risk auto-adjustment)
 - [x] Add Weekly Friday Telegram summary: trades count, win rate, total P&L
 - [x] Run 108+ tests and confirm all passing
+
+## Round 32 — SL/TP Bug Investigation & Fix
+- [x] Investigate SL/TP calculation flow: AI prompt → parseAISignal → executeSignal → Capital.com order
+- [x] Identify why GOLD shows SL=45.01 (absolute offset) and AUDUSD shows SL=0.00700 (relative offset)
+- [x] Fix SL/TP to always use absolute price levels for Capital.com API
+- [x] Verify fix with TypeScript check and 108+ tests
