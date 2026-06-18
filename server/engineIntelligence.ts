@@ -162,6 +162,9 @@ export async function formatLessonsForPrompt(instrument: string): Promise<string
  *
  * Returns: { threshold, shouldStop, reason }
  */
+// Track last warning date to avoid spamming every 15 minutes
+let _lastWinRateWarnDate: string | null = null;
+
 export async function getDynamicConfidenceThreshold(): Promise<{
   threshold: number;
   shouldStop: boolean;
@@ -198,11 +201,16 @@ export async function getDynamicConfidenceThreshold(): Promise<{
       // The engine will continue but only take very high-confidence setups.
       threshold = 65;
       reason = `Win rate ${winRate}% (below 40%) — threshold raised to 65% (high-confidence mode). Engine continues.`;
-      await notifyRiskAlert(
-        `⚠️ تحذير: معدل الفوز في آخر 7 أيام ${winRate.toFixed(1)}% (أقل من 40%)\n` +
-        `تم رفع الـ confidence threshold لـ 65% (وضع حذر عالي الثقة).\n` +
-        `المحرك يستمر بالعمل — فقط الصفقات عالية الثقة سيتم تنفيذها.`
-      ).catch(() => {});
+      // Only send warning ONCE per day (not every 15-minute cycle)
+      const todayDate = new Date().toISOString().slice(0, 10);
+      if (_lastWinRateWarnDate !== todayDate) {
+        _lastWinRateWarnDate = todayDate;
+        await notifyRiskAlert(
+          `⚠️ تحذير: معدل الفوز في آخر 7 أيام ${winRate.toFixed(1)}% (أقل من 40%)\n` +
+          `تم رفع الـ confidence threshold لـ 65% (وضع حذر عالي الثقة).\n` +
+          `المحرك يستمر بالعمل — فقط الصفقات عالية الثقة سيتم تنفيذها.`
+        ).catch(() => {});
+      }
     }
 
     // Persist to DB
