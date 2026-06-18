@@ -512,6 +512,8 @@ export async function updateEngineIntelligence(patch: Partial<{
   marketRegimes: Record<string, string>;
   winRate7d: string;
   trades7d: number;
+  lastWinRateWarnDate: string | null;
+  lastWeeklySummaryDate: string | null;
 }>): Promise<void> {
   const db = await getDb();
   if (!db) return;

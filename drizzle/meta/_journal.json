@@ -57,6 +57,13 @@
       "when": 1781653613247,
       "tag": "0007_aspiring_jack_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1781791419340,
+      "tag": "0008_plain_magma",
+      "breakpoints": true
     }
   ]
 }

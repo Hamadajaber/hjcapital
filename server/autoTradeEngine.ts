@@ -54,7 +54,7 @@ import {
   getInstrumentSentiment,
   formatSentimentForPrompt,
 } from "./sentimentAnalysis";
-import { getDb, getPriceAlerts, triggerPriceAlert, getPortfolio } from "./db";
+import { getDb, getPriceAlerts, triggerPriceAlert, getPortfolio, updateEngineIntelligence } from "./db";
 import {
   evaluateClosedTrade,
   formatLessonsForPrompt,
@@ -109,7 +109,8 @@ export interface EngineState {
 // In-memory state (single-user platform)
 let _engineState: EngineState | null = null;
 let _cycleTimer: ReturnType<typeof setTimeout> | null = null;
-// Deduplication guard: weekly summary sent at most once per Friday
+// NOTE: _lastWeeklySummaryDate is now persisted in the DB (engineIntelligence.lastWeeklySummaryDate)
+// so it survives Autoscale cold-starts / server restarts. In-memory var is kept as fast-path cache.
 let _lastWeeklySummaryDate: string | null = null;
 
 // ─── Instrument Universe ─────────────────────────────────────────────────────
@@ -589,8 +590,24 @@ async function runCycle() {
       const utcDay = now.getUTCDay(); // 5 = Friday
       const utcHour = now.getUTCHours();
       const todayDateStr = now.toISOString().slice(0, 10);
-      if (utcDay === 5 && utcHour === 20 && _lastWeeklySummaryDate !== todayDateStr) {
+      // Check both in-memory cache and DB to survive server restarts
+      let weeklySummaryAlreadySent = _lastWeeklySummaryDate === todayDateStr;
+      if (!weeklySummaryAlreadySent) {
+        const intelCheck = await getDb().then(async db => {
+          if (!db) return null;
+          const { engineIntelligence: eiTable } = await import("../drizzle/schema");
+          const rows = await db.select().from(eiTable).limit(1);
+          return rows[0] ?? null;
+        }).catch(() => null);
+        if (intelCheck?.lastWeeklySummaryDate === todayDateStr) {
+          weeklySummaryAlreadySent = true;
+          _lastWeeklySummaryDate = todayDateStr; // update in-memory cache
+        }
+      }
+      if (utcDay === 5 && utcHour === 20 && !weeklySummaryAlreadySent) {
         _lastWeeklySummaryDate = todayDateStr;
+        // Persist to DB so future cold-starts know we already sent it today
+        await updateEngineIntelligence({ lastWeeklySummaryDate: todayDateStr }).catch(() => {});
         // Compute weekly stats from closed trades this week (Mon-Fri)
         const db = await getDb();
         if (db) {

@@ -162,7 +162,8 @@ export async function formatLessonsForPrompt(instrument: string): Promise<string
  *
  * Returns: { threshold, shouldStop, reason }
  */
-// Track last warning date to avoid spamming every 15 minutes
+// NOTE: _lastWinRateWarnDate is now persisted in the DB (engineIntelligence.lastWinRateWarnDate)
+// so it survives server restarts (Autoscale cold starts). The in-memory var is kept as a fast-path cache.
 let _lastWinRateWarnDate: string | null = null;
 
 export async function getDynamicConfidenceThreshold(): Promise<{
@@ -201,15 +202,30 @@ export async function getDynamicConfidenceThreshold(): Promise<{
       // The engine will continue but only take very high-confidence setups.
       threshold = 65;
       reason = `Win rate ${winRate}% (below 40%) — threshold raised to 65% (high-confidence mode). Engine continues.`;
-      // Only send warning ONCE per day (not every 15-minute cycle)
+      // Only send warning ONCE per day (not every 15-minute cycle).
+      // We check BOTH the in-memory cache AND the DB-persisted date so the guard
+      // survives Autoscale cold-starts / server restarts.
       const todayDate = new Date().toISOString().slice(0, 10);
-      if (_lastWinRateWarnDate !== todayDate) {
-        _lastWinRateWarnDate = todayDate;
-        await notifyRiskAlert(
-          `⚠️ تحذير: معدل الفوز في آخر 7 أيام ${winRate.toFixed(1)}% (أقل من 40%)\n` +
-          `تم رفع الـ confidence threshold لـ 65% (وضع حذر عالي الثقة).\n` +
-          `المحرك يستمر بالعمل — فقط الصفقات عالية الثقة سيتم تنفيذها.`
-        ).catch(() => {});
+      // Fast-path: in-memory cache hit
+      if (_lastWinRateWarnDate === todayDate) {
+        // Already warned today (in this process) — skip
+      } else {
+        // Check DB to see if we already warned today in a previous process
+        const intel = await getEngineIntelligence();
+        const dbWarnDate = intel?.lastWinRateWarnDate ?? null;
+        if (dbWarnDate !== todayDate) {
+          // First warning today — send it and persist
+          _lastWinRateWarnDate = todayDate;
+          await updateEngineIntelligence({ lastWinRateWarnDate: todayDate });
+          await notifyRiskAlert(
+            `⚠️ تحذير: معدل الفوز في آخر 7 أيام ${winRate.toFixed(1)}% (أقل من 40%)\n` +
+            `تم رفع الـ confidence threshold لـ 65% (وضع حذر عالي الثقة).\n` +
+            `المحرك يستمر بالعمل — فقط الصفقات عالية الثقة سيتم تنفيذها.`
+          ).catch(() => {});
+        } else {
+          // DB says we already warned today — update in-memory cache to avoid future DB lookups
+          _lastWinRateWarnDate = todayDate;
+        }
       }
     }
 

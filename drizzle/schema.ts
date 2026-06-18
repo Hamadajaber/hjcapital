@@ -223,6 +223,10 @@ export const engineIntelligence = mysqlTable("engine_intelligence", {
   winRate7d: decimal("winRate7d", { precision: 5, scale: 2 }).notNull().default("0.00"),
   // Total trades in last 7 days
   trades7d: int("trades7d").notNull().default(0),
+  // Last date a win-rate warning was sent (YYYY-MM-DD) — persisted to survive server restarts
+  lastWinRateWarnDate: varchar("lastWinRateWarnDate", { length: 10 }),
+  // Last date a weekly summary was sent (YYYY-MM-DD) — persisted to survive server restarts
+  lastWeeklySummaryDate: varchar("lastWeeklySummaryDate", { length: 10 }),
   // Last time intelligence was updated
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
