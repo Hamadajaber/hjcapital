@@ -373,3 +373,8 @@
 - [x] Identify why GOLD shows SL=45.01 (absolute offset) and AUDUSD shows SL=0.00700 (relative offset)
 - [x] Fix SL/TP to always use absolute price levels for Capital.com API
 - [x] Verify fix with TypeScript check and 108+ tests
+
+## Round 33 — Position Sync Fix
+- [x] Close orphaned DB positions (GOLD, US500, USDJPY) that Capital.com already closed
+- [x] Add automatic position reconciliation to runCycle every cycle
+- [x] Test and save checkpoint

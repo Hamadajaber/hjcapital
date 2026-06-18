@@ -54,7 +54,7 @@ import {
   getInstrumentSentiment,
   formatSentimentForPrompt,
 } from "./sentimentAnalysis";
-import { getDb, getPriceAlerts, triggerPriceAlert, getPortfolio, updateEngineIntelligence } from "./db";
+import { getDb, getPriceAlerts, triggerPriceAlert, getPortfolio, updateEngineIntelligence, closeTrade } from "./db";
 import {
   evaluateClosedTrade,
   formatLessonsForPrompt,
@@ -360,6 +360,43 @@ async function runCycle() {
     const openPositions = _engineState.mode === "live"
       ? await getOpenPositions().catch(() => [])
       : [];
+
+    // 3a. Position Reconciliation — close any DB "open" trades that no longer exist on Capital.com
+    // This prevents the engine from thinking it has more open positions than it actually does.
+    // Happens when: SL/TP hit on broker side, manual close, or broker-side expiry.
+    if (_engineState.mode === "live") {
+      try {
+        const dbConn = await getDb();
+        if (dbConn) {
+          const { trades: tradesTable } = await import("../drizzle/schema");
+          const { eq, and } = await import("drizzle-orm");
+          const dbOpenTrades = await dbConn
+            .select()
+            .from(tradesTable)
+            .where(and(eq(tradesTable.status, "open"), eq(tradesTable.mode, "live")));
+
+          // Build set of epics currently open on Capital.com
+          const brokerEpics = new Set(openPositions.map((p) => p.epic));
+
+          // For each DB-open trade, check if it still exists on the broker
+          for (const dbTrade of dbOpenTrades) {
+            const tradeEpic = INSTRUMENT_EPICS[dbTrade.instrument] ?? dbTrade.instrument;
+            if (!brokerEpics.has(tradeEpic)) {
+              // Trade was closed on broker side — mark as closed in DB with unknown P&L
+              // Use openPrice as closePrice (we don't know the actual close price)
+              await closeTrade(dbTrade.id, dbTrade.openPrice ?? "0", "0.00");
+              console.log(`[AutoTrade] Reconciliation: closed orphaned DB trade #${dbTrade.id} (${dbTrade.instrument}) — no longer on Capital.com`);
+              await notifyOwner({
+                title: `🔄 Position Reconciliation: ${dbTrade.instrument}`,
+                content: `Trade #${dbTrade.id} (${dbTrade.instrument} ${dbTrade.direction} @ ${dbTrade.openPrice}) was closed on Capital.com but still open in DB. Marked as closed automatically.`,
+              }).catch(() => {});
+            }
+          }
+        }
+      } catch (reconcileErr) {
+        console.warn("[AutoTrade] Position reconciliation error:", reconcileErr);
+      }
+    }
 
     for (const pos of openPositions) {
       // ███ TRAILING STOP LOGIC ███
