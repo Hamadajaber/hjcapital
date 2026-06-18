@@ -22,6 +22,7 @@ import {
   notifyEngineStarted,
   notifyEngineStopped,
   notifyRiskAlert,
+  sendWeeklySummary,
 } from "./telegram";
 import {
   getAllMarketPrices,
@@ -53,7 +54,7 @@ import {
   getInstrumentSentiment,
   formatSentimentForPrompt,
 } from "./sentimentAnalysis";
-import { getDb, getPriceAlerts, triggerPriceAlert } from "./db";
+import { getDb, getPriceAlerts, triggerPriceAlert, getPortfolio } from "./db";
 import {
   evaluateClosedTrade,
   formatLessonsForPrompt,
@@ -108,6 +109,8 @@ export interface EngineState {
 // In-memory state (single-user platform)
 let _engineState: EngineState | null = null;
 let _cycleTimer: ReturnType<typeof setTimeout> | null = null;
+// Deduplication guard: weekly summary sent at most once per Friday
+let _lastWeeklySummaryDate: string | null = null;
 
 // ─── Instrument Universe ─────────────────────────────────────────────────────
 
@@ -579,6 +582,57 @@ async function runCycle() {
 
     // Cycle heartbeat summary
     console.log(`[AutoTrade] Cycle #${_engineState.cycleCount} complete — ${openPositions.length} open positions, threshold=${risk.minConfidenceThreshold}%`);
+
+    // Friday Weekly Summary — send once per Friday between 20:00-21:00 UTC
+    try {
+      const now = new Date();
+      const utcDay = now.getUTCDay(); // 5 = Friday
+      const utcHour = now.getUTCHours();
+      const todayDateStr = now.toISOString().slice(0, 10);
+      if (utcDay === 5 && utcHour === 20 && _lastWeeklySummaryDate !== todayDateStr) {
+        _lastWeeklySummaryDate = todayDateStr;
+        // Compute weekly stats from closed trades this week (Mon-Fri)
+        const db = await getDb();
+        if (db) {
+          const weekStart = new Date(now);
+          weekStart.setUTCDate(weekStart.getUTCDate() - weekStart.getUTCDay() + 1); // Monday
+          weekStart.setUTCHours(0, 0, 0, 0);
+          const { trades: tradesTable } = await import("../drizzle/schema");
+          const { eq: eqOp } = await import("drizzle-orm");
+          const weekTrades = await db.select().from(tradesTable)
+            .where(eqOp(tradesTable.status, "closed"));
+          const thisWeek = weekTrades.filter(t => t.closedAt && t.closedAt >= weekStart);
+          let totalPnl = 0, wins = 0, losses = 0, bestTrade = 0, worstTrade = 0;
+          for (const t of thisWeek) {
+            const p = parseFloat(t.pnl ?? "0");
+            totalPnl += p;
+            if (p > 0) { wins++; if (p > bestTrade) bestTrade = p; }
+            else if (p < 0) { losses++; if (p < worstTrade) worstTrade = p; }
+          }
+          const totalTrades = thisWeek.length;
+          const winRate = totalTrades > 0 ? (wins / totalTrades) * 100 : 0;
+          const port = await getPortfolio();
+          const balance = port ? parseFloat(port.balance) : 0;
+          const weekStartStr = weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+          const weekEndStr = now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+          await sendWeeklySummary({
+            weekStart: weekStartStr,
+            weekEnd: weekEndStr,
+            totalTrades,
+            wins,
+            losses,
+            totalPnl: Math.round(totalPnl * 100) / 100,
+            winRate: Math.round(winRate * 10) / 10,
+            bestTrade: Math.round(bestTrade * 100) / 100,
+            worstTrade: Math.round(worstTrade * 100) / 100,
+            balance,
+          }).catch(err => console.error("[AutoTrade] Weekly summary send failed:", err));
+          console.log(`[AutoTrade] Weekly Friday summary sent: ${totalTrades} trades, ${winRate.toFixed(1)}% win rate, $${totalPnl.toFixed(2)} P&L`);
+        }
+      }
+    } catch (weeklyErr) {
+      console.error("[AutoTrade] Weekly summary error:", weeklyErr);
+    }
 
   } catch (err) {
     console.error("[AutoTrade] Cycle error:", err);

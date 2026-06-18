@@ -527,3 +527,60 @@ export async function updateEngineIntelligence(patch: Partial<{
     await db.update(engineIntelligence).set(patch);
   }
 }
+
+// ─── Strategy Comparison (Before / After Round 28) ───────────────────────────
+// Round 28 was deployed on 2026-06-17 at ~21:57 UTC.
+// We use 2026-06-18 00:00 UTC as a clean cutoff date.
+const ROUND28_CUTOFF = new Date("2026-06-18T00:00:00.000Z");
+
+export interface StrategyPeriodStats {
+  totalTrades: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  totalPnl: number;
+  avgPnl: number;
+  bestTrade: number;
+  worstTrade: number;
+}
+
+export interface StrategyComparisonResult {
+  before: StrategyPeriodStats;
+  after: StrategyPeriodStats;
+  cutoffDate: string;
+}
+
+export async function getStrategyComparison(): Promise<StrategyComparisonResult> {
+  const db = await getDb();
+  const empty: StrategyPeriodStats = { totalTrades: 0, wins: 0, losses: 0, winRate: 0, totalPnl: 0, avgPnl: 0, bestTrade: 0, worstTrade: 0 };
+  if (!db) return { before: empty, after: empty, cutoffDate: ROUND28_CUTOFF.toISOString() };
+
+  const allClosed = await db
+    .select()
+    .from(trades)
+    .where(eq(trades.status, "closed"));
+
+  function calcStats(subset: typeof allClosed): StrategyPeriodStats {
+    if (subset.length === 0) return { ...empty };
+    let totalPnl = 0, wins = 0, losses = 0, bestTrade = 0, worstTrade = 0;
+    for (const t of subset) {
+      const p = parseFloat(t.pnl ?? "0");
+      totalPnl += p;
+      if (p > 0) { wins++; if (p > bestTrade) bestTrade = p; }
+      else if (p < 0) { losses++; if (p < worstTrade) worstTrade = p; }
+    }
+    const totalTrades = subset.length;
+    const winRate = totalTrades > 0 ? Math.round((wins / totalTrades) * 100 * 10) / 10 : 0;
+    const avgPnl = totalTrades > 0 ? Math.round((totalPnl / totalTrades) * 100) / 100 : 0;
+    return { totalTrades, wins, losses, winRate, totalPnl: Math.round(totalPnl * 100) / 100, avgPnl, bestTrade: Math.round(bestTrade * 100) / 100, worstTrade: Math.round(worstTrade * 100) / 100 };
+  }
+
+  const beforeTrades = allClosed.filter(t => t.openedAt < ROUND28_CUTOFF);
+  const afterTrades = allClosed.filter(t => t.openedAt >= ROUND28_CUTOFF);
+
+  return {
+    before: calcStats(beforeTrades),
+    after: calcStats(afterTrades),
+    cutoffDate: ROUND28_CUTOFF.toISOString(),
+  };
+}

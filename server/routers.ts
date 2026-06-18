@@ -13,6 +13,7 @@ import {
   getScheduleConfig, updateScheduleConfig,
   getPriceAlerts, createPriceAlert, deletePriceAlert,
   getEquityHistory, getMaxDrawdown, getInstrumentPerformance,
+  getStrategyComparison,
 } from "./db";
 import { setTelegramWebhook } from "./telegram";
 import {
@@ -758,6 +759,13 @@ Respond ONLY with valid JSON:
         const ok = await setTelegramWebhook(input.webhookUrl);
         return { success: ok };
       }),
+  }),
+
+  // ─── Strategy Comparison ─────────────────────────────────────────────────────
+  strategyComparison: router({
+    get: ownerProcedure.query(async () => {
+      return await getStrategyComparison();
+    }),
   }),
 });
 

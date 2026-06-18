@@ -361,3 +361,9 @@
 - [x] Telegram already shows Rule 1/2/3 status in each signal (rulesPassedSummary)
 - [x] 108/108 tests passing, TypeScript 0 errors
 - [x] Risk Settings presets updated: Conservative 65%/0.5%, Balanced 55%/0.75%, Aggressive 45%/1%
+
+## Round 31 — Apply 3 Suggested Improvements
+- [x] Add Trade History comparison view: before vs after Round 28 strategy (Jun 18 cutoff)
+- [x] Add auto-apply Balanced preset when win rate > 50% (smart risk auto-adjustment)
+- [x] Add Weekly Friday Telegram summary: trades count, win rate, total P&L
+- [x] Run 108+ tests and confirm all passing

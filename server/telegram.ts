@@ -264,3 +264,35 @@ ${pnlEmoji} إجمالي الربح/الخسارة: <b>${pnlSign}$${params.total
 
   await sendTelegramMessage(text);
 }
+
+export async function sendWeeklySummary(params: {
+  weekStart: string;
+  weekEnd: string;
+  totalTrades: number;
+  wins: number;
+  losses: number;
+  totalPnl: number;
+  winRate: number;
+  bestTrade: number;
+  worstTrade: number;
+  balance: number;
+}): Promise<void> {
+  const pnlEmoji = params.totalPnl >= 0 ? "✅" : "❌";
+  const pnlSign = params.totalPnl >= 0 ? "+" : "";
+  const text = `📊 <b>ملخص الأسبوع — HJ Capital</b>
+📅 ${params.weekStart} → ${params.weekEnd}
+━━━━━━━━━━━━━━━━━━
+📈 إجمالي الصفقات: <b>${params.totalTrades}</b>
+✅ صفقات رابحة: <b>${params.wins}</b>
+❌ صفقات خاسرة: <b>${params.losses}</b>
+🎯 نسبة النجاح الأسبوعية: <b>${params.winRate.toFixed(1)}%</b>
+━━━━━━━━━━━━━━━━━━
+${pnlEmoji} إجمالي الربح/الخسارة: <b>${pnlSign}$${params.totalPnl.toFixed(2)}</b>
+🏆 أفضل صفقة: <b>+$${params.bestTrade.toFixed(2)}</b>
+📉 أسوأ صفقة: <b>-$${Math.abs(params.worstTrade).toFixed(2)}</b>
+━━━━━━━━━━━━━━━━━━
+💰 الرصيد الحالي: <b>$${params.balance.toFixed(2)}</b>
+🤖 الاستراتيجية: Trend Following + MTF Confirmation`;
+
+  await sendTelegramMessage(text);
+}

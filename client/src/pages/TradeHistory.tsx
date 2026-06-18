@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Filter, TrendingUp, TrendingDown, Clock, ChevronDown, ChevronUp, Activity, ArrowLeftRight } from "lucide-react";
+import { Filter, TrendingUp, TrendingDown, Clock, ChevronDown, ChevronUp, Activity, ArrowLeftRight, BarChart2 } from "lucide-react";
 
 const INSTRUMENTS = ["All", "EURUSD", "GBPUSD", "USDJPY", "EURGBP", "GOLD", "XAGUSD", "OIL_CRUDE", "US500", "GER40", "NASDAQ"];
 const STATUSES = ["All", "open", "closed", "cancelled"] as const;
@@ -372,8 +372,98 @@ function TransactionHistoryTab() {
   );
 }
 
+// ─── Strategy Comparison Tab ─────────────────────────────────────────────────
+function StrategyComparisonTab() {
+  const compQuery = trpc.strategyComparison.get.useQuery();
+  const data = compQuery.data;
+
+  if (compQuery.isLoading) {
+    return (
+      <div className="space-y-4">
+        {[...Array(2)].map((_, i) => (
+          <div key={i} className="animate-pulse h-40 rounded-2xl" style={{ background: "var(--color-bg-elevated)" }} />
+        ))}
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const cutoff = new Date(data.cutoffDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+  type PeriodStats = { totalTrades: number; wins: number; losses: number; winRate: number; totalPnl: number; avgPnl: number; bestTrade: number; worstTrade: number };
+  function PeriodCard({ title, stats, accent }: {
+    title: string;
+    stats: PeriodStats;
+    accent: string;
+  }) {
+    const pnlColor = stats.totalPnl >= 0 ? "var(--color-profit)" : "var(--color-loss)";
+    const winColor = stats.winRate >= 50 ? "var(--color-profit)" : stats.winRate > 0 ? "var(--color-loss)" : "var(--color-text-tertiary)";
+    return (
+      <div className="rounded-2xl p-5 flex-1" style={{ background: "var(--color-bg-surface)", border: `1px solid ${accent}` }}>
+        <p style={{ fontSize: "0.8125rem", fontWeight: 700, color: accent, marginBottom: "1rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>{title}</p>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { label: "Total Trades", value: `${stats.totalTrades}`, color: "var(--color-text-primary)" },
+            { label: "Win Rate", value: `${stats.winRate.toFixed(1)}%`, color: winColor },
+            { label: "Total P&L", value: `${stats.totalPnl >= 0 ? "+" : ""}$${stats.totalPnl.toFixed(2)}`, color: pnlColor },
+            { label: "Avg P&L / Trade", value: `${stats.avgPnl >= 0 ? "+" : ""}$${stats.avgPnl.toFixed(2)}`, color: pnlColor },
+            { label: "Best Trade", value: `+$${stats.bestTrade.toFixed(2)}`, color: "var(--color-profit)" },
+            { label: "Worst Trade", value: `-$${Math.abs(stats.worstTrade).toFixed(2)}`, color: "var(--color-loss)" },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="rounded-xl p-3" style={{ background: "var(--color-bg-elevated)", border: "1px solid var(--color-border-subtle)" }}>
+              <p style={{ fontSize: "0.625rem", color: "var(--color-text-tertiary)", marginBottom: "0.25rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</p>
+              <p className="tabular-nums" style={{ fontSize: "1rem", fontWeight: 700, fontFamily: "var(--font-serif)", color }}>{value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <BarChart2 size={14} style={{ color: "var(--color-accent)" }} />
+        <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-text-primary)" }}>Strategy Comparison</span>
+        <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", marginLeft: "auto" }}>Cutoff: {cutoff} (Round 28 — MTF Strategy)</span>
+      </div>
+
+      {/* Improvement delta banner */}
+      {data.before.totalTrades > 0 && data.after.totalTrades > 0 && (() => {
+        const winDelta = data.after.winRate - data.before.winRate;
+        const avgDelta = data.after.avgPnl - data.before.avgPnl;
+        const improved = winDelta >= 0 && avgDelta >= 0;
+        return (
+          <div className="flex items-center gap-3 p-3 rounded-xl" style={{
+            background: improved ? "var(--color-profit-dim)" : "var(--color-loss-dim)",
+            border: `1px solid ${improved ? "oklch(0.720 0.130 155 / 0.30)" : "oklch(0.660 0.155 20 / 0.30)"}`
+          }}>
+            {improved ? <TrendingUp size={14} style={{ color: "var(--color-profit)", flexShrink: 0 }} /> : <TrendingDown size={14} style={{ color: "var(--color-loss)", flexShrink: 0 }} />}
+            <span style={{ fontSize: "0.8125rem", color: "var(--color-text-secondary)" }}>
+              MTF Strategy: Win rate {winDelta >= 0 ? "+" : ""}{winDelta.toFixed(1)}% · Avg P&L {avgDelta >= 0 ? "+" : ""}${avgDelta.toFixed(2)} per trade vs previous strategy
+            </span>
+          </div>
+        );
+      })()}
+
+      <div className="flex flex-col md:flex-row gap-4">
+        <PeriodCard title="Before Round 28 (AI-Only)" stats={data.before} accent="var(--color-text-tertiary)" />
+        <PeriodCard title="After Round 28 (MTF Strategy)" stats={data.after} accent="var(--color-accent)" />
+      </div>
+
+      {data.before.totalTrades === 0 && data.after.totalTrades === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 rounded-2xl" style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)" }}>
+          <BarChart2 size={28} style={{ color: "var(--color-text-tertiary)", marginBottom: "0.75rem" }} />
+          <p style={{ fontSize: "0.875rem", color: "var(--color-text-tertiary)" }}>No closed trades yet to compare</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TradeHistory() {
-  const [activeTab, setActiveTab] = useState<"platform" | "activity" | "transactions">("platform");
+  const [activeTab, setActiveTab] = useState<"platform" | "activity" | "transactions" | "comparison">("platform");
   const [instrumentFilter, setInstrumentFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState<"All" | "open" | "closed" | "cancelled">("All");
   const [dateFrom, setDateFrom] = useState("");
@@ -411,6 +501,7 @@ export default function TradeHistory() {
           { key: "platform", label: "Platform Trades", icon: TrendingUp },
           { key: "activity", label: "Capital.com Activity", icon: Activity },
           { key: "transactions", label: "Transactions", icon: ArrowLeftRight },
+          { key: "comparison", label: "Strategy Comparison", icon: BarChart2 },
         ] as const).map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -429,6 +520,7 @@ export default function TradeHistory() {
 
       {activeTab === "activity" && <ActivityHistoryTab />}
       {activeTab === "transactions" && <TransactionHistoryTab />}
+      {activeTab === "comparison" && <StrategyComparisonTab />}
 
       {activeTab === "platform" && <div className="space-y-6">
 

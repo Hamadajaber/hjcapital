@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
-import { Shield, Save, AlertTriangle, Info, Target, Zap, Scale, Lock } from "lucide-react";
+import { Shield, Save, AlertTriangle, Info, Target, Zap, Scale, Lock, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 const PRESETS = {
@@ -69,6 +69,7 @@ function SettingRow({
 
 export default function RiskSettings() {
   const riskQuery = trpc.risk.get.useQuery();
+  const thresholdQuery = trpc.intelligence.getDynamicThreshold.useQuery(undefined, { retry: false });
   const updateMutation = trpc.risk.update.useMutation({
     onSuccess: () => { riskQuery.refetch(); toast.success("Risk settings saved successfully"); },
     onError: () => toast.error("Failed to save settings"),
@@ -120,6 +121,11 @@ export default function RiskSettings() {
     });
   };
 
+  // Smart preset recommendation: when 7-day win rate > 50%, suggest Balanced preset
+  const winRate7d = thresholdQuery.data?.winRate ?? 0;
+  const totalTrades7d = thresholdQuery.data?.totalTrades ?? 0;
+  const showBalancedSuggestion = totalTrades7d >= 5 && winRate7d > 50 && activePreset !== "balanced";
+
   const riskLevel = parseFloat(settings.maxRiskPerTrade) > 2 ? "high"
     : parseFloat(settings.maxRiskPerTrade) > 1 ? "medium" : "low";
 
@@ -149,6 +155,32 @@ export default function RiskSettings() {
           {updateMutation.isPending ? "Saving..." : "Save Settings"}
         </button>
       </div>
+
+      {/* Smart Balanced Preset Suggestion */}
+      {showBalancedSuggestion && (
+        <div
+          className="flex items-start gap-3 p-4 rounded-xl"
+          style={{ background: "oklch(0.65 0.18 55 / 0.08)", border: "1px solid oklch(0.65 0.18 55 / 0.30)" }}
+        >
+          <Sparkles size={16} style={{ color: "var(--color-gold)", flexShrink: 0, marginTop: "0.125rem" }} />
+          <div className="flex-1">
+            <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-gold)" }}>
+              Smart Suggestion — Apply Balanced Preset?
+            </p>
+            <p style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)", marginTop: "0.25rem" }}>
+              Your 7-day win rate is <strong style={{ color: "var(--color-profit)" }}>{winRate7d.toFixed(1)}%</strong> (above 50% — performing well).
+              The Balanced preset (55% confidence / 0.75% risk) is recommended to capitalize on this momentum.
+            </p>
+          </div>
+          <button
+            onClick={() => applyPreset("balanced")}
+            className="hj-btn hj-btn-primary shrink-0"
+            style={{ fontSize: "0.75rem", padding: "0.375rem 0.75rem" }}
+          >
+            Apply Balanced
+          </button>
+        </div>
+      )}
 
       {/* Risk level indicator */}
       <div
