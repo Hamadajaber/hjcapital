@@ -897,92 +897,106 @@ export async function getWatchlistDetail(watchlistId: string): Promise<Watchlist
  *   BITCOIN          — 24/7 (always open)
  */
 export function isMarketOpen(instrument: string): boolean {
+  /**
+   * Precise trading hours sourced directly from Capital.com (Jun 2026).
+   * All times are UTC. day: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
+   */
   const now = new Date();
-  const day = now.getUTCDay(); // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
+  const day = now.getUTCDay();
   const hour = now.getUTCHours();
   const minute = now.getUTCMinutes();
-  const timeMinutes = hour * 60 + minute; // minutes since midnight UTC
+  const t = hour * 60 + minute; // minutes since midnight UTC
 
   const epic = (INSTRUMENT_EPICS[instrument] ?? instrument).toUpperCase();
 
-  // Weekend check — most markets closed Sat/Sun
-  if (day === 6) return false; // Saturday — all markets closed
+  // ── Saturday: ALL markets closed ──────────────────────────────────────────
+  if (day === 6) return false;
 
-  if (epic === "BITCOIN") return true; // Crypto is 24/7
-
-  if (epic === "EURUSD" || epic === "GBPUSD" || epic === "USDJPY" || epic === "EURGBP") {
-    // Forex: Mon 00:00 – Fri 22:00
-    if (day === 0) return false; // Sunday closed
-    if (day === 5 && timeMinutes >= 22 * 60) return false; // Fri after 22:00 UTC
+  // ── Crypto: 24/7 ──────────────────────────────────────────────────────────
+  if (
+    epic === "ETHUSD" || epic === "BITCOIN" || epic === "XRPUSD" ||
+    epic === "LTCUSD" || epic === "ADAUSD" || epic === "SOLUSD"
+  ) {
     return true;
   }
 
-  if (epic === "GOLD" || epic === "SILVER") {
-    // Metals: Mon 22:00 – Fri 17:00, with daily break 20:59–22:00
-    if (day === 0 && timeMinutes < 22 * 60) return false; // Sun before 22:00
-    if (day === 5 && timeMinutes >= 17 * 60) return false; // Fri after 17:00
-    // Daily maintenance break: 20:59 – 22:00 UTC
-    if (timeMinutes >= 20 * 60 + 59 && timeMinutes < 22 * 60) return false;
+  // ── Forex: EURUSD, GBPUSD, USDJPY, EURGBP, AUDUSD ────────────────────────
+  // Mon-Thu: 00:00-20:59, 21:05-24:00 | Fri: 00:00-20:59 | Sun: 21:00-24:00
+  // Daily break: 21:00-21:05 UTC
+  if (
+    epic === "EURUSD" || epic === "GBPUSD" || epic === "USDJPY" ||
+    epic === "EURGBP" || epic === "AUDUSD"
+  ) {
+    if (day === 0) return t >= 21 * 60;                      // Sun: open from 21:00
+    if (day === 5) return t < 21 * 60;                       // Fri: close at 21:00
+    // Mon-Thu: daily break 21:00-21:05
+    if (t >= 21 * 60 && t < 21 * 60 + 5) return false;
     return true;
   }
 
-  if (epic === "OIL_CRUDE") {
-    // Oil: Mon 00:00 – Fri 22:00, daily break 22:00–23:00
-    if (day === 0) return false; // Sunday closed
-    if (day === 5 && timeMinutes >= 22 * 60) return false; // Fri after 22:00
-    // Daily maintenance break: 22:00 – 23:00 UTC
-    if (timeMinutes >= 22 * 60 && timeMinutes < 23 * 60) return false;
+  // ── Gold (GOLD/XAUUSD) & Silver (XAGUSD) ──────────────────────────────────
+  // Mon-Thu: 00:00-20:59, 22:00-24:00 | Fri: 00:00-17:00 | Sun: 22:00-24:00
+  // Daily break: 21:00-22:00 UTC
+  if (epic === "GOLD" || epic === "SILVER" || epic === "XAGUSD") {
+    if (day === 0) return t >= 22 * 60;                      // Sun: open from 22:00
+    if (day === 5) return t < 17 * 60;                       // Fri: close at 17:00
+    // Mon-Thu: daily break 21:00-22:00
+    if (t >= 21 * 60 && t < 22 * 60) return false;
     return true;
   }
 
-  if (epic === "GER40" || epic === "DE30" || epic === "DE40") {
-    // DAX 40 (GER40 / DE40): Mon–Fri 07:00–21:00 UTC (Xetra hours)
-    if (day === 0 || day === 6) return false;
-    return timeMinutes >= 7 * 60 && timeMinutes < 21 * 60;
-  }
-
-  if (epic === "NDAQ100" || epic === "US100" || epic === "US30" || epic === "UK100" || epic === "FRA40" || epic === "AUS200" || epic === "JPN225" || epic === "HK50" || epic === "SPAIN35" || epic === "SWISS20" || epic === "NETH25" || epic === "SING30") {
-    // Global indices: Mon–Fri, use weekday default (each has different hours but Capital.com handles status)
-    if (day === 0 || day === 6) return false;
+  // ── US Crude Oil (OIL_CRUDE) ───────────────────────────────────────────────
+  // Mon-Fri: 00:00-22:00 | Sun: 23:00-24:00 | Daily break: 22:00-23:00 UTC
+  if (epic === "OIL_CRUDE" || epic === "OIL") {
+    if (day === 0) return t >= 23 * 60;                      // Sun: open from 23:00
+    if (day === 5) return t < 22 * 60;                       // Fri: close at 22:00
+    // Mon-Thu: daily break 22:00-23:00
+    if (t >= 22 * 60 && t < 23 * 60) return false;
     return true;
   }
 
-  if (epic === "US500") {
-    // Mon 21:05 – Fri 21:00, with 5-min break 21:00–21:05
-    if (day === 0) return false; // Sunday closed
-    if (day === 5 && timeMinutes >= 21 * 60) return false; // Fri after 21:00
-    // Daily maintenance break: 21:00 – 21:05 UTC
-    if (timeMinutes >= 21 * 60 && timeMinutes < 21 * 60 + 5) return false;
-    if (day === 1 && timeMinutes < 21 * 60 + 5) return false; // Mon before 21:05
+  // ── US500 (S&P 500) & GER40 (DAX) ─────────────────────────────────────────
+  // Mon-Thu: 00:00-20:59, 22:00-24:00 | Fri: 00:00-21:00 | Sun: 22:00-24:00
+  // Daily break: 21:00-22:00 UTC
+  if (epic === "US500" || epic === "GER40" || epic === "DE40" || epic === "DE30") {
+    if (day === 0) return t >= 22 * 60;                      // Sun: open from 22:00
+    if (day === 5) return t < 21 * 60;                       // Fri: close at 21:00
+    // Mon-Thu: daily break 21:00-22:00
+    if (t >= 21 * 60 && t < 22 * 60) return false;
     return true;
   }
 
-  // Crypto: 24/7 (check common crypto epics)
-  if (epic === "ETHUSD" || epic === "XRPUSD" || epic === "LTCUSD" || epic === "ADAUSD" || epic === "SOLUSD" || epic === "BITCOIN") {
+  // ── NASDAQ (US Tech 100) ───────────────────────────────────────────────────
+  // Mon-Thu: 00:00-21:00, 21:05-24:00 | Fri: 00:00-20:00 | Sun: 22:00-24:00
+  // Daily break: 21:00-21:05 UTC
+  if (epic === "NDAQ100" || epic === "US100" || epic === "NASDAQ") {
+    if (day === 0) return t >= 22 * 60;                      // Sun: open from 22:00
+    if (day === 5) return t < 20 * 60;                       // Fri: close at 20:00
+    // Mon-Thu: daily break 21:00-21:05
+    if (t >= 21 * 60 && t < 21 * 60 + 5) return false;
     return true;
   }
 
-  // US stocks: Mon–Fri 13:30–20:00 UTC (NYSE/NASDAQ regular hours)
+  // ── US stocks: NYSE/NASDAQ regular hours 13:30-20:00 UTC Mon-Fri ──────────
   const US_STOCKS = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "NFLX", "AMD", "INTC"];
   if (US_STOCKS.includes(epic)) {
     if (day === 0 || day === 6) return false;
-    return timeMinutes >= 13 * 60 + 30 && timeMinutes < 20 * 60;
+    return t >= 13 * 60 + 30 && t < 20 * 60;
   }
 
-  // Agricultural commodities: Mon–Fri (Capital.com handles specific hours)
-  const AGRI = ["WHEAT", "CORN", "SUGAR", "COFFEE", "COCOA", "COTTON"];
+  // ── Other global indices: Mon-Fri (Capital.com manages exact hours) ────────
+  const OTHER_INDICES = ["US30", "UK100", "FRA40", "AUS200", "JPN225", "HK50", "SPAIN35", "SWISS20"];
+  if (OTHER_INDICES.includes(epic)) {
+    return day >= 1 && day <= 5;
+  }
+
+  // ── Agricultural & other commodities: Mon-Fri ─────────────────────────────
+  const AGRI = ["WHEAT", "CORN", "SUGAR", "COFFEE", "COCOA", "COTTON", "COPPER", "PLATINUM", "PALLADIUM", "NGAS"];
   if (AGRI.includes(epic)) {
-    if (day === 0 || day === 6) return false;
-    return true;
+    return day >= 1 && day <= 5;
   }
 
-  // Metals/energy extras: Mon–Fri
-  if (epic === "COPPER" || epic === "PLATINUM" || epic === "PALLADIUM" || epic === "NGAS") {
-    if (day === 0 || day === 6) return false;
-    return true;
-  }
-
-  // Default: assume open on weekdays
+  // Default: open on weekdays
   return day >= 1 && day <= 5;
 }
 

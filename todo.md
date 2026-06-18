@@ -384,3 +384,10 @@
 - [x] Add Reconciliation Dashboard tab in Trade History page
 - [x] Add SL/TP Validation Guard before executing new trades
 - [x] Run 108+ tests and confirm all passing
+
+## Round 35 — Precise Market Hours Schedule
+- [x] Research exact Capital.com trading hours for all 10 instruments
+- [x] Implement precise per-instrument isMarketOpen() replacing approximate logic
+- [x] Add XAGUSD Friday 17:00 UTC close + Sunday 22:00 UTC open (+ all other instruments)
+- [x] Add Market Hours dedicated page with live open/closed status for all instruments
+- [x] Run 108+ tests and confirm all passing

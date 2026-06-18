@@ -16,6 +16,7 @@ import {
   FlaskConical,
   ChevronRight,
   Brain,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { path: "/history",     label: "Trade History",icon: History },
   { path: "/performance", label: "Performance",  icon: BarChart3 },
   { path: "/risk",        label: "Risk Settings",icon: Shield },
+  { path: "/market-hours", label: "Market Hours",  icon: Clock },
 ];
 
 // Items shown in the mobile bottom nav (most important 5)
