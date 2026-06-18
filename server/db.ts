@@ -131,7 +131,7 @@ export async function insertTrade(trade: InsertTrade): Promise<void> {
   await db.insert(trades).values(trade);
 }
 
-export async function closeTrade(id: number, closePrice: string, pnl: string) {
+export async function closeTrade(id: number, closePrice: string, pnl: string, closeReason?: string) {
   const db = await getDb();
   if (!db) return;
   await db.update(trades).set({
@@ -139,6 +139,7 @@ export async function closeTrade(id: number, closePrice: string, pnl: string) {
     pnl,
     status: "closed",
     closedAt: new Date(),
+    ...(closeReason ? { closeReason } : {}),
   }).where(eq(trades.id, id));
 }
 

@@ -767,6 +767,34 @@ Respond ONLY with valid JSON:
       return await getStrategyComparison();
     }),
   }),
+
+  reconciliation: router({
+    list: ownerProcedure.query(async () => {
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) return [];
+      const { trades: tradesTable } = await import("../drizzle/schema");
+      const { eq, and, desc } = await import("drizzle-orm");
+      const rows = await db
+        .select()
+        .from(tradesTable)
+        .where(and(eq(tradesTable.closeReason, "reconciled"), eq(tradesTable.mode, "live")))
+        .orderBy(desc(tradesTable.closedAt))
+        .limit(100);
+      return rows.map((r) => ({
+        id: r.id,
+        instrument: r.instrument,
+        direction: r.direction,
+        openPrice: r.openPrice,
+        closePrice: r.closePrice ?? r.openPrice,
+        pnl: r.pnl ?? "0.00",
+        openedAt: r.openedAt,
+        closedAt: r.closedAt,
+        closeReason: r.closeReason ?? "reconciled",
+        aiConfidence: r.aiConfidence,
+      }));
+    }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

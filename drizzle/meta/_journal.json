@@ -64,6 +64,13 @@
       "when": 1781791419340,
       "tag": "0008_plain_magma",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1781824136512,
+      "tag": "0009_aspiring_bloodaxe",
+      "breakpoints": true
     }
   ]
 }

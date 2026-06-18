@@ -378,3 +378,9 @@
 - [x] Close orphaned DB positions (GOLD, US500, USDJPY) that Capital.com already closed
 - [x] Add automatic position reconciliation to runCycle every cycle
 - [x] Test and save checkpoint
+
+## Round 34 — 3 Improvements
+- [x] Fetch real close price from Capital.com during reconciliation to compute actual P&L
+- [x] Add Reconciliation Dashboard tab in Trade History page
+- [x] Add SL/TP Validation Guard before executing new trades
+- [x] Run 108+ tests and confirm all passing

@@ -39,6 +39,7 @@ import {
   getMinDealSize,
   getSessionTokens,
   updatePositionStopLoss,
+  getTransactionHistory,
 } from "./capitalcom";
 import type { OHLCVCandle } from "./capitalcom";
 import {
@@ -378,17 +379,53 @@ async function runCycle() {
           // Build set of epics currently open on Capital.com
           const brokerEpics = new Set(openPositions.map((p) => p.epic));
 
+          // Fetch recent transaction history to get real close prices/P&L
+          let recentTransactions: Awaited<ReturnType<typeof getTransactionHistory>> = [];
+          try {
+            // Look back 48 hours to catch any missed closes
+            const from48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+            recentTransactions = await getTransactionHistory(from48h, undefined, 100);
+          } catch (txErr) {
+            console.warn("[AutoTrade] Reconciliation: could not fetch transaction history:", txErr);
+          }
+
           // For each DB-open trade, check if it still exists on the broker
           for (const dbTrade of dbOpenTrades) {
             const tradeEpic = INSTRUMENT_EPICS[dbTrade.instrument] ?? dbTrade.instrument;
             if (!brokerEpics.has(tradeEpic)) {
-              // Trade was closed on broker side — mark as closed in DB with unknown P&L
-              // Use openPrice as closePrice (we don't know the actual close price)
-              await closeTrade(dbTrade.id, dbTrade.openPrice ?? "0", "0.00");
-              console.log(`[AutoTrade] Reconciliation: closed orphaned DB trade #${dbTrade.id} (${dbTrade.instrument}) — no longer on Capital.com`);
+              // Try to find the real close price and P&L from transaction history
+              const matchingTx = recentTransactions.find(
+                (tx) =>
+                  tx.type === "TRADE" &&
+                  !tx.cashTransaction &&
+                  tx.instrumentName &&
+                  (tx.instrumentName.toUpperCase().includes(dbTrade.instrument.toUpperCase()) ||
+                   dbTrade.instrument.toUpperCase().includes(tx.instrumentName.toUpperCase().replace(/ /g, "")))
+              );
+
+              let closePrice = dbTrade.openPrice ?? "0";
+              let pnl = "0.00";
+              let pnlSource = "unknown";
+
+              if (matchingTx) {
+                // Parse P&L from Capital.com format: "USD 1.23" or "-USD 0.50"
+                const pnlStr = matchingTx.profitAndLoss ?? "";
+                const pnlMatch = pnlStr.match(/([+-]?)[A-Z]+ ([+-]?[\d.]+)/);
+                if (pnlMatch) {
+                  const sign = pnlMatch[1] === "-" ? -1 : 1;
+                  pnl = (sign * parseFloat(pnlMatch[2])).toFixed(2);
+                }
+                if (matchingTx.closeLevel) {
+                  closePrice = matchingTx.closeLevel.toFixed(5);
+                }
+                pnlSource = `Capital.com transaction (P&L: ${matchingTx.profitAndLoss})`;
+              }
+
+              await closeTrade(dbTrade.id, closePrice, pnl, "reconciled");
+              console.log(`[AutoTrade] Reconciliation: closed orphaned DB trade #${dbTrade.id} (${dbTrade.instrument}) — closePrice=${closePrice}, P&L=${pnl} (${pnlSource})`);
               await notifyOwner({
                 title: `🔄 Position Reconciliation: ${dbTrade.instrument}`,
-                content: `Trade #${dbTrade.id} (${dbTrade.instrument} ${dbTrade.direction} @ ${dbTrade.openPrice}) was closed on Capital.com but still open in DB. Marked as closed automatically.`,
+                content: `Trade #${dbTrade.id} (${dbTrade.instrument} ${dbTrade.direction} @ ${dbTrade.openPrice}) was closed on Capital.com.\nClose Price: ${closePrice}\nP&L: $${pnl}\nSource: ${pnlSource}`,
               }).catch(() => {});
             }
           }
@@ -1650,6 +1687,43 @@ async function executeDecision(
             console.warn(`[AutoTrade] SL DIRECTION GUARD: ${decision.instrument} ${decision.action} — SL ${finalSL} was on wrong side of price ${livePrice}. Recalculated to SL=${finalSL} TP=${finalTP}`);
           }
         }
+
+        // ███ SL/TP VALIDATION GUARD ███
+        // Final sanity check before sending to broker:
+        // 1. SL and TP must be positive non-zero absolute prices
+        // 2. SL must be on the correct side of the live price
+        // 3. TP must be on the correct side of the live price
+        // 4. SL distance must be at least 0.01% of price (not a rounding artifact)
+        const slValid = finalSL && finalSL > 0 && !isNaN(finalSL);
+        const tpValid = finalTP && finalTP > 0 && !isNaN(finalTP);
+        const slOnCorrectSide = slValid && (
+          decision.action === "BUY" ? finalSL! < livePrice : finalSL! > livePrice
+        );
+        const tpOnCorrectSide = tpValid && (
+          decision.action === "BUY" ? finalTP! > livePrice : finalTP! < livePrice
+        );
+        const slMinDist = slValid && livePrice > 0 ? Math.abs(livePrice - finalSL!) / livePrice : 0;
+        const tpMinDist = tpValid && livePrice > 0 ? Math.abs(livePrice - finalTP!) / livePrice : 0;
+        const slHasMinDist = slMinDist >= 0.0001; // at least 0.01% of price
+        const tpHasMinDist = tpMinDist >= 0.0001;
+
+        if (!slValid || !tpValid || !slOnCorrectSide || !tpOnCorrectSide || !slHasMinDist || !tpHasMinDist) {
+          const reason = [
+            !slValid ? `SL invalid (${finalSL})` : null,
+            !tpValid ? `TP invalid (${finalTP})` : null,
+            slValid && !slOnCorrectSide ? `SL on wrong side (SL=${finalSL} price=${livePrice} ${decision.action})` : null,
+            tpValid && !tpOnCorrectSide ? `TP on wrong side (TP=${finalTP} price=${livePrice} ${decision.action})` : null,
+            slValid && slOnCorrectSide && !slHasMinDist ? `SL too close (${(slMinDist * 100).toFixed(4)}% < 0.01%)` : null,
+            tpValid && tpOnCorrectSide && !tpHasMinDist ? `TP too close (${(tpMinDist * 100).toFixed(4)}% < 0.01%)` : null,
+          ].filter(Boolean).join("; ");
+          console.error(`[AutoTrade] SL/TP VALIDATION GUARD BLOCKED: ${decision.instrument} ${decision.action} — ${reason}`);
+          await notifyOwner({
+            title: `🚫 Trade Blocked: ${decision.instrument} ${decision.action}`,
+            content: `SL/TP validation failed — trade not sent to broker.\nReason: ${reason}\nEntry: ${livePrice} | SL: ${finalSL} | TP: ${finalTP}`,
+          }).catch(() => {});
+          throw new Error(`SL/TP validation guard blocked trade: ${reason}`);
+        }
+        // ─────────────────────────────────────────────────────────────────────────
 
         // Enforce minimum deal size from Capital.com API
         const minSize = await getMinDealSize(epic).catch(() => 1);

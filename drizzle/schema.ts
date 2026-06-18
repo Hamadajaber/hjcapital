@@ -59,6 +59,8 @@ export const trades = mysqlTable("trades", {
   takeProfit: decimal("takeProfit", { precision: 12, scale: 5 }),
   // Auto trade reference
   autoTradeSessionId: int("autoTradeSessionId"),
+  // Close reason: 'ai_close' | 'sl_hit' | 'tp_hit' | 'reconciled' | 'manual'
+  closeReason: varchar("closeReason", { length: 32 }),
 });
 
 export type Trade = typeof trades.$inferSelect;

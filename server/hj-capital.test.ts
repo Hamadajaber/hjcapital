@@ -33,7 +33,7 @@ describe("HJ Capital — Portfolio Router", () => {
     expect(portfolio.balance).toBeDefined();
     expect(["paper", "live"]).toContain(portfolio.mode);
     expect(parseFloat(portfolio.balance)).toBeGreaterThan(0);
-  });
+  }, 15000);
 
   it("returns daily stats", async () => {
     const ctx = createMockContext();

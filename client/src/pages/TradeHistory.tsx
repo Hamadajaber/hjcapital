@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Filter, TrendingUp, TrendingDown, Clock, ChevronDown, ChevronUp, Activity, ArrowLeftRight, BarChart2 } from "lucide-react";
+import { Filter, TrendingUp, TrendingDown, Clock, ChevronDown, ChevronUp, Activity, ArrowLeftRight, BarChart2, RefreshCw } from "lucide-react";
 
 const INSTRUMENTS = ["All", "EURUSD", "GBPUSD", "USDJPY", "EURGBP", "GOLD", "XAGUSD", "OIL_CRUDE", "US500", "GER40", "NASDAQ"];
 const STATUSES = ["All", "open", "closed", "cancelled"] as const;
@@ -462,8 +462,91 @@ function StrategyComparisonTab() {
   );
 }
 
+// ─── Reconciliation Dashboard Tab ─────────────────────────────────────────────────────────────────────────────────────
+function ReconciliationTab() {
+  const query = trpc.reconciliation.list.useQuery();
+  const rows = query.data ?? [];
+
+  if (query.isLoading) {
+    return (
+      <div className="space-y-3">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="animate-pulse h-16 rounded-2xl" style={{ background: "var(--color-bg-elevated)" }} />
+        ))}
+      </div>
+    );
+  }
+
+  const totalPnl = rows.reduce((s, r) => s + parseFloat(r.pnl), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <RefreshCw size={14} style={{ color: "var(--color-accent)" }} />
+        <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-text-primary)" }}>Reconciled Positions</span>
+        <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", marginLeft: "auto" }}>Trades closed by broker (SL/TP/manual) — synced automatically</span>
+      </div>
+
+      {rows.length > 0 && (
+        <div className="flex items-center gap-3 p-3 rounded-xl" style={{
+          background: totalPnl >= 0 ? "var(--color-profit-dim)" : "var(--color-loss-dim)",
+          border: `1px solid ${totalPnl >= 0 ? "oklch(0.720 0.130 155 / 0.30)" : "oklch(0.660 0.155 20 / 0.30)"}`
+        }}>
+          <RefreshCw size={14} style={{ color: totalPnl >= 0 ? "var(--color-profit)" : "var(--color-loss)", flexShrink: 0 }} />
+          <span style={{ fontSize: "0.8125rem", color: "var(--color-text-secondary)" }}>
+            {rows.length} reconciled trade{rows.length !== 1 ? "s" : ""} — Total P&L: <strong style={{ color: totalPnl >= 0 ? "var(--color-profit)" : "var(--color-loss)" }}>{totalPnl >= 0 ? "+" : ""}${totalPnl.toFixed(2)}</strong>
+          </span>
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 rounded-2xl" style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)" }}>
+          <RefreshCw size={28} style={{ color: "var(--color-text-tertiary)", marginBottom: "0.75rem" }} />
+          <p style={{ fontSize: "0.875rem", color: "var(--color-text-tertiary)" }}>No reconciled positions yet</p>
+          <p style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", marginTop: "0.25rem" }}>Positions closed on Capital.com outside the platform will appear here</p>
+        </div>
+      ) : (
+        <div className="rounded-2xl overflow-hidden" style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)" }}>
+          <table className="w-full">
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--color-border-subtle)" }}>
+                {["Instrument", "Direction", "Open Price", "Close Price", "P&L", "Opened", "Closed"].map(h => (
+                  <th key={h} className="px-4 py-3 text-left" style={{ fontSize: "0.6875rem", fontWeight: 600, color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => {
+                const pnl = parseFloat(r.pnl);
+                return (
+                  <tr key={r.id} style={{ borderBottom: i < rows.length - 1 ? "1px solid var(--color-border-subtle)" : "none" }}>
+                    <td className="px-4 py-3" style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-text-primary)" }}>{r.instrument}</td>
+                    <td className="px-4 py-3">
+                      <span className="px-2 py-0.5 rounded text-xs font-semibold" style={{
+                        background: r.direction === "BUY" ? "var(--color-profit-dim)" : "var(--color-loss-dim)",
+                        color: r.direction === "BUY" ? "var(--color-profit)" : "var(--color-loss)"
+                      }}>{r.direction}</span>
+                    </td>
+                    <td className="px-4 py-3 tabular-nums" style={{ fontSize: "0.8125rem", fontFamily: "var(--font-mono)", color: "var(--color-text-secondary)" }}>{parseFloat(r.openPrice).toFixed(5)}</td>
+                    <td className="px-4 py-3 tabular-nums" style={{ fontSize: "0.8125rem", fontFamily: "var(--font-mono)", color: "var(--color-text-secondary)" }}>{parseFloat(r.closePrice).toFixed(5)}</td>
+                    <td className="px-4 py-3 tabular-nums" style={{ fontSize: "0.875rem", fontWeight: 600, fontFamily: "var(--font-serif)", color: pnl >= 0 ? "var(--color-profit)" : "var(--color-loss)" }}>
+                      {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3" style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>{new Date(r.openedAt).toLocaleDateString()}</td>
+                    <td className="px-4 py-3" style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>{r.closedAt ? new Date(r.closedAt).toLocaleDateString() : "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TradeHistory() {
-  const [activeTab, setActiveTab] = useState<"platform" | "activity" | "transactions" | "comparison">("platform");
+  const [activeTab, setActiveTab] = useState<"platform" | "activity" | "transactions" | "comparison" | "reconciliation">("platform");
   const [instrumentFilter, setInstrumentFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState<"All" | "open" | "closed" | "cancelled">("All");
   const [dateFrom, setDateFrom] = useState("");
@@ -502,6 +585,7 @@ export default function TradeHistory() {
           { key: "activity", label: "Capital.com Activity", icon: Activity },
           { key: "transactions", label: "Transactions", icon: ArrowLeftRight },
           { key: "comparison", label: "Strategy Comparison", icon: BarChart2 },
+          { key: "reconciliation", label: "Reconciled", icon: RefreshCw },
         ] as const).map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -521,6 +605,7 @@ export default function TradeHistory() {
       {activeTab === "activity" && <ActivityHistoryTab />}
       {activeTab === "transactions" && <TransactionHistoryTab />}
       {activeTab === "comparison" && <StrategyComparisonTab />}
+      {activeTab === "reconciliation" && <ReconciliationTab />}
 
       {activeTab === "platform" && <div className="space-y-6">
 
