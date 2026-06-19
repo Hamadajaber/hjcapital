@@ -51,6 +51,8 @@ git commit -m "$COMMIT_MSG"
 
 # Push to GitHub
 echo -e "${GREEN}[4/4] Pushing to GitHub...${NC}"
+# Ensure remote has auth token embedded
+git remote set-url github https://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@github.com/Hamadajaber/hjcapital.git 2>/dev/null || true
 git push github main
 
 echo ""
