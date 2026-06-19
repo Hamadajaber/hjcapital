@@ -324,6 +324,39 @@ export default function Performance() {
 
           {/* Charts row */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <SectionCard title="Close Reason Breakdown">
+              {(() => {
+                const reasons = [
+                  { name: "AI Close", key: "ai_close", color: "var(--color-accent)" },
+                  { name: "SL Hit", key: "sl_hit", color: "#ef4444" },
+                  { name: "TP Hit", key: "tp_hit", color: "#22c55e" },
+                  { name: "Reconciled", key: "reconciled", color: "#f59e0b" },
+                  { name: "Manual", key: "manual", color: "#a78bfa" },
+                ];
+                const closeReasonData = reasons
+                  .map(r => ({
+                    name: r.name,
+                    value: trades.filter(t => (t.closeReason ?? "ai_close") === r.key).length,
+                    color: r.color,
+                  }))
+                  .filter(d => d.value > 0);
+                return closeReasonData.length === 0 ? emptyState("No closed trades yet") : (
+                  <ResponsiveContainer width="100%" height={180}>
+                    <PieChart>
+                      <Pie data={closeReasonData} cx="50%" cy="50%" innerRadius={45} outerRadius={65} dataKey="value" paddingAngle={3}>
+                        {closeReasonData.map((entry, i) => (
+                          <Cell key={i} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Legend iconType="circle" iconSize={8}
+                        formatter={(value) => <span style={{ color: "var(--color-text-secondary)", fontSize: "11px" }}>{value}</span>} />
+                      <Tooltip formatter={(value, name) => [`${value} trades`, name]} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                );
+              })()}
+            </SectionCard>
+
             <SectionCard title="Daily P&L — Last 7 Days">
               {dailyPnlData.every(d => d.pnl === 0) ? emptyState("No closed trades yet") : (
                 <ResponsiveContainer width="100%" height={180}>

@@ -416,9 +416,9 @@
 - [x] Add AI Lessons stats card to Dashboard (last lesson text + overall accuracy %)
 
 ## Round 39 — Three Next-Step Improvements
-- [ ] Fix Reconciliation error.invalid.from — fix the date format sent to Capital.com transaction history API
-- [ ] Add Lesson Trends Chart to /lessons page — weekly accuracy % over time line chart
-- [ ] Add Paper/Live mode filter to /lessons page
+- [x] Fix Reconciliation error.invalid.from — fix the date format sent to Capital.com transaction history API
+- [x] Add Lesson Trends Chart to /lessons page — weekly accuracy % over time line chart
+- [x] Add Paper/Live mode filter to /lessons page
 
 ## Round 39 — Three Next-Step Improvements
 - [x] Fix Reconciliation error.invalid.from: changed lookback from 48h to 23h (Capital.com max is 24h), fixed date format to YYYY-MM-DDTHH:MM:SS
@@ -429,3 +429,8 @@
 - [x] Add Weekly Accuracy Trend Chart to /lessons page (Recharts LineChart, groups by ISO week, last 8 weeks)
 - [x] Add Paper/Live mode filter to /lessons page (client-side mode pills + server-side mode filter)
 - [x] TypeScript: 0 errors | Tests: 108/108 passing
+
+## Round 40 — Three Next-Step Improvements
+- [x] Add Instrument Performance Comparison table in /lessons page (Win Rate per instrument)
+- [x] Add Close Reason Analytics Pie Chart in Performance page (ai_close/sl_hit/tp_hit/reconciled/manual)
+- [x] Improve formatLessonsForPrompt: use 5 lessons, prioritize incorrect ones (wasCorrect=false)

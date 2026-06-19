@@ -225,6 +225,33 @@ export default function Lessons() {
   // Weekly trend data
   const weeklyTrend = useMemo(() => buildWeeklyTrend(lessons), [lessons]);
 
+  // Instrument performance comparison (always computed from ALL lessons, ignoring instrument filter)
+  const allLessonsQuery = trpc.intelligence.getLessons.useQuery(
+    { limit: 200, mode: filterMode === "all" ? undefined : filterMode },
+    { refetchInterval: 60000 }
+  );
+  const allLessons = allLessonsQuery.data ?? [];
+
+  const instrumentStats = useMemo(() => {
+    const map = new Map<string, { correct: number; total: number; pnl: number }>();
+    for (const l of allLessons) {
+      const existing = map.get(l.instrument) ?? { correct: 0, total: 0, pnl: 0 };
+      existing.total++;
+      if (l.wasCorrect) existing.correct++;
+      existing.pnl += parseFloat(l.pnl ?? "0");
+      map.set(l.instrument, existing);
+    }
+    return Array.from(map.entries())
+      .map(([instrument, { correct, total, pnl }]) => ({
+        instrument,
+        total,
+        correct,
+        winRate: Math.round((correct / total) * 100),
+        pnl: parseFloat(pnl.toFixed(2)),
+      }))
+      .sort((a, b) => b.winRate - a.winRate);
+  }, [allLessons]);
+
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6">
       {/* Page Header */}
@@ -393,6 +420,70 @@ export default function Lessons() {
           ))}
         </div>
       </div>
+
+      {/* Instrument Performance Comparison Table */}
+      {instrumentStats.length > 0 && (
+        <div
+          className="rounded-xl overflow-hidden"
+          style={{ background: "var(--color-bg-elevated)", border: "1px solid var(--color-border-subtle)" }}
+        >
+          <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--color-border-subtle)" }}>
+            <h3 style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--color-text-primary)", fontFamily: "var(--font-sans)" }}>
+              Instrument Performance Comparison
+            </h3>
+            <p style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)", marginTop: 2 }}>
+              Win rate &amp; P&amp;L per instrument across all lessons
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full" style={{ fontSize: "0.75rem", fontFamily: "var(--font-sans)" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--color-border-subtle)" }}>
+                  {["Instrument", "Trades", "Win Rate", "P&L", "Bar"].map((h) => (
+                    <th key={h} className="px-4 py-2 text-left" style={{ color: "var(--color-text-tertiary)", fontWeight: 500 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {instrumentStats.map((row, i) => {
+                  const isPositive = row.pnl >= 0;
+                  const barColor = row.winRate >= 60 ? "var(--color-accent)" : row.winRate >= 40 ? "#f59e0b" : "#ef4444";
+                  return (
+                    <tr
+                      key={row.instrument}
+                      style={{
+                        borderBottom: i < instrumentStats.length - 1 ? "1px solid var(--color-border-subtle)" : undefined,
+                        background: selectedInstrument === row.instrument ? "var(--color-accent-dim)" : undefined,
+                        cursor: "pointer",
+                      }}
+                      onClick={() => setSelectedInstrument(selectedInstrument === row.instrument ? "All" : row.instrument)}
+                    >
+                      <td className="px-4 py-2.5" style={{ color: "var(--color-text-primary)", fontWeight: 600 }}>{row.instrument}</td>
+                      <td className="px-4 py-2.5" style={{ color: "var(--color-text-secondary)" }}>{row.total}</td>
+                      <td className="px-4 py-2.5">
+                        <span style={{ color: row.winRate >= 50 ? "#22c55e" : "#ef4444", fontWeight: 600 }}>
+                          {row.winRate}%
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5" style={{ color: isPositive ? "#22c55e" : "#ef4444", fontWeight: 500 }}>
+                        {isPositive ? "+" : ""}{row.pnl.toFixed(2)}
+                      </td>
+                      <td className="px-4 py-2.5" style={{ minWidth: 80 }}>
+                        <div className="rounded-full overflow-hidden" style={{ height: 6, background: "var(--color-bg-surface)" }}>
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{ width: `${row.winRate}%`, background: barColor }}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Lessons List */}
       {lessonsQuery.isLoading ? (

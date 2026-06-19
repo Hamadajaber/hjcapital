@@ -142,15 +142,31 @@ Respond in JSON:
  */
 export async function formatLessonsForPrompt(instrument: string): Promise<string> {
   try {
-    const lessons = await getRecentLessons(instrument, 3);
-    if (lessons.length === 0) return "";
+    // Fetch more lessons so we can prioritize incorrect ones
+    const allLessons = await getRecentLessons(instrument, 10);
+    if (allLessons.length === 0) return "";
 
-    const lines = lessons.map((l, i) => {
-      const outcome = l.wasCorrect ? "✅ WIN" : "❌ LOSS";
+    // Prioritize incorrect lessons (wasCorrect=false) — they carry more learning value
+    const incorrect = allLessons.filter((l) => !l.wasCorrect);
+    const correct = allLessons.filter((l) => l.wasCorrect);
+
+    // Take up to 3 incorrect + up to 2 correct = max 5 lessons
+    const prioritized = [
+      ...incorrect.slice(0, 3),
+      ...correct.slice(0, 2),
+    ].slice(0, 5);
+
+    const lines = prioritized.map((l, i) => {
+      const outcome = l.wasCorrect ? "✅ WIN" : "❌ LOSS (IMPORTANT — avoid repeating this mistake)";
       return `  ${i + 1}. [${outcome}] ${l.lessonText}`;
     });
 
-    return `\nPAST LESSONS FOR ${instrument} (learn from these):\n${lines.join("\n")}`;
+    const incorrectCount = prioritized.filter((l) => !l.wasCorrect).length;
+    const header = incorrectCount > 0
+      ? `\nPAST LESSONS FOR ${instrument} — ${incorrectCount} mistake(s) highlighted (learn from these):`
+      : `\nPAST LESSONS FOR ${instrument} (learn from these):`;
+
+    return `${header}\n${lines.join("\n")}`;
   } catch {
     return "";
   }
