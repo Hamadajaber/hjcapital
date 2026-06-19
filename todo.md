@@ -442,3 +442,10 @@
 - [x] Engine auto-starts when isAnyMarketOpen() becomes true, auto-stops when it becomes false
 - [x] Update UI: show "Next Open" / "Next Close" time in AutoTrade scheduled automation panel
 - [x] TypeScript: 0 errors | Tests: 108/108 passing
+
+## Round 42 — Workflow System (Multi-Chat Context Management)
+- [x] Create DIRECTOR_CONTEXT.md — master brain document with full project history
+- [x] Build hjcapital-workflow Skill (roles, GitHub sync protocol, context overflow prevention)
+- [x] Create scripts/git-sync.sh — one-command GitHub push
+- [x] Configure GitHub remote with new PAT token
+- [x] Push DIRECTOR_CONTEXT.md + scripts to GitHub (https://github.com/Hamadajaber/hjcapital)
