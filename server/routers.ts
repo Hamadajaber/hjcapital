@@ -38,6 +38,8 @@ import {
   searchMarkets,
   getWatchlists,
   getWatchlistDetail,
+  isAnyMarketOpen,
+  getNextMarketEvent,
 } from "./capitalcom";
 import {
   startAutoTrade,
@@ -46,6 +48,7 @@ import {
   getActiveSession,
   getSessionLogs,
   getRecentSessions,
+  CORE_INSTRUMENTS,
 } from "./autoTradeEngine";
 import {
   getDynamicConfidenceThreshold,
@@ -566,7 +569,18 @@ export const appRouter = router({
 
     // ── Schedule: get current config ──────────────────────────────────────
     getSchedule: ownerProcedure.query(async () => {
-      return getScheduleConfig();
+      const config = await getScheduleConfig();
+      const anyOpen = isAnyMarketOpen(CORE_INSTRUMENTS);
+      const nextEvent = getNextMarketEvent(CORE_INSTRUMENTS);
+      return {
+        ...config,
+        marketStatus: {
+          anyOpen,
+          nextEvent: nextEvent.event,
+          nextEventMinutesFromNow: nextEvent.minutesFromNow,
+          nextEventAtUTC: nextEvent.atUTC,
+        },
+      };
     }),
 
     // ── Schedule: enable daily auto-start/stop ────────────────────────────

@@ -10,8 +10,8 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { autoTradeStartHandler, autoTradeStopHandler } from "../scheduledHandlers";
 import { handleTelegramUpdate, TelegramUpdate } from "../telegram";
-import { startAutoTrade, stopAutoTrade, getEngineState, getActiveSession } from "../autoTradeEngine";
-import { getAccountBalance } from "../capitalcom";
+import { startAutoTrade, stopAutoTrade, getEngineState, getActiveSession, CORE_INSTRUMENTS } from "../autoTradeEngine";
+import { getAccountBalance, isAnyMarketOpen, getNextMarketEvent } from "../capitalcom";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -118,22 +118,50 @@ async function startServer() {
     console.log(`Server running on http://localhost:${port}/`);
   });
 
-  // Auto-start the trade engine in Live mode on every server boot
-  // The engine runs continuously — user only needs to act to STOP it
-  setTimeout(async () => {
+  // ── Market-Hours Watcher ──────────────────────────────────────────────────
+  // Checks every 5 minutes whether any Capital.com market is open.
+  // Engine auto-starts when markets open, auto-stops when all markets close.
+  // This replaces the fixed Cairo 10AM-11PM schedule with a dynamic one.
+  const WATCHER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+  async function marketHoursWatcher() {
     try {
-      const existing = getEngineState();
-      if (!existing?.isRunning) {
-        console.log("[AutoTrade] Auto-starting engine in LIVE mode...");
+      const anyOpen = isAnyMarketOpen(CORE_INSTRUMENTS);
+      const state = getEngineState();
+      const nextEvent = getNextMarketEvent(CORE_INSTRUMENTS);
+
+      if (anyOpen && !state?.isRunning) {
+        // Markets are open but engine is stopped → start it
+        console.log("[MarketWatcher] Markets are open — auto-starting engine in LIVE mode...");
         await startAutoTrade("live", 15);
-        console.log("[AutoTrade] Engine auto-started in LIVE mode.");
+        console.log("[MarketWatcher] Engine auto-started. Next close in ~" + nextEvent.minutesFromNow + " min.");
+      } else if (!anyOpen && state?.isRunning) {
+        // All markets closed → stop the engine
+        console.log("[MarketWatcher] All markets closed — auto-stopping engine...");
+        await stopAutoTrade("All markets closed (market-hours watcher)");
+        console.log("[MarketWatcher] Engine stopped. Next open in ~" + nextEvent.minutesFromNow + " min.");
+      } else if (anyOpen && state?.isRunning) {
+        // All good — log occasionally
+        if (Math.random() < 0.1) { // ~10% chance = roughly every 50 min
+          console.log("[MarketWatcher] Markets open, engine running. Next close in ~" + nextEvent.minutesFromNow + " min.");
+        }
       } else {
-        console.log("[AutoTrade] Engine already running, skipping auto-start.");
+        // Markets closed, engine stopped — normal weekend/overnight state
+        if (Math.random() < 0.1) {
+          console.log("[MarketWatcher] Markets closed, engine idle. Next open in ~" + nextEvent.minutesFromNow + " min.");
+        }
       }
     } catch (err) {
-      console.error("[AutoTrade] Auto-start failed:", err);
+      console.error("[MarketWatcher] Error:", err);
     }
-  }, 5000); // 5s delay to let DB connections settle
+  }
+
+  // Initial check after 5s (let DB connections settle)
+  setTimeout(async () => {
+    await marketHoursWatcher();
+    // Then check every 5 minutes
+    setInterval(marketHoursWatcher, WATCHER_INTERVAL_MS);
+  }, 5000);
 }
 
 startServer().catch(console.error);

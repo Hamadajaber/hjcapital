@@ -1006,3 +1006,82 @@ export function isMarketOpen(instrument: string): boolean {
 export function getOpenMarkets(instruments: string[]): string[] {
   return instruments.filter((inst) => isMarketOpen(inst));
 }
+
+/**
+ * Returns true if at least one instrument in the list is currently tradeable.
+ */
+export function isAnyMarketOpen(instruments: string[]): boolean {
+  return instruments.some((inst) => isMarketOpen(inst));
+}
+
+/**
+ * Returns the next market open or close event across all instruments.
+ * Scans the next 48 hours in 1-minute increments to find the transition.
+ */
+export function getNextMarketEvent(instruments: string[]): {
+  event: "open" | "close";
+  minutesFromNow: number;
+  atUTC: Date;
+} {
+  const currentlyOpen = isAnyMarketOpen(instruments);
+  const targetState = !currentlyOpen; // we're looking for the opposite state
+
+  const now = new Date();
+  for (let m = 1; m <= 48 * 60; m++) {
+    const future = new Date(now.getTime() + m * 60 * 1000);
+    // Temporarily override Date for isMarketOpen check by using a helper
+    const futureOpen = instruments.some((inst) => {
+      const day = future.getUTCDay();
+      const hour = future.getUTCHours();
+      const minute = future.getUTCMinutes();
+      const t = hour * 60 + minute;
+      const epic = (INSTRUMENT_EPICS[inst] ?? inst).toUpperCase();
+
+      if (day === 6) return false;
+      if (["ETHUSD", "BITCOIN", "XRPUSD", "LTCUSD", "ADAUSD", "SOLUSD"].includes(epic)) return true;
+      if (["EURUSD", "GBPUSD", "USDJPY", "EURGBP", "AUDUSD"].includes(epic)) {
+        if (day === 0) return t >= 21 * 60;
+        if (day === 5) return t < 21 * 60;
+        if (t >= 21 * 60 && t < 21 * 60 + 5) return false;
+        return true;
+      }
+      if (["GOLD", "SILVER", "XAGUSD"].includes(epic)) {
+        if (day === 0) return t >= 22 * 60;
+        if (day === 5) return t < 17 * 60;
+        if (t >= 21 * 60 && t < 22 * 60) return false;
+        return true;
+      }
+      if (["US500", "GER40", "DE40", "DE30"].includes(epic)) {
+        if (day === 0) return t >= 22 * 60;
+        if (day === 5) return t < 21 * 60;
+        if (t >= 21 * 60 && t < 22 * 60) return false;
+        return true;
+      }
+      if (["NDAQ100", "US100", "NASDAQ"].includes(epic)) {
+        if (day === 0) return t >= 22 * 60;
+        if (day === 5) return t < 20 * 60;
+        if (t >= 21 * 60 && t < 21 * 60 + 5) return false;
+        return true;
+      }
+      return day >= 1 && day <= 5;
+    });
+
+    if (futureOpen === targetState) {
+      return {
+        event: targetState ? "open" : "close",
+        minutesFromNow: m,
+        atUTC: future,
+      };
+    }
+  }
+
+  // Fallback: next open is Sunday 21:00 UTC
+  const fallback = new Date(now);
+  fallback.setUTCHours(21, 0, 0, 0);
+  while (fallback.getUTCDay() !== 0) fallback.setUTCDate(fallback.getUTCDate() + 1);
+  return {
+    event: "open",
+    minutesFromNow: Math.round((fallback.getTime() - now.getTime()) / 60000),
+    atUTC: fallback,
+  };
+}

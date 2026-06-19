@@ -880,13 +880,41 @@ export default function AutoTrade() {
               Scheduled Automation
             </h2>
 
+            {/* Dynamic Market Status */}
+            {(() => {
+              const ms = scheduleQuery.data?.marketStatus;
+              const anyOpen = ms?.anyOpen ?? false;
+              const nextEvt = ms?.nextEvent ?? "open";
+              const minsAway = ms?.nextEventMinutesFromNow ?? 0;
+              const hoursAway = Math.floor(minsAway / 60);
+              const minsRem = minsAway % 60;
+              const timeStr = hoursAway > 0 ? `${hoursAway}h ${minsRem}m` : `${minsRem}m`;
+              const nextEvtAt = ms?.nextEventAtUTC ? new Date(ms.nextEventAtUTC).toLocaleString("en-US", { timeZone: "Africa/Cairo", weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+              return (
+                <div className="mb-4 rounded-xl p-3" style={{ background: anyOpen ? "oklch(0.35 0.08 145 / 0.25)" : "oklch(0.35 0.08 25 / 0.15)", border: `1px solid ${anyOpen ? "oklch(0.55 0.12 145 / 0.4)" : "oklch(0.55 0.08 25 / 0.3)"}` }}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="inline-block w-2 h-2 rounded-full" style={{ background: anyOpen ? "#22c55e" : "#ef4444", boxShadow: anyOpen ? "0 0 6px #22c55e" : undefined }} />
+                    <span className="text-xs font-semibold" style={{ color: anyOpen ? "#22c55e" : "#ef4444", fontFamily: "var(--font-sans)" }}>
+                      {anyOpen ? "Markets Open" : "Markets Closed"}
+                    </span>
+                  </div>
+                  <p className="text-xs" style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)" }}>
+                    {anyOpen
+                      ? `Engine active — next close in ${timeStr} (${nextEvtAt} Cairo)`
+                      : `Engine idle — next open in ${timeStr} (${nextEvtAt} Cairo)`
+                    }
+                  </p>
+                </div>
+              );
+            })()}
+
             {/* Schedule info */}
             <div className="space-y-2 mb-4">
               {[
-                { label: "Auto-Start", value: "10:00 AM Cairo (Mon–Fri)", icon: "🟢" },
-                { label: "Auto-Stop",  value: "11:00 PM Cairo (Mon–Fri)", icon: "🔴" },
-                { label: "Mode",       value: scheduleQuery.data?.defaultMode?.toUpperCase() ?? "PAPER", icon: "📊" },
-                { label: "Cycle",      value: `Every ${scheduleQuery.data?.cycleIntervalMinutes ?? 15} min`, icon: "🔄" },
+                { label: "Trigger",  value: "Capital.com market hours", icon: "🌐" },
+                { label: "Mode",     value: scheduleQuery.data?.defaultMode?.toUpperCase() ?? "LIVE", icon: "📊" },
+                { label: "Cycle",    value: `Every ${scheduleQuery.data?.cycleIntervalMinutes ?? 15} min`, icon: "🔄" },
+                { label: "Coverage", value: "Sun 21:00 – Fri 21:00 UTC", icon: "⏰" },
               ].map((r) => (
                 <div
                   key={r.label}

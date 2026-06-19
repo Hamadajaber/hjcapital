@@ -434,3 +434,11 @@
 - [x] Add Instrument Performance Comparison table in /lessons page (Win Rate per instrument)
 - [x] Add Close Reason Analytics Pie Chart in Performance page (ai_close/sl_hit/tp_hit/reconciled/manual)
 - [x] Improve formatLessonsForPrompt: use 5 lessons, prioritize incorrect ones (wasCorrect=false)
+
+## Round 41 — Dynamic Market-Hours Scheduler
+- [x] Build isAnyMarketOpen() function: returns true if at least one CORE_INSTRUMENTS market is open right now
+- [x] Build getNextMarketEvent() function: returns next open/close time across all instruments
+- [x] Replace fixed cron schedule (10AM-11PM Cairo) with dynamic market-hours checker running every 5 min
+- [x] Engine auto-starts when isAnyMarketOpen() becomes true, auto-stops when it becomes false
+- [x] Update UI: show "Next Open" / "Next Close" time in AutoTrade scheduled automation panel
+- [x] TypeScript: 0 errors | Tests: 108/108 passing
