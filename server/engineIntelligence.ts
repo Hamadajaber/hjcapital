@@ -526,41 +526,60 @@ export async function getClientSentiment(
 ): Promise<Record<string, ClientSentiment>> {
   const result: Record<string, ClientSentiment> = {};
 
-  try {
-    // Use the authenticated Capital.com API path (avoids self-signed cert on gbksoft domain)
-    const rawItems = await capitalGetClientSentiment(instruments);
+  // Retry up to 2 times with a 2s delay to handle transient Capital.com 429/503 errors
+  const MAX_RETRIES = 2;
+  const RETRY_DELAY_MS = 2000;
 
-    for (const item of rawItems) {
-      const longPct = item.longPositionPercentage;
-      const shortPct = item.shortPositionPercentage;
-
-      // Contrarian logic
-      let signal: "bullish" | "bearish" | "neutral";
-      let strength: "strong" | "moderate" | "weak";
-
-      if (longPct >= 80) {
-        signal = "bearish"; // Too many longs → expect reversal down
-        strength = "strong";
-      } else if (longPct >= 70) {
-        signal = "bearish";
-        strength = "moderate";
-      } else if (shortPct >= 80) {
-        signal = "bullish"; // Too many shorts → expect reversal up
-        strength = "strong";
-      } else if (shortPct >= 70) {
-        signal = "bullish";
-        strength = "moderate";
-      } else {
-        signal = "neutral";
-        strength = "weak";
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
       }
 
-      result[item.marketId] = { instrument: item.marketId, longPct, shortPct, signal, strength };
+      // Use the authenticated Capital.com API path (avoids self-signed cert on gbksoft domain)
+      const rawItems = await capitalGetClientSentiment(instruments);
+
+      for (const item of rawItems) {
+        const longPct = item.longPositionPercentage;
+        const shortPct = item.shortPositionPercentage;
+
+        // Contrarian logic
+        let signal: "bullish" | "bearish" | "neutral";
+        let strength: "strong" | "moderate" | "weak";
+
+        if (longPct >= 80) {
+          signal = "bearish"; // Too many longs → expect reversal down
+          strength = "strong";
+        } else if (longPct >= 70) {
+          signal = "bearish";
+          strength = "moderate";
+        } else if (shortPct >= 80) {
+          signal = "bullish"; // Too many shorts → expect reversal up
+          strength = "strong";
+        } else if (shortPct >= 70) {
+          signal = "bullish";
+          strength = "moderate";
+        } else {
+          signal = "neutral";
+          strength = "weak";
+        }
+
+        result[item.marketId] = { instrument: item.marketId, longPct, shortPct, signal, strength };
+      }
+
+      // Success — return immediately
+      return result;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < MAX_RETRIES) {
+        console.warn(`[Intelligence] Client sentiment fetch error (attempt ${attempt + 1}/${MAX_RETRIES + 1}), retrying in ${RETRY_DELAY_MS}ms...`);
+      }
     }
-  } catch (err) {
-    console.warn("[Intelligence] Client sentiment fetch error:", err);
   }
 
+  // All retries exhausted — log once and return empty (engine continues without sentiment data)
+  console.warn(`[Intelligence] Client sentiment unavailable after ${MAX_RETRIES + 1} attempts — continuing without it. Last error:`, lastErr);
   return result;
 }
 

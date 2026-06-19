@@ -395,32 +395,47 @@ async function runCycle() {
           for (const dbTrade of dbOpenTrades) {
             const tradeEpic = INSTRUMENT_EPICS[dbTrade.instrument] ?? dbTrade.instrument;
             if (!brokerEpics.has(tradeEpic)) {
-              // Try to find the real close price and P&L from transaction history
-              const matchingTx = recentTransactions.find(
-                (tx) =>
-                  tx.type === "TRADE" &&
-                  !tx.cashTransaction &&
-                  tx.instrumentName &&
-                  (tx.instrumentName.toUpperCase().includes(dbTrade.instrument.toUpperCase()) ||
-                   dbTrade.instrument.toUpperCase().includes(tx.instrumentName.toUpperCase().replace(/ /g, "")))
-              );
+              // Try to find the real close price and P&L from transaction history.
+              // Strategy: match by instrument name (multiple fallbacks) and pick the most recent TRADE.
+              const instrumentEpic = (INSTRUMENT_EPICS[dbTrade.instrument] ?? dbTrade.instrument).toUpperCase();
+              const instrumentFriendly = dbTrade.instrument.toUpperCase();
+
+              const matchingTx = recentTransactions
+                .filter((tx) => {
+                  if (tx.cashTransaction) return false;
+                  if (tx.type !== "TRADE" && tx.type !== "POSITION") return false;
+                  if (!tx.instrumentName) return false;
+                  const txName = tx.instrumentName.toUpperCase().replace(/[\s/-]/g, "");
+                  const epicClean = instrumentEpic.replace(/[\s/-]/g, "");
+                  const friendlyClean = instrumentFriendly.replace(/[\s/-]/g, "");
+                  // Match if tx name contains or is contained by either the epic or friendly name
+                  return (
+                    txName.includes(epicClean) || epicClean.includes(txName) ||
+                    txName.includes(friendlyClean) || friendlyClean.includes(txName)
+                  );
+                })
+                // Sort by date descending — pick the most recent matching transaction
+                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
 
               let closePrice = dbTrade.openPrice ?? "0";
               let pnl = "0.00";
-              let pnlSource = "unknown";
+              let pnlSource = "unknown (no matching transaction found)";
 
               if (matchingTx) {
-                // Parse P&L from Capital.com format: "USD 1.23" or "-USD 0.50"
-                const pnlStr = matchingTx.profitAndLoss ?? "";
-                const pnlMatch = pnlStr.match(/([+-]?)[A-Z]+ ([+-]?[\d.]+)/);
+                // Parse P&L from Capital.com format: "USD 1.23", "-USD 0.50", or "1.23"
+                const pnlStr = (matchingTx.profitAndLoss ?? "").trim();
+                // Handles: "USD 1.23", "-USD 0.50", "USD -1.23", "1.23", "-1.23"
+                const pnlMatch = pnlStr.match(/^(-?)[A-Z]* *(-?[\d.]+)$/) ||
+                                 pnlStr.match(/^([+-]?[\d.]+)$/);
                 if (pnlMatch) {
-                  const sign = pnlMatch[1] === "-" ? -1 : 1;
-                  pnl = (sign * parseFloat(pnlMatch[2])).toFixed(2);
+                  const rawNum = parseFloat(pnlMatch[pnlMatch.length - 1]);
+                  const prefixNeg = pnlMatch[1] === "-";
+                  pnl = (prefixNeg && rawNum > 0 ? -rawNum : rawNum).toFixed(2);
                 }
-                if (matchingTx.closeLevel) {
+                if (matchingTx.closeLevel && matchingTx.closeLevel > 0) {
                   closePrice = matchingTx.closeLevel.toFixed(5);
                 }
-                pnlSource = `Capital.com transaction (P&L: ${matchingTx.profitAndLoss})`;
+                pnlSource = `Capital.com transaction ${matchingTx.reference} (raw: "${matchingTx.profitAndLoss}", parsed: $${pnl})`;
               }
 
               await closeTrade(dbTrade.id, closePrice, pnl, "reconciled");
@@ -606,8 +621,14 @@ async function runCycle() {
     const effectiveMaxPositions = openCount === 0 ? Math.max(1, risk.maxOpenPositions) : risk.maxOpenPositions;
 
     if (openCount < effectiveMaxPositions) {
-      // Get list of currently open instrument epics for correlation filter
-      const openInstruments = openPositions.map((p) => p.epic);
+      // Get list of currently open instrument names for correlation filter.
+      // Capital.com returns broker epics (e.g. "AUDUSD", "DE40", "US100") but our
+      // correlation groups and CORE_INSTRUMENTS use friendly names (e.g. "GER40", "NASDAQ").
+      // We must reverse-map broker epics → friendly names so the correlation filter works correctly.
+      const epicToFriendly = Object.fromEntries(
+        Object.entries(INSTRUMENT_EPICS).map(([friendly, epic]) => [epic, friendly])
+      );
+      const openInstruments = openPositions.map((p) => epicToFriendly[p.epic] ?? p.epic);
 
       // How many more positions can we open?
       const remainingSlots = risk.maxOpenPositions - openCount;

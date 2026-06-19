@@ -449,3 +449,9 @@
 - [x] Create scripts/git-sync.sh — one-command GitHub push
 - [x] Configure GitHub remote with new PAT token
 - [x] Push DIRECTOR_CONTEXT.md + scripts to GitHub (https://github.com/Hamadajaber/hjcapital)
+
+## Round 43 — Bug Fixes (Code Review)
+- [x] Fix broker epic → friendly name mapping in openInstruments (AUDUSD ghost position blocks EURUSD/GBPUSD)
+- [x] Improve reconciliation P&L: better transaction history matching to avoid P&L=0.00 on reconciled trades
+- [x] Harden client sentiment fetch: retry logic + graceful fallback when Capital.com sentiment API fails
+- [x] Verify all fixes with 108+ passing tests
