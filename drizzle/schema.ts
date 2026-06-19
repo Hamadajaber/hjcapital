@@ -208,6 +208,7 @@ export const tradeLessons = mysqlTable("trade_lessons", {
   aiVerdict: text("aiVerdict").notNull(),  // AI's self-evaluation
   lessonText: text("lessonText").notNull(), // Key lesson extracted
   marketConditions: text("marketConditions"), // Brief market context at trade time
+  mode: mysqlEnum("mode", ["paper", "live"]).notNull().default("paper"), // Trading mode when lesson was learned
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

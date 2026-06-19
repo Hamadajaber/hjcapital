@@ -450,22 +450,30 @@ export async function insertTradeLesson(lesson: Omit<InsertTradeLesson, "id" | "
  * Get the most recent lessons for a specific instrument (or all instruments).
  * Used to inject into AI prompt context.
  */
-export async function getRecentLessons(instrument?: string, limit = 5): Promise<TradeLesson[]> {
+export async function getRecentLessons(instrument?: string, limit = 5, mode?: "paper" | "live"): Promise<TradeLesson[]> {
   const db = await getDb();
   if (!db) return [];
-  if (instrument) {
+
+  const conditions = [];
+  if (instrument) conditions.push(eq(tradeLessons.instrument, instrument));
+  if (mode) conditions.push(eq(tradeLessons.mode, mode));
+
+  const effectiveLimit = instrument ? limit : limit * 2;
+
+  if (conditions.length > 0) {
+    const whereClause = conditions.length === 1 ? conditions[0] : and(...conditions);
     return db
       .select()
       .from(tradeLessons)
-      .where(eq(tradeLessons.instrument, instrument))
+      .where(whereClause)
       .orderBy(desc(tradeLessons.createdAt))
-      .limit(limit);
+      .limit(effectiveLimit);
   }
   return db
     .select()
     .from(tradeLessons)
     .orderBy(desc(tradeLessons.createdAt))
-    .limit(limit * 2); // broader context when no instrument filter
+    .limit(effectiveLimit);
 }
 
 /**

@@ -414,3 +414,18 @@
 - [x] Add "View All Lessons →" button in AutoTrade page lessons panel linking to /lessons
 - [x] Add 0.1% tolerance to Technical SL/TP Guard to avoid premature close from spread/noise
 - [x] Add AI Lessons stats card to Dashboard (last lesson text + overall accuracy %)
+
+## Round 39 — Three Next-Step Improvements
+- [ ] Fix Reconciliation error.invalid.from — fix the date format sent to Capital.com transaction history API
+- [ ] Add Lesson Trends Chart to /lessons page — weekly accuracy % over time line chart
+- [ ] Add Paper/Live mode filter to /lessons page
+
+## Round 39 — Three Next-Step Improvements
+- [x] Fix Reconciliation error.invalid.from: changed lookback from 48h to 23h (Capital.com max is 24h), fixed date format to YYYY-MM-DDTHH:MM:SS
+- [x] Add mode column to trade_lessons table (paper/live) + DB migration pushed (0010_numerous_bulldozer.sql)
+- [x] Pass mode to evaluateClosedTrade in all 3 call sites (main close, reconciliation, manual close)
+- [x] Update getRecentLessons() in db.ts to support mode filter (uses and() for combined conditions)
+- [x] Update getLessons tRPC procedure to accept mode parameter
+- [x] Add Weekly Accuracy Trend Chart to /lessons page (Recharts LineChart, groups by ISO week, last 8 weeks)
+- [x] Add Paper/Live mode filter to /lessons page (client-side mode pills + server-side mode filter)
+- [x] TypeScript: 0 errors | Tests: 108/108 passing

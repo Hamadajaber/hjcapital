@@ -1,6 +1,13 @@
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import { Brain, TrendingUp, TrendingDown, Lightbulb, CheckCircle2, XCircle, Filter, RefreshCw } from "lucide-react";
+import {
+  Brain, TrendingUp, TrendingDown, Lightbulb,
+  CheckCircle2, XCircle, Filter, RefreshCw,
+} from "lucide-react";
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ReferenceLine,
+} from "recharts";
 
 const INSTRUMENTS = ["All", "EURUSD", "GBPUSD", "USDJPY", "EURGBP", "GOLD", "XAGUSD", "US500", "GER40", "NASDAQ"];
 
@@ -33,6 +40,7 @@ function LessonCard({ lesson }: { lesson: {
   aiVerdict: string;
   lessonText: string;
   marketConditions: string | null;
+  mode: "paper" | "live";
   createdAt: Date;
 }}) {
   const [expanded, setExpanded] = useState(false);
@@ -73,6 +81,21 @@ function LessonCard({ lesson }: { lesson: {
               <XCircle size={12} /> Incorrect
             </span>
           )}
+          {/* Mode badge */}
+          <span
+            className="text-xs px-1.5 py-0.5 rounded"
+            style={{
+              background: lesson.mode === "live" ? "rgba(239,68,68,0.1)" : "rgba(100,116,139,0.15)",
+              color: lesson.mode === "live" ? "var(--color-loss)" : "var(--color-text-tertiary)",
+              fontFamily: "var(--font-sans)",
+              fontSize: "0.625rem",
+              fontWeight: 600,
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+            }}
+          >
+            {lesson.mode}
+          </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {lesson.pnl !== null && (
@@ -136,21 +159,53 @@ function LessonCard({ lesson }: { lesson: {
   );
 }
 
+// ─── Weekly Accuracy Trend Chart ─────────────────────────────────────────────
+
+function buildWeeklyTrend(lessons: Array<{ wasCorrect: boolean; createdAt: Date }>) {
+  if (lessons.length === 0) return [];
+
+  // Group by ISO week (Mon–Sun)
+  const weekMap = new Map<string, { correct: number; total: number }>();
+  for (const l of lessons) {
+    const d = new Date(l.createdAt);
+    // Get Monday of that week
+    const day = d.getDay(); // 0=Sun
+    const diff = (day === 0 ? -6 : 1 - day);
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + diff);
+    const key = monday.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const existing = weekMap.get(key) ?? { correct: 0, total: 0 };
+    existing.total++;
+    if (l.wasCorrect) existing.correct++;
+    weekMap.set(key, existing);
+  }
+
+  return Array.from(weekMap.entries())
+    .map(([week, { correct, total }]) => ({
+      week,
+      accuracy: Math.round((correct / total) * 100),
+      total,
+    }))
+    .slice(-8); // last 8 weeks
+}
+
 export default function Lessons() {
   const [selectedInstrument, setSelectedInstrument] = useState("All");
   const [filterCorrect, setFilterCorrect] = useState<"all" | "correct" | "incorrect">("all");
+  const [filterMode, setFilterMode] = useState<"all" | "paper" | "live">("all");
 
   const lessonsQuery = trpc.intelligence.getLessons.useQuery(
     {
       instrument: selectedInstrument === "All" ? undefined : selectedInstrument,
-      limit: 50,
+      limit: 100,
+      mode: filterMode === "all" ? undefined : filterMode,
     },
     { refetchInterval: 60000 }
   );
 
   const lessons = lessonsQuery.data ?? [];
 
-  // Filter by correct/incorrect
+  // Filter by correct/incorrect (client-side)
   const filteredLessons = useMemo(() => {
     if (filterCorrect === "correct") return lessons.filter((l) => l.wasCorrect);
     if (filterCorrect === "incorrect") return lessons.filter((l) => !l.wasCorrect);
@@ -166,6 +221,9 @@ export default function Lessons() {
     const totalPnl = lessons.reduce((sum, l) => sum + parseFloat(l.pnl ?? "0"), 0);
     return { total, correct, incorrect, winRate, totalPnl };
   }, [lessons]);
+
+  // Weekly trend data
+  const weeklyTrend = useMemo(() => buildWeeklyTrend(lessons), [lessons]);
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6">
@@ -229,36 +287,111 @@ export default function Lessons() {
         ))}
       </div>
 
-      {/* Instrument Filter */}
-      <div>
-        <div className="flex items-center gap-1.5 mb-2">
-          <Filter size={12} style={{ color: "var(--color-text-tertiary)" }} />
-          <span style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>Filter by Instrument</span>
+      {/* Weekly Accuracy Trend Chart */}
+      {weeklyTrend.length >= 2 && (
+        <div
+          className="rounded-2xl p-5"
+          style={{ background: "var(--color-bg-elevated)", border: "1px solid var(--color-border-subtle)" }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <p style={{ fontWeight: 600, fontSize: "0.9375rem", color: "var(--color-text-primary)", fontFamily: "var(--font-sans)" }}>
+              Weekly Accuracy Trend
+            </p>
+            <span style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>
+              Last {weeklyTrend.length} weeks
+            </span>
+          </div>
+          <ResponsiveContainer width="100%" height={160}>
+            <LineChart data={weeklyTrend} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" vertical={false} />
+              <XAxis
+                dataKey="week"
+                tick={{ fontSize: 10, fill: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                domain={[0, 100]}
+                tick={{ fontSize: 10, fill: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v) => `${v}%`}
+              />
+              <Tooltip
+                contentStyle={{
+                  background: "var(--color-bg-surface)",
+                  border: "1px solid var(--color-border-subtle)",
+                  borderRadius: 8,
+                  fontSize: 12,
+                  fontFamily: "var(--font-sans)",
+                }}
+                formatter={(value: number, _: string, props: any) => [
+                  `${value}% (${props.payload.total} trades)`,
+                  "Accuracy",
+                ]}
+              />
+              <ReferenceLine y={50} stroke="rgba(255,255,255,0.1)" strokeDasharray="4 4" />
+              <Line
+                type="monotone"
+                dataKey="accuracy"
+                stroke="var(--color-accent)"
+                strokeWidth={2}
+                dot={{ fill: "var(--color-accent)", r: 3, strokeWidth: 0 }}
+                activeDot={{ r: 5, strokeWidth: 0 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {INSTRUMENTS.map((inst) => (
+      )}
+
+      {/* Filters Row */}
+      <div className="space-y-3">
+        {/* Mode Filter */}
+        <div>
+          <div className="flex items-center gap-1.5 mb-2">
+            <Filter size={12} style={{ color: "var(--color-text-tertiary)" }} />
+            <span style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>Trading Mode</span>
+          </div>
+          <div className="flex gap-2">
+            {(["all", "paper", "live"] as const).map((m) => (
+              <FilterPill key={m} active={filterMode === m} onClick={() => setFilterMode(m)}>
+                {m === "all" ? "All Modes" : m === "paper" ? "📄 Paper" : "🔴 Live"}
+              </FilterPill>
+            ))}
+          </div>
+        </div>
+
+        {/* Instrument Filter */}
+        <div>
+          <div className="flex items-center gap-1.5 mb-2">
+            <Filter size={12} style={{ color: "var(--color-text-tertiary)" }} />
+            <span style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>Instrument</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {INSTRUMENTS.map((inst) => (
+              <FilterPill
+                key={inst}
+                active={selectedInstrument === inst}
+                onClick={() => setSelectedInstrument(inst)}
+              >
+                {inst}
+              </FilterPill>
+            ))}
+          </div>
+        </div>
+
+        {/* Correct / Incorrect Filter */}
+        <div className="flex gap-2">
+          {(["all", "correct", "incorrect"] as const).map((f) => (
             <FilterPill
-              key={inst}
-              active={selectedInstrument === inst}
-              onClick={() => setSelectedInstrument(inst)}
+              key={f}
+              active={filterCorrect === f}
+              onClick={() => setFilterCorrect(f)}
             >
-              {inst}
+              {f === "all" ? "All" : f === "correct" ? "✓ Correct" : "✗ Incorrect"}
             </FilterPill>
           ))}
         </div>
-      </div>
-
-      {/* Correct / Incorrect Filter */}
-      <div className="flex gap-2">
-        {(["all", "correct", "incorrect"] as const).map((f) => (
-          <FilterPill
-            key={f}
-            active={filterCorrect === f}
-            onClick={() => setFilterCorrect(f)}
-          >
-            {f === "all" ? "All" : f === "correct" ? "✓ Correct" : "✗ Incorrect"}
-          </FilterPill>
-        ))}
       </div>
 
       {/* Lessons List */}
@@ -288,7 +421,7 @@ export default function Lessons() {
       ) : (
         <div className="space-y-3">
           {filteredLessons.map((lesson) => (
-            <LessonCard key={lesson.id} lesson={lesson} />
+            <LessonCard key={lesson.id} lesson={lesson as any} />
           ))}
         </div>
       )}

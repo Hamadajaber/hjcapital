@@ -380,11 +380,13 @@ async function runCycle() {
           const brokerEpics = new Set(openPositions.map((p) => p.epic));
 
           // Fetch recent transaction history to get real close prices/P&L
+          // Capital.com API constraint: max date range is 1 day (24h).
+          // We use 23h to stay safely within the limit.
+          // Date format must be: YYYY-MM-DDTHH:MM:SS (ISO 8601, no milliseconds, no Z suffix)
           let recentTransactions: Awaited<ReturnType<typeof getTransactionHistory>> = [];
           try {
-            // Look back 48 hours to catch any missed closes
-            const from48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
-            recentTransactions = await getTransactionHistory(from48h, undefined, 100);
+            const from23h = new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString().slice(0, 19);
+            recentTransactions = await getTransactionHistory(from23h, undefined, 100);
           } catch (txErr) {
             console.warn("[AutoTrade] Reconciliation: could not fetch transaction history:", txErr);
           }
@@ -433,7 +435,8 @@ async function runCycle() {
                 exitPrice: parseFloat(closePrice),
                 pnl: parseFloat(pnl),
                 originalReasoning: dbTrade.aiReasoning ?? "No reasoning recorded",
-                marketConditionsAtEntry: `Reconciled close (broker closed position). Mode: live, Confidence: ${dbTrade.aiConfidence ?? 0}%`,
+                marketConditionsAtEntry: `Reconciled close (broker closed position). Mode: ${dbTrade.mode ?? "live"}, Confidence: ${dbTrade.aiConfidence ?? 0}%`,
+                mode: (dbTrade.mode as "paper" | "live") ?? "live",
               }).catch(() => {});
 
               await notifyOwner({
@@ -1589,6 +1592,7 @@ async function executeDecision(
             pnl,
             originalReasoning: decision.reasoning,
             marketConditionsAtEntry: `Mode: ${mode}, Confidence: ${decision.confidence}%`,
+            mode,
           }).catch(() => {});
         }
       }

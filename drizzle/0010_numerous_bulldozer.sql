@@ -1,0 +1,1 @@
+ALTER TABLE `trade_lessons` ADD `mode` enum('paper','live') DEFAULT 'paper' NOT NULL;

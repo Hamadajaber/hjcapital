@@ -81,6 +81,7 @@ export async function evaluateClosedTrade(params: {
   pnl: number;
   originalReasoning: string;
   marketConditionsAtEntry: string;
+  mode?: "paper" | "live";
 }): Promise<void> {
   try {
     const wasCorrect = params.pnl > 0;
@@ -127,6 +128,7 @@ Respond in JSON:
       aiVerdict: parsed.verdict ?? "No verdict",
       lessonText: parsed.lesson ?? "No lesson extracted",
       marketConditions: params.marketConditionsAtEntry,
+      mode: params.mode ?? "paper",
     });
 
     console.log(`[Intelligence] Trade lesson saved for ${params.instrument}: ${parsed.lesson}`);

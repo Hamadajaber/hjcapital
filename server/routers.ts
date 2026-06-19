@@ -264,6 +264,7 @@ export const appRouter = router({
             pnl: parseFloat(input.pnl),
             originalReasoning: tradeToClose.aiReasoning ?? "No reasoning recorded",
             marketConditionsAtEntry: `Manual close. Mode: ${tradeToClose.mode}, Confidence: ${tradeToClose.aiConfidence ?? 0}%`,
+            mode: (tradeToClose.mode as "paper" | "live") ?? "paper",
           }).catch(() => {});
         }
 
@@ -737,9 +738,13 @@ Respond ONLY with valid JSON:
   // ─── Intelligence Dashboard ──────────────────────────────────────────────────
   intelligence: router({
     getLessons: ownerProcedure
-      .input(z.object({ instrument: z.string().optional(), limit: z.number().default(10) }))
+      .input(z.object({
+        instrument: z.string().optional(),
+        limit: z.number().default(10),
+        mode: z.enum(["paper", "live"]).optional(),
+      }))
       .query(async ({ input }) => {
-        return await getRecentLessons(input.instrument, input.limit);
+        return await getRecentLessons(input.instrument, input.limit, input.mode);
       }),
     getDynamicThreshold: ownerProcedure
       .query(async () => {
