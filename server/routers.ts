@@ -50,6 +50,7 @@ import {
 import {
   getDynamicConfidenceThreshold,
   checkEconomicCalendar,
+  evaluateClosedTrade,
 } from "./engineIntelligence";
 import { getWSState, getAllCachedPrices } from "./capitalcomWS";
 import { getRecentLessons, getEngineIntelligence } from "./db";
@@ -245,7 +246,27 @@ export const appRouter = router({
     close: ownerProcedure
       .input(z.object({ id: z.number(), closePrice: z.string(), pnl: z.string() }))
       .mutation(async ({ input }) => {
-        await closeTrade(input.id, input.closePrice, input.pnl);
+        // Fetch the trade before closing so we have data for lesson extraction
+        const { getTrades: getTradesHelper } = await import("./db");
+        const allTrades = await getTradesHelper({ status: "open" });
+        const tradeToClose = allTrades.find((t) => t.id === input.id);
+
+        await closeTrade(input.id, input.closePrice, input.pnl, "manual");
+
+        // Learning Memory: extract lesson from manually closed trade
+        if (tradeToClose) {
+          evaluateClosedTrade({
+            tradeId: tradeToClose.id,
+            instrument: tradeToClose.instrument,
+            direction: tradeToClose.direction as "BUY" | "SELL",
+            entryPrice: parseFloat(tradeToClose.openPrice ?? "0"),
+            exitPrice: parseFloat(input.closePrice),
+            pnl: parseFloat(input.pnl),
+            originalReasoning: tradeToClose.aiReasoning ?? "No reasoning recorded",
+            marketConditionsAtEntry: `Manual close. Mode: ${tradeToClose.mode}, Confidence: ${tradeToClose.aiConfidence ?? 0}%`,
+          }).catch(() => {});
+        }
+
         // Update balance
         const p = await getPortfolio();
         if (p) {

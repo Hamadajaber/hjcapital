@@ -391,3 +391,14 @@
 - [x] Add XAGUSD Friday 17:00 UTC close + Sunday 22:00 UTC open (+ all other instruments)
 - [x] Add Market Hours dedicated page with live open/closed status for all instruments
 - [x] Run 108+ tests and confirm all passing
+
+## Round 36 — Comprehensive Code Review & Fixes
+- [x] Verified evaluateClosedTrade is called in analyzeForClose path (via executeDecision)
+- [x] Fixed: Reconciliation close path now calls evaluateClosedTrade (AI learns from broker-closed positions)
+- [x] Fixed: Manual close path (routers.ts trades.close) now calls evaluateClosedTrade
+- [x] Fixed: analyzeMarket prompt now uses CORE_INSTRUMENTS instead of hardcoded list with OIL_CRUDE
+- [x] Fixed: Added market hours guard before closePosition to prevent SILVER 400 error during daily break (21:00-22:00 UTC)
+- [x] Verified gatherMarketContext fetches all 3 timeframes (5m, 1H, 4H) correctly
+- [x] Verified AI prompt quality in analyzeInstrument — SL/TP rules, examples, and confirmation logic are correct
+- [x] TypeScript: 0 errors
+- [x] Tests: 108/108 passing

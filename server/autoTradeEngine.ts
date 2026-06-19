@@ -423,6 +423,19 @@ async function runCycle() {
 
               await closeTrade(dbTrade.id, closePrice, pnl, "reconciled");
               console.log(`[AutoTrade] Reconciliation: closed orphaned DB trade #${dbTrade.id} (${dbTrade.instrument}) — closePrice=${closePrice}, P&L=${pnl} (${pnlSource})`);
+
+              // Learning Memory: evaluate reconciled trade so AI learns from broker-closed positions
+              evaluateClosedTrade({
+                tradeId: dbTrade.id,
+                instrument: dbTrade.instrument,
+                direction: dbTrade.direction as "BUY" | "SELL",
+                entryPrice: parseFloat(dbTrade.openPrice ?? "0"),
+                exitPrice: parseFloat(closePrice),
+                pnl: parseFloat(pnl),
+                originalReasoning: dbTrade.aiReasoning ?? "No reasoning recorded",
+                marketConditionsAtEntry: `Reconciled close (broker closed position). Mode: live, Confidence: ${dbTrade.aiConfidence ?? 0}%`,
+              }).catch(() => {});
+
               await notifyOwner({
                 title: `🔄 Position Reconciliation: ${dbTrade.instrument}`,
                 content: `Trade #${dbTrade.id} (${dbTrade.instrument} ${dbTrade.direction} @ ${dbTrade.openPrice}) was closed on Capital.com.\nClose Price: ${closePrice}\nP&L: $${pnl}\nSource: ${pnlSource}`,
@@ -950,7 +963,7 @@ LATEST NEWS HEADLINES:
 ${news.slice(0, 5).join("\n")}
 
 CURRENTLY OPEN MARKETS (only trade these):
-${getOpenMarkets(["EURUSD", "GBPUSD", "USDJPY", "EURGBP", "GOLD", "XAGUSD", "OIL_CRUDE", "US500", "GER40", "NASDAQ"]).join(", ") || "No markets open right now"}
+${getOpenMarkets(CORE_INSTRUMENTS).join(", ") || "No markets open right now"}
 
 CURRENTLY OPEN POSITIONS (correlation filter — avoid correlated pairs):
 ${openInstruments.length > 0 ? openInstruments.join(", ") : "None"}
@@ -1454,6 +1467,21 @@ async function executeDecision(
       let pnl = 0;
       let confirmedCloseLevel: number | undefined;
       if (mode === "live") {
+        // ███ MARKET HOURS GUARD FOR CLOSE ███
+        // Capital.com rejects close orders during daily market breaks (e.g. SILVER 21:00-22:00 UTC)
+        // Check if market is currently tradeable before attempting to close
+        const closeEpic = INSTRUMENT_EPICS[decision.instrument] ?? decision.instrument;
+        const marketOpen = await checkMarketTradeable(closeEpic).catch(() => isMarketOpen(decision.instrument));
+        if (!marketOpen) {
+          console.warn(`[AutoTrade] CLOSE SKIPPED: ${decision.instrument} market is closed/in break — will retry next cycle`);
+          await logDecision(sessionId, {
+            ...decision,
+            action: "SKIP",
+            reasoning: `Close skipped: ${decision.instrument} market is closed/in daily break — will retry next cycle`,
+          }, "skipped", `Market closed during close attempt: ${decision.instrument}`);
+          return;
+        }
+        // ─────────────────────────────────────────────────────────────────────────
         const result = await closePosition(decision.closeDealId);
         pnl = result.pnl ?? 0;
         confirmedCloseLevel = result.closeLevel;
