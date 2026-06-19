@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Brain,
   Clock,
+  Lightbulb,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
   { path: "/performance", label: "Performance",  icon: BarChart3 },
   { path: "/risk",        label: "Risk Settings",icon: Shield },
   { path: "/market-hours", label: "Market Hours",  icon: Clock },
+  { path: "/lessons",      label: "AI Lessons",    icon: Lightbulb },
 ];
 
 // Items shown in the mobile bottom nav (most important 5)

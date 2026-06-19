@@ -519,15 +519,80 @@ async function runCycle() {
         console.warn(`[AutoTrade] Trailing stop error for ${pos.epic}:`, trailErr);
       }
 
-      const closeDecision = await analyzeForClose(pos, marketContext);
-      if (closeDecision.action === "CLOSE") {
-        await executeDecision(closeDecision, _engineState.sessionId, _engineState.mode);
+      // ███ TECHNICAL SL/TP FALLBACK CLOSE GUARD ███
+      // If the current price has breached the DB-stored SL or TP levels,
+      // close immediately WITHOUT waiting for AI — this is a safety net for cases
+      // where Capital.com's broker-side SL/TP did not trigger (e.g. gap, slippage, paper mode)
+      let technicalCloseTriggered = false;
+      try {
+        const dbFallback = await getDb();
+        if (dbFallback) {
+          const { trades: tradesTable } = await import("../drizzle/schema");
+          const { eq, and, desc } = await import("drizzle-orm");
+          const [openTrade] = await dbFallback
+            .select()
+            .from(tradesTable)
+            .where(and(eq(tradesTable.status, "open"), eq(tradesTable.instrument, pos.epic)))
+            .orderBy(desc(tradesTable.openedAt))
+            .limit(1);
+
+          if (openTrade && openTrade.stopLoss && openTrade.takeProfit && pos.currentLevel) {
+            const sl = parseFloat(openTrade.stopLoss);
+            const tp = parseFloat(openTrade.takeProfit);
+            const price = pos.currentLevel;
+            const dir = pos.direction as "BUY" | "SELL";
+
+            const slBreached = dir === "BUY" ? price <= sl : price >= sl;
+            const tpBreached = dir === "BUY" ? price >= tp : price <= tp;
+
+            if (slBreached || tpBreached) {
+              const triggerType = slBreached ? "SL" : "TP";
+              const triggerLevel = slBreached ? sl : tp;
+              console.warn(`[AutoTrade] TECHNICAL ${triggerType} GUARD: ${pos.epic} ${dir} — price ${price} breached ${triggerType}=${triggerLevel} — closing immediately`);
+
+              const fallbackDecision: TradeDecision = {
+                instrument: pos.epic,
+                action: "CLOSE",
+                confidence: 100,
+                reasoning: `Technical ${triggerType} guard: price ${price} breached ${triggerType} level ${triggerLevel} — broker-side order may not have triggered`,
+                closeDealId: pos.dealId,
+                positionDirection: dir,
+                positionOpenLevel: pos.openLevel,
+                positionCurrentLevel: price,
+              };
+              await executeDecision(fallbackDecision, _engineState.sessionId, _engineState.mode);
+              technicalCloseTriggered = true;
+
+              await notifyOwner({
+                title: `🛡️ Technical ${triggerType} Guard Triggered: ${pos.epic}`,
+                content: `${dir} position closed by technical guard.\nPrice: ${price} | ${triggerType}: ${triggerLevel}\nBroker-side order may not have fired.`,
+              }).catch(() => {});
+            }
+          }
+        }
+      } catch (slTpErr) {
+        console.warn(`[AutoTrade] Technical SL/TP guard error for ${pos.epic}:`, slTpErr);
+      }
+
+      // Only ask AI to close if the technical guard did not already close it
+      if (!technicalCloseTriggered) {
+        const closeDecision = await analyzeForClose(pos, marketContext);
+        if (closeDecision.action === "CLOSE") {
+          await executeDecision(closeDecision, _engineState.sessionId, _engineState.mode);
+        }
       }
     }
 
     // 4. Analyze ALL instruments in parallel and execute ALL valid trades
     const risk = await getRiskSettings();
     const openCount = openPositions.length;
+
+    // ███ LIVE BALANCE CACHE ███
+    // Fetch the live Capital.com balance ONCE per cycle and share it across all
+    // analyzeInstrument() calls for accurate ATR position sizing.
+    // Previously each call fetched balance independently (extra API calls + stale values).
+    const cycleAccountBalance = await getCurrentBalance(_engineState.mode).catch(() => 250);
+    console.log(`[AutoTrade] Cycle balance: $${cycleAccountBalance.toFixed(2)} (${_engineState.mode} mode)`);
 
     // Portfolio manager bypass: if 0 open positions, always allow at least 1 trade
     // regardless of maxOpenPositions setting (prevents engine from being stuck at 0)
@@ -566,7 +631,7 @@ async function runCycle() {
         // Analyze ALL candidate instruments in parallel
         const scanResults = await Promise.allSettled(
           candidateInstruments.map((inst) =>
-            analyzeInstrument(inst, marketContext, risk, openInstruments, dynamicThreshold.threshold)
+            analyzeInstrument(inst, marketContext, risk, openInstruments, dynamicThreshold.threshold, cycleAccountBalance)
           )
         );
 
@@ -1100,7 +1165,8 @@ async function analyzeInstrument(
   marketContext: Record<string, unknown>,
   risk: { minConfidenceThreshold: number; maxRiskPerTrade: number },
   openInstruments: string[],
-  dynamicThreshold?: number
+  dynamicThreshold?: number,
+  accountBalance?: number
 ): Promise<TradeDecision> {
   const effectiveThreshold = dynamicThreshold ?? risk.minConfidenceThreshold;
   const prices = (marketContext.prices as any[]) ?? [];
@@ -1342,8 +1408,10 @@ Respond in JSON:
     const candles1h = instTechnical.candles1h.map((c: OHLCVCandle) => ({
       open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume, timestamp: c.timestamp
     }));
-    const accountBalance = await getCurrentBalance("live").catch(() => 200);
-    const { size: calculatedSize, atr, riskAmount } = calculateATRPositionSize(candles1h, accountBalance);
+    // Use the per-cycle cached balance (passed from runCycle) for accurate ATR sizing.
+    // Falls back to live fetch if called outside runCycle (e.g. direct API call).
+    const effectiveBalance = accountBalance ?? await getCurrentBalance("live").catch(() => 200);
+    const { size: calculatedSize, atr, riskAmount } = calculateATRPositionSize(candles1h, effectiveBalance);
     tradeSize = calculatedSize;
     console.log(`[AutoTrade] ATR SIZE: ${instrument} — ATR=${atr}, risk=$${riskAmount}, size=${calculatedSize}`);
   }

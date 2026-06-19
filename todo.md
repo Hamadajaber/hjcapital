@@ -402,3 +402,10 @@
 - [x] Verified AI prompt quality in analyzeInstrument — SL/TP rules, examples, and confirmation logic are correct
 - [x] TypeScript: 0 errors
 - [x] Tests: 108/108 passing
+
+## Round 37 — Three Improvement Features
+- [x] Feature 1: Technical SL/TP fallback close guard — closes position immediately if price breaches DB SL/TP without waiting for AI (safety net for broker-side order failures, paper mode, or slippage)
+- [x] Feature 2: Live balance cache per cycle — fetches Capital.com balance once per runCycle() and passes it to all analyzeInstrument() calls via new `accountBalance` parameter for accurate ATR position sizing
+- [x] Feature 3: AI Lessons Learned page (/lessons) — full-page view with instrument filter, correct/incorrect filter, summary stats (total/win rate/correct/P&L), expandable lesson cards with AI verdict and market context
+- [x] Added /lessons route to App.tsx and Lightbulb nav item to HJLayout sidebar
+- [x] TypeScript: 0 errors | Tests: 108/108 passing

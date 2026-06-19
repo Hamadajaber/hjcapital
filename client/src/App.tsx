@@ -12,6 +12,7 @@ import RiskSettings from "./pages/RiskSettings";
 import Performance from "./pages/Performance";
 import AutoTrade from "./pages/AutoTrade";
 import MarketHours from "./pages/MarketHours";
+import Lessons from "./pages/Lessons";
 import Login from "./pages/Login";
 import HJLayout from "./components/HJLayout";
 import { useAuth } from "./_core/hooks/useAuth";
@@ -52,6 +53,7 @@ function ProtectedRoutes() {
         <Route path="/performance" component={Performance} />
         <Route path="/auto-trade" component={AutoTrade} />
         <Route path="/market-hours" component={MarketHours} />
+        <Route path="/lessons" component={Lessons} />
         <Route component={NotFound} />
       </Switch>
     </HJLayout>
