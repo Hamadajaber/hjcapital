@@ -409,3 +409,8 @@
 - [x] Feature 3: AI Lessons Learned page (/lessons) — full-page view with instrument filter, correct/incorrect filter, summary stats (total/win rate/correct/P&L), expandable lesson cards with AI verdict and market context
 - [x] Added /lessons route to App.tsx and Lightbulb nav item to HJLayout sidebar
 - [x] TypeScript: 0 errors | Tests: 108/108 passing
+
+## Round 38 — Three Next-Step Improvements
+- [x] Add "View All Lessons →" button in AutoTrade page lessons panel linking to /lessons
+- [x] Add 0.1% tolerance to Technical SL/TP Guard to avoid premature close from spread/noise
+- [x] Add AI Lessons stats card to Dashboard (last lesson text + overall accuracy %)

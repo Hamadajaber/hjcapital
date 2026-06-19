@@ -542,8 +542,12 @@ async function runCycle() {
             const price = pos.currentLevel;
             const dir = pos.direction as "BUY" | "SELL";
 
-            const slBreached = dir === "BUY" ? price <= sl : price >= sl;
-            const tpBreached = dir === "BUY" ? price >= tp : price <= tp;
+            // Apply 0.1% tolerance to avoid premature close from spread/noise.
+            // The price must move PAST the SL/TP by at least 0.1% before triggering.
+            // Example: SL=1.0800 BUY → only triggers if price ≤ 1.0789 (not 1.0800)
+            const TOLERANCE = 0.001; // 0.1%
+            const slBreached = dir === "BUY" ? price <= sl * (1 - TOLERANCE) : price >= sl * (1 + TOLERANCE);
+            const tpBreached = dir === "BUY" ? price >= tp * (1 + TOLERANCE) : price <= tp * (1 - TOLERANCE);
 
             if (slBreached || tpBreached) {
               const triggerType = slBreached ? "SL" : "TP";

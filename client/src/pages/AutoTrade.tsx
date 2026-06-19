@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Brain, Zap, Shield, TrendingUp, Square, Activity, Clock, Calendar, Bell, BellRing, Trash2, Plus, Lightbulb, BarChart3, Globe, Wifi, WifiOff } from "lucide-react";
@@ -215,32 +216,53 @@ function IntelligenceDashboardCard() {
 
       {/* Lessons Tab */}
       {activeTab === "lessons" && (
-        <div className="space-y-2 max-h-64 overflow-y-auto">
-          {lessonsQuery.isLoading ? (
-            <p className="text-xs text-center py-4" style={{ color: "var(--color-text-tertiary)" }}>Loading lessons...</p>
-          ) : !lessonsQuery.data?.length ? (
-            <div className="text-center py-6">
-              <Lightbulb size={24} className="mx-auto mb-2" style={{ color: "var(--color-text-tertiary)" }} />
-              <p className="text-xs" style={{ color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>
-                No lessons yet. The AI learns after each closed trade.
-              </p>
-            </div>
-          ) : (
-            lessonsQuery.data.map((lesson, i) => (
-              <div key={i} className="p-3 rounded" style={{ background: "var(--color-bg-secondary)", border: "1px solid var(--color-border-subtle)" }}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold" style={{ color: "var(--color-accent)", fontFamily: "var(--font-sans)" }}>
-                    {lesson.instrument}
-                  </span>
-                  <span className="text-xs" style={{ fontFamily: "var(--font-sans)", color: parseFloat(lesson.pnl ?? "0") >= 0 ? "var(--color-profit)" : "var(--color-loss)" }}>
-                    {parseFloat(lesson.pnl ?? "0") >= 0 ? "+" : ""}${parseFloat(lesson.pnl ?? "0").toFixed(2)}
-                  </span>
-                </div>
-                <p className="text-xs leading-relaxed" style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)" }}>
-                  {lesson.lessonText}
+        <div className="space-y-2">
+          <div className="max-h-64 overflow-y-auto space-y-2">
+            {lessonsQuery.isLoading ? (
+              <p className="text-xs text-center py-4" style={{ color: "var(--color-text-tertiary)" }}>Loading lessons...</p>
+            ) : !lessonsQuery.data?.length ? (
+              <div className="text-center py-6">
+                <Lightbulb size={24} className="mx-auto mb-2" style={{ color: "var(--color-text-tertiary)" }} />
+                <p className="text-xs" style={{ color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>
+                  No lessons yet. The AI learns after each closed trade.
                 </p>
               </div>
-            ))
+            ) : (
+              lessonsQuery.data.map((lesson, i) => (
+                <div key={i} className="p-3 rounded" style={{ background: "var(--color-bg-secondary)", border: "1px solid var(--color-border-subtle)" }}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-semibold" style={{ color: "var(--color-accent)", fontFamily: "var(--font-sans)" }}>
+                      {lesson.instrument}
+                    </span>
+                    <span className="text-xs" style={{ fontFamily: "var(--font-sans)", color: parseFloat(lesson.pnl ?? "0") >= 0 ? "var(--color-profit)" : "var(--color-loss)" }}>
+                      {parseFloat(lesson.pnl ?? "0") >= 0 ? "+" : ""}${parseFloat(lesson.pnl ?? "0").toFixed(2)}
+                    </span>
+                  </div>
+                  <p className="text-xs leading-relaxed" style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)" }}>
+                    {lesson.lessonText}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+          {/* View All Lessons link */}
+          {(lessonsQuery.data?.length ?? 0) > 0 && (
+            <Link href="/lessons">
+              <div
+                className="flex items-center justify-center gap-1.5 py-2 rounded-lg cursor-pointer transition-all duration-150 hover:opacity-80"
+                style={{
+                  background: "var(--color-accent-dim)",
+                  border: "1px solid var(--color-accent)",
+                  color: "var(--color-accent)",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  fontFamily: "var(--font-sans)",
+                }}
+              >
+                <Lightbulb size={12} />
+                View All Lessons →
+              </div>
+            </Link>
           )}
         </div>
       )}

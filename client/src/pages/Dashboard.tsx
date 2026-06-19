@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { Link } from "wouter";
+import { Lightbulb } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -125,6 +126,9 @@ export default function Dashboard() {
   const liveBalance   = liveBalanceQuery.data?.balance;
   const livePnl       = liveBalanceQuery.data?.profitLoss;
   const liveAvailable = liveBalanceQuery.data?.available;
+
+  const lessonsQuery = trpc.intelligence.getLessons.useQuery({ limit: 1 }, { refetchInterval: 120000 });
+  const lessonsStatsQuery = trpc.intelligence.getLessons.useQuery({ limit: 100 }, { refetchInterval: 120000 });
 
   const sentimentQuery = trpc.capitalcom.clientSentiment.useQuery(
     { instruments: ["EURUSD", "GBPUSD", "GOLD", "US500", "BITCOIN"] },
@@ -432,6 +436,53 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* AI Lessons Stats Card */}
+      {(() => {
+        const allLessons = lessonsStatsQuery.data ?? [];
+        const total = allLessons.length;
+        const correct = allLessons.filter((l) => l.wasCorrect).length;
+        const winRate = total > 0 ? (correct / total) * 100 : 0;
+        const lastLesson = lessonsQuery.data?.[0];
+        return total > 0 ? (
+          <Link href="/lessons">
+            <div
+              className="rounded-2xl p-5 cursor-pointer transition-all duration-200 hover:opacity-90"
+              style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)" }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Lightbulb size={14} style={{ color: "var(--color-accent)" }} />
+                  <p style={{ fontWeight: 600, fontSize: "0.9375rem", color: "var(--color-text-primary)" }}>AI Lessons Learned</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)" }}>{total} lessons</span>
+                  <span
+                    className="text-xs font-bold px-2 py-0.5 rounded-full"
+                    style={{
+                      background: winRate >= 60 ? "rgba(34,197,94,0.15)" : winRate >= 45 ? "rgba(245,158,11,0.15)" : "rgba(239,68,68,0.15)",
+                      color: winRate >= 60 ? "var(--color-profit)" : winRate >= 45 ? "var(--color-gold, #f59e0b)" : "var(--color-loss)",
+                      fontFamily: "var(--font-sans)",
+                    }}
+                  >
+                    {winRate.toFixed(0)}% accuracy
+                  </span>
+                  <span style={{ fontSize: "0.6875rem", color: "var(--color-accent)", fontFamily: "var(--font-sans)", fontWeight: 600 }}>View all →</span>
+                </div>
+              </div>
+              {lastLesson && (
+                <div className="flex items-start gap-2">
+                  <Lightbulb size={12} className="mt-0.5 shrink-0" style={{ color: "var(--color-gold, #f59e0b)" }} />
+                  <p style={{ fontSize: "0.8125rem", color: "var(--color-text-secondary)", lineHeight: 1.6, fontFamily: "var(--font-sans)" }}>
+                    <span style={{ fontWeight: 600, color: "var(--color-accent)" }}>{lastLesson.instrument}: </span>
+                    {lastLesson.lessonText}
+                  </p>
+                </div>
+              )}
+            </div>
+          </Link>
+        ) : null;
+      })()}
 
       {/* Today's summary */}
       <div className="rounded-2xl p-5"
