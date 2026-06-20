@@ -12,11 +12,11 @@
 | اسم المشروع | HJ Capital — منصة حمادة الاستثمارية |
 | الهدف | منصة تداول آلي مدعومة بالذكاء الاصطناعي تتصل بـ Capital.com |
 | المالك | حمادة جابر |
-| الرصيد الحي | ~$1,000 على Capital.com (live trading) |
+| الرصيد الحالي | ~$1,021 على Capital.com (ربح ~$21) |
 | الموقع | https://hjcapital.vip |
 | GitHub | https://github.com/Hamadajaber/hjcapital (private) |
 | مسار المشروع | `/home/ubuntu/hj-capital-platform` |
-| آخر Checkpoint | `b16c8074` |
+| آخر Checkpoint | `6de7b7f9` |
 
 ---
 
@@ -105,6 +105,9 @@ hj-capital-platform/
 | Round 39 | إصلاح error.invalid.from في reconciliation، mode column في trade_lessons، Weekly Accuracy Trend Chart، Paper/Live filter | ✅ |
 | Round 40 | Instrument Performance Comparison table، Close Reason Pie Chart، تحسين formatLessonsForPrompt (5 lessons، incorrect أولاً) | ✅ |
 | Round 41 | استبدال الجدول الثابت بـ Market-Hours Watcher ديناميكي (كل 5 دقائق)، isAnyMarketOpen()، getNextMarketEvent() | ✅ |
+| Round 42 | نظام العمل متعدد الـ Chats: DIRECTOR_CONTEXT.md، hjcapital-workflow Skill، scripts/git-sync.sh، GitHub sync | ✅ |
+| Round 43 | 3 bug fixes: broker epic->friendly name mapping، Reconciliation P&L محسّن، Client sentiment retry logic | ✅ |
+| Round 44 | تحديث DIRECTOR_CONTEXT.md، Telegram alert للصفقات المعادلة، تأكيد EURUSD/GBPUSD غير محجوبة | ✅ |
 
 ---
 
@@ -117,6 +120,11 @@ hj-capital-platform/
 | maxRiskPerTrade = 1% (ليس أكثر) | الرصيد $1,000 — حماية رأس المال أولاً | Round 30 |
 | Dynamic confidence threshold | Win Rate < 50% → threshold يرتفع تلقائياً | Round 30 |
 | Market-Hours Watcher بدلاً من جدول ثابت | الأسواق تفتح/تغلق بشكل ديناميكي | Round 41 |
+| openInstruments يستخدم friendly names | broker epics كانت تحجب EURUSD/GBPUSD خطأً | Round 43 |
+| Telegram alert للصفقات المعادلة | إشعار فوري عند إغلاق Capital.com لصفقة عبر SL/TP | Round 44 |
+| Round 42 | نظام العمل متعدد الـ Chats: DIRECTOR_CONTEXT.md، hjcapital-workflow Skill، scripts/git-sync.sh، GitHub sync | ✅ |
+| Round 43 | 3 bug fixes: broker epic->friendly name mapping، Reconciliation P&L محسّن، Client sentiment retry logic | ✅ |
+| Round 44 | تحديث DIRECTOR_CONTEXT.md، Telegram alert للصفقات المعادلة، تأكيد EURUSD/GBPUSD غير محجوبة | ✅ |
 | Trailing stop عند 50%/75% | تأمين الأرباح تدريجياً | Round 28 |
 | SL/TP Guard بـ 0.1% tolerance | منع رفض الأوامر من Capital.com | Round 37-38 |
 
@@ -131,6 +139,9 @@ hj-capital-platform/
 | error.invalid.from في reconciliation | 23h lookback + ISO date format | Round 39 |
 | SILVER يُغلق خلال فترة الراحة | Market hours guard قبل closePosition | Round 36 |
 | Win rate warning يُرسل كل 15 دقيقة | DB guard يمنع التكرار | Round 31 |
+| AUDUSD Ghost Position يحجب EURUSD/GBPUSD | epicToFriendly reverse-map في openInstruments | Round 43 |
+| P&L=0.00 على reconciled trades | Multi-fallback name matching + sorted by date + robust regex | Round 43 |
+| Client sentiment TypeError متكرر | Retry 2x بـ 2s delay + single warning on final failure | Round 43 |
 
 ---
 
@@ -175,11 +186,11 @@ git push origin main
 > يُحدّث هذا القسم في نهاية كل جلسة عمل.
 
 ### أولوية عالية
-- [ ] مراقبة أداء المحرك في الأسبوع الأول من التشغيل الحي
+- [x] مراقبة أداء المحرك — المحرك يعمل (Cycle #18+، رصيد $1,021)
 - [ ] تحليل نتائج الصفقات الأولى وتعديل الاستراتيجية إذا لزم
 
 ### أولوية متوسطة
-- [ ] إضافة Telegram alerts لكل صفقة تُفتح/تُغلق (بدلاً من الإشعارات الحالية فقط)
+- [x] إضافة Telegram alert للصفقات المعادلة (Round 44)
 - [ ] لوحة تحكم للـ Risk Management (رسم بياني للـ drawdown)
 - [ ] إضافة backtesting حقيقي بدلاً من الـ simulation الحالي
 
@@ -223,6 +234,9 @@ pnpm dev
 | التاريخ | التحديث | بواسطة |
 |---|---|---|
 | 2026-06-19 | إنشاء الملف الأولي — Round 41 مكتمل | Manus AI |
+| 2026-06-19 | Round 42: نظام العمل متعدد الـ Chats + GitHub sync | Manus AI |
+| 2026-06-20 | Round 43: 3 bug fixes (epic mapping، reconciliation P&L، sentiment retry) | Manus AI |
+| 2026-06-20 | Round 44: Telegram reconciliation alert + تحديث DIRECTOR_CONTEXT | Manus AI |
 
 ---
 

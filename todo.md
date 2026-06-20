@@ -455,3 +455,8 @@
 - [x] Improve reconciliation P&L: better transaction history matching to avoid P&L=0.00 on reconciled trades
 - [x] Harden client sentiment fetch: retry logic + graceful fallback when Capital.com sentiment API fails
 - [x] Verify all fixes with 108+ passing tests
+
+## Round 44 — Suggestions Implementation
+- [x] Update DIRECTOR_CONTEXT.md with Round 42/43/44 fixes and current platform state
+- [x] Add Telegram notification for reconciled trades with real P&L (notifyTradeReconciled)
+- [x] Verify EURUSD/GBPUSD unblocked (epicToFriendly fix applied in Round 43)

@@ -22,6 +22,7 @@ import {
   notifyEngineStarted,
   notifyEngineStopped,
   notifyRiskAlert,
+  notifyTradeReconciled,
   sendWeeklySummary,
 } from "./telegram";
 import {
@@ -454,6 +455,19 @@ async function runCycle() {
                 mode: (dbTrade.mode as "paper" | "live") ?? "live",
               }).catch(() => {});
 
+              // Send Telegram notification for reconciled trade (Capital.com closed it via SL/TP/Manual)
+              await notifyTradeReconciled({
+                tradeId: dbTrade.id,
+                instrument: dbTrade.instrument,
+                direction: dbTrade.direction as "BUY" | "SELL",
+                entryPrice: dbTrade.openPrice ?? "0",
+                closePrice,
+                pnl: parseFloat(pnl),
+                pnlSource,
+                mode: (dbTrade.mode as "paper" | "live") ?? "live",
+              }).catch(() => {});
+
+              // Also notify owner via Manus notification
               await notifyOwner({
                 title: `🔄 Position Reconciliation: ${dbTrade.instrument}`,
                 content: `Trade #${dbTrade.id} (${dbTrade.instrument} ${dbTrade.direction} @ ${dbTrade.openPrice}) was closed on Capital.com.\nClose Price: ${closePrice}\nP&L: $${pnl}\nSource: ${pnlSource}`,

@@ -115,6 +115,33 @@ ${pnlEmoji} إجمالي الربح/الخسارة: <b>${pnlSign}$${stats.totalP
   await sendTelegramMessage(text);
 }
 
+export async function notifyTradeReconciled(params: {
+  tradeId: number;
+  instrument: string;
+  direction: "BUY" | "SELL";
+  entryPrice: string | number;
+  closePrice: string | number;
+  pnl: number;
+  pnlSource: string;
+  mode: "paper" | "live";
+}): Promise<void> {
+  const modeLabel = params.mode === "live" ? "🔴 LIVE" : "📄 PAPER";
+  const pnlEmoji = params.pnl > 0 ? "✅" : params.pnl < 0 ? "❌" : "⚪";
+  const pnlSign = params.pnl > 0 ? "+" : "";
+  const text = `🔄 <b>صفقة مُعادَلة تلقائياً — ${params.instrument}</b>
+━━━━━━━━━━━━━━━━━━
+${modeLabel} | الاتجاه: <b>${params.direction}</b>
+📥 سعر الدخول: <b>${params.entryPrice}</b>
+📤 سعر الإغلاق: <b>${params.closePrice}</b>
+${pnlEmoji} الربح/الخسارة: <b>${pnlSign}$${params.pnl.toFixed(2)}</b>
+━━━━━━━━━━━━━━━━━━
+📝 أُغلقت بواسطة Capital.com (SL/TP/Manual)
+🔍 المصدر: <i>${params.pnlSource}</i>
+🆔 رقم الصفقة: #${params.tradeId}`;
+
+  await sendTelegramMessage(text);
+}
+
 export async function notifyRiskAlert(message: string): Promise<void> {
   const text = `⚠️ <b>تنبيه إدارة المخاطر</b>
 ━━━━━━━━━━━━━━━━━━
