@@ -485,12 +485,12 @@
 - [x] Fix initialBalance reference: use $1000 as base for total return calculation
 
 ## Round 48 — Telegram Bot + initialBalance Fix
-- [ ] Fix initialBalance in DB portfolio table to $1000.00
-- [ ] Add Telegram Bot webhook handler for incoming commands
-- [ ] Implement /status command (engine state, mode, open positions count)
-- [ ] Implement /balance command (live Capital.com balance + P&L)
-- [ ] Implement /positions command (list all open trades with entry/current/P&L)
-- [ ] Register webhook route in index.ts
+- [x] Fix initialBalance in DB portfolio table to $1000.00
+- [x] Add Telegram Bot webhook handler for incoming commands
+- [x] Implement /status command (engine state, mode, open positions count)
+- [x] Implement /balance command (live Capital.com balance + P&L)
+- [x] Implement /positions command (list all open trades with entry/current/P&L)
+- [x] Register webhook route in index.ts
 
 ## Round 48 — Completed
 - [x] Fix initialBalance in DB portfolio table to $1000.00

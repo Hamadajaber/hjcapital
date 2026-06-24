@@ -14,12 +14,12 @@ import { toast } from "sonner";
 
 function generateBalanceHistory(currentBalance: number) {
   const data = [];
-  let balance = 250;
+  let balance = currentBalance; // Start from current balance and work backwards
   const now = Date.now();
   for (let i = 29; i >= 0; i--) {
     const date = new Date(now - i * 24 * 60 * 60 * 1000);
     balance += (Math.random() - 0.45) * 1.8;
-    balance = Math.max(238, balance);
+    balance = Math.max(currentBalance * 0.95, balance);
     data.push({
       date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
       balance: parseFloat(balance.toFixed(2)),
