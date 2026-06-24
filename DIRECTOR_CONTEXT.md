@@ -12,11 +12,11 @@
 | اسم المشروع | HJ Capital — منصة حمادة الاستثمارية |
 | الهدف | منصة تداول آلي مدعومة بالذكاء الاصطناعي تتصل بـ Capital.com |
 | المالك | حمادة جابر |
-| الرصيد الحالي | ~$1,014-1,073 على Capital.com (ربح ~$14-73) |
+| الرصيد الحالي | ~$2,000+ على Capital.com (إيداع جديد $1,000 في 2026-06-25) |
 | الموقع | https://hjcapital.vip |
 | GitHub | https://github.com/Hamadajaber/hjcapital (private) |
 | مسار المشروع | `/home/ubuntu/hj-capital-platform` |
-| آخر Checkpoint | `8288d9fe` (Round 48) — Round 49 checkpoint pending |
+| آخر Checkpoint | `b02f6e57` (Round 49) |
 
 ---
 
@@ -215,7 +215,7 @@ git push origin main
 |---|---|---|
 | dailyLossLimitPct | 25% | يوقف التداول إذا تجاوزت الخسارة اليومية 25% من رأس المال |
 | trailingDrawdownPct | 5% | يوقف التداول إذا انخفض الرصيد 5% عن أعلى قيمة له |
-| peakBalance | $1,000+ | يتحدث تلقائياً عند كل ارتفاع جديد في الرصيد |
+| peakBalance | $2,000 | تم تحديثه بعد الإيداع الجديد — يتحدث تلقائياً عند كل ارتفاع جديد |
 | stopLossPerTrade | 1% | كل صفقة لها stop loss بـ 1% من رأس المال |
 | maxRiskPerTrade | 1% | الحد الأقصى للمخاطرة في صفقة واحدة |
 | minConfidenceThreshold | 55% | الحد الأدنى لثقة الـ AI لفتح صفقة |
@@ -266,6 +266,7 @@ pnpm dev
 | 2026-06-24 | Round 47: dealId tracking, balance sync, Dashboard live balance | Manus AI |
 | 2026-06-24 | Round 48: initialBalance=$1000, /positions Telegram command, webhook auto-register | Manus AI |
 | 2026-06-25 | Round 49: Trailing Drawdown Protection (5%), remove Daily Profit Lock, RiskSettings UI update | Manus AI |
+| 2026-06-25 | إيداع $1,000 جديد — initialBalance و peakBalance تم تحديثهما إلى $2,000 | Manus AI |
 
 ---
 
