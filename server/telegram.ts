@@ -164,7 +164,7 @@ export interface TelegramUpdate {
 
 /**
  * Handle an incoming Telegram bot update (webhook).
- * Supports: /start, /stop, /status, /balance
+ * Supports: /start, /stop, /status, /balance, /positions
  */
 export async function handleTelegramUpdate(
   update: TelegramUpdate,
@@ -173,6 +173,7 @@ export async function handleTelegramUpdate(
     onStop: () => Promise<string>;
     onStatus: () => Promise<string>;
     onBalance: () => Promise<string>;
+    onPositions?: () => Promise<string>;
   }
 ): Promise<void> {
   const message = update.message;
@@ -198,6 +199,8 @@ export async function handleTelegramUpdate(
     response = await handlers.onStatus();
   } else if (text === "/balance" || text.startsWith("/balance ")) {
     response = await handlers.onBalance();
+  } else if (text === "/positions" || text.startsWith("/positions ")) {
+    response = handlers.onPositions ? await handlers.onPositions() : "❌ /positions غير مفعّل.";
   } else if (text === "/help") {
     response = `🤖 <b>HJ Capital Bot — الأوامر المتاحة</b>
 ━━━━━━━━━━━━━━━━━━
@@ -205,6 +208,7 @@ export async function handleTelegramUpdate(
 /stop — إيقاف محرك التداول الآلي
 /status — حالة المحرك والجلسة الحالية
 /balance — رصيد الحساب الحالي
+/positions — الصفقات المفتوحة الآن
 /help — عرض هذه القائمة`;
   } else {
     response = `❓ أمر غير معروف: <code>${message.text}</code>\nاكتب /help لعرض الأوامر المتاحة.`;

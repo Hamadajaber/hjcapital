@@ -9,7 +9,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { autoTradeStartHandler, autoTradeStopHandler, weeklyReportHandler } from "../scheduledHandlers";
-import { handleTelegramUpdate, TelegramUpdate } from "../telegram";
+import { handleTelegramUpdate, TelegramUpdate, setTelegramWebhook } from "../telegram";
 import { startAutoTrade, stopAutoTrade, getEngineState, getActiveSession, CORE_INSTRUMENTS } from "../autoTradeEngine";
 import { getAccountBalance, isAnyMarketOpen, getNextMarketEvent } from "../capitalcom";
 
@@ -85,6 +85,25 @@ async function startServer() {
             return `💰 <b>رصيد Capital.com</b>\n━━━━━━━━━━━━━━━━━━\nالرصيد: <b>$${bal.balance.toFixed(2)}</b>\nمتاح للتداول: <b>$${bal.available.toFixed(2)}</b>\nربح/خسارة مفتوحة: <b>${bal.profitLoss >= 0 ? "+" : ""}$${bal.profitLoss.toFixed(2)}</b>`;
           } catch (err) {
             return `❌ فشل جلب الرصيد: ${String(err)}`;
+          }
+        },
+        onPositions: async () => {
+          try {
+            const { getOpenPositions } = await import("../capitalcom");
+            const positions = await getOpenPositions();
+            if (!positions || positions.length === 0) {
+              return `📊 <b>الصفقات المفتوحة</b>\n━━━━━━━━━━━━━━━━━━\nلا توجد صفقات مفتوحة حالياً.`;
+            }
+            const lines = positions.map((p, i) => {
+              const pnl = p.profitLoss ?? 0;
+              const pnlStr = `${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`;
+              const dir = p.direction === "BUY" ? "🟢 BUY" : "🔴 SELL";
+              return `${i + 1}. <b>${p.epic}</b> ${dir}\n   دخول: ${p.openLevel} | حالي: ${p.currentLevel}\n   P&L: <b>${pnlStr}</b>`;
+            });
+            const totalPnl = positions.reduce((s, p) => s + (p.profitLoss ?? 0), 0);
+            return `📊 <b>الصفقات المفتوحة (${positions.length})</b>\n━━━━━━━━━━━━━━━━━━\n${lines.join("\n\n")}\n━━━━━━━━━━━━━━━━━━\nإجمالي P&L: <b>${totalPnl >= 0 ? "+" : ""}$${totalPnl.toFixed(2)}</b>`;
+          } catch (err) {
+            return `❌ فشل جلب الصفقات: ${String(err)}`;
           }
         },
       });
@@ -163,6 +182,26 @@ async function startServer() {
     // Then check every 5 minutes
     setInterval(marketHoursWatcher, WATCHER_INTERVAL_MS);
   }, 5000);
+
+  // Auto-register Telegram webhook on startup (production only)
+  // Uses the deployed domain so Telegram can reach our /api/telegram/webhook endpoint
+  if (process.env.NODE_ENV === "production") {
+    setTimeout(async () => {
+      try {
+        // Try hjcapital.vip first, fall back to manus.space subdomain
+        const domain = process.env.APP_DOMAIN || "hjcapital.vip";
+        const webhookUrl = `https://${domain}/api/telegram/webhook`;
+        const ok = await setTelegramWebhook(webhookUrl);
+        if (ok) {
+          console.log(`[Telegram] Webhook auto-registered: ${webhookUrl}`);
+        } else {
+          console.warn("[Telegram] Webhook registration failed — bot commands will not work until webhook is set.");
+        }
+      } catch (err) {
+        console.warn("[Telegram] Webhook auto-registration error:", err);
+      }
+    }, 8000); // Wait 8s for server to be fully ready
+  }
 }
 
 startServer().catch(console.error);

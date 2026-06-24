@@ -483,3 +483,18 @@
 - [x] Fix balance sync: persist live Capital.com balance to DB every engine cycle
 - [x] Fix Dashboard: use live Capital.com balance as primary source (not stale DB $250)
 - [x] Fix initialBalance reference: use $1000 as base for total return calculation
+
+## Round 48 — Telegram Bot + initialBalance Fix
+- [ ] Fix initialBalance in DB portfolio table to $1000.00
+- [ ] Add Telegram Bot webhook handler for incoming commands
+- [ ] Implement /status command (engine state, mode, open positions count)
+- [ ] Implement /balance command (live Capital.com balance + P&L)
+- [ ] Implement /positions command (list all open trades with entry/current/P&L)
+- [ ] Register webhook route in index.ts
+
+## Round 48 — Completed
+- [x] Fix initialBalance in DB portfolio table to $1000.00
+- [x] Add /positions command to Telegram bot (live positions with entry/current/P&L)
+- [x] Add onPositions handler in index.ts webhook
+- [x] Auto-register Telegram webhook on production startup (hjcapital.vip)
+- [x] Update /help command to include /positions
