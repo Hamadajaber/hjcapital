@@ -2097,6 +2097,29 @@ async function checkDailyRiskLimits(sessionId: number, mode: "paper" | "live"): 
     };
   }
 
+  // ── Trailing Drawdown Protection (Scientific Risk Management) ────────────────────────
+  // Stops engine if balance drops more than X% from its all-time peak during the session.
+  // This protects accumulated profits without capping upside (no profit lock).
+  if (risk.trailingDrawdownPct > 0) {
+    const db = await getDb();
+    if (db) {
+      // Update peak balance if current balance exceeds previous peak
+      if (currentBalance > risk.peakBalance) {
+        await db.update(riskSettings).set({ peakBalance: currentBalance.toFixed(2) });
+        risk.peakBalance = currentBalance;
+        console.log(`[AutoTrade] 📈 New peak balance: $${currentBalance.toFixed(2)}`);
+      }
+      // Check if drawdown from peak exceeds allowed threshold
+      const drawdownFromPeak = ((risk.peakBalance - currentBalance) / risk.peakBalance) * 100;
+      if (drawdownFromPeak >= risk.trailingDrawdownPct) {
+        return {
+          blocked: true,
+          reason: `Trailing drawdown protection: balance $${currentBalance.toFixed(2)} is ${drawdownFromPeak.toFixed(2)}% below peak $${risk.peakBalance.toFixed(2)} (max: ${risk.trailingDrawdownPct}%). Trading paused to protect profits.`
+        };
+      }
+    }
+  }
+
   return { blocked: false, reason: "" };
 }
 
@@ -2107,7 +2130,7 @@ async function getRiskSettings() {
   // Default threshold raised from 45% → 55% (Round 45 improvement).
   // Analysis showed Win Rate was only 38.9% at 45% threshold.
   // At 55%, we expect fewer but higher-quality trades.
-  if (!db) return { dailyLossLimitPct: 25, stopLossPerTrade: 1, maxRiskPerTrade: 1, minConfidenceThreshold: 55, maxOpenPositions: 3 };
+  if (!db) return { dailyLossLimitPct: 25, stopLossPerTrade: 1, maxRiskPerTrade: 1, minConfidenceThreshold: 55, maxOpenPositions: 3, trailingDrawdownPct: 5, peakBalance: 1000 };
   const rows = await db.select().from(riskSettings).limit(1);
   const r = rows[0];
   return {
@@ -2116,6 +2139,8 @@ async function getRiskSettings() {
     maxRiskPerTrade: r ? parseFloat(r.maxRiskPerTrade) : 1,
     minConfidenceThreshold: r ? r.minConfidenceThreshold : 55,
     maxOpenPositions: r ? r.maxOpenPositions : 3,
+    trailingDrawdownPct: r ? parseFloat(r.trailingDrawdownPct) : 5,
+    peakBalance: r ? parseFloat(r.peakBalance) : 1000,
   };
 }
 

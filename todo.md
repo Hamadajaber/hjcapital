@@ -498,3 +498,23 @@
 - [x] Add onPositions handler in index.ts webhook
 - [x] Auto-register Telegram webhook on production startup (hjcapital.vip)
 - [x] Update /help command to include /positions
+
+## Round 49 — Scientific Risk Management (Trailing Drawdown Protection)
+- [x] Remove Daily Profit Lock concept — no profit cap, unlimited upside
+- [x] Add trailingDrawdownPct column to risk_settings table (default 5.00%)
+- [x] Add peakBalance column to risk_settings table (default 1000.00)
+- [x] Push DB migration (drizzle/0012_glamorous_silvermane.sql)
+- [x] Update getRiskSettings() in autoTradeEngine.ts to return new fields
+- [x] Add Trailing Drawdown Protection block in checkDailyRiskLimits():
+  - Update peakBalance in DB whenever current balance exceeds previous peak
+  - Block trading if balance drops >= trailingDrawdownPct% from peak
+- [x] Update updateRiskSettings() in db.ts to accept trailingDrawdownPct
+- [x] Update risk.update router in routers.ts to accept trailingDrawdownPct
+- [x] Update RiskSettings.tsx frontend:
+  - Add Trailing Drawdown Protection card with ACTIVE badge
+  - Show peakBalance (read-only, auto-tracked by engine)
+  - Show drawdown floor = peakBalance × (1 - trailingPct%)
+  - Add trailingDrawdownPct to preset values
+  - Update philosophy info box to explain scientific risk management
+- [x] TypeScript: 0 errors
+- [x] Tests: 108/108 passing

@@ -85,6 +85,13 @@
       "when": 1782338329843,
       "tag": "0011_reflective_chamber",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1782340762241,
+      "tag": "0012_glamorous_silvermane",
+      "breakpoints": true
     }
   ]
 }

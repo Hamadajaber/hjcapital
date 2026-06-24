@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
-import { Shield, Save, AlertTriangle, Info, Target, Zap, Scale, Lock, Sparkles } from "lucide-react";
+import { Shield, Save, AlertTriangle, Info, Target, Zap, Scale, Lock, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 
 const PRESETS = {
@@ -11,7 +11,7 @@ const PRESETS = {
     color: "var(--color-profit)",
     dimColor: "var(--color-profit-dim)",
     borderColor: "oklch(0.720 0.130 155 / 0.30)",
-    values: { minConfidenceThreshold: 65, maxRiskPerTrade: "0.50", maxOpenPositions: 2, stopLossPerTrade: "0.50", dailyLossLimitPct: "10.00" },
+    values: { minConfidenceThreshold: 65, maxRiskPerTrade: "0.50", maxOpenPositions: 2, stopLossPerTrade: "0.50", dailyLossLimitPct: "10.00", trailingDrawdownPct: "5.00" },
   },
   balanced: {
     label: "Balanced — مدير محفظة",
@@ -20,7 +20,7 @@ const PRESETS = {
     color: "var(--color-gold)",
     dimColor: "oklch(0.65 0.18 55 / 0.08)",
     borderColor: "oklch(0.65 0.18 55 / 0.30)",
-    values: { minConfidenceThreshold: 55, maxRiskPerTrade: "0.75", maxOpenPositions: 3, stopLossPerTrade: "0.75", dailyLossLimitPct: "20.00" },
+    values: { minConfidenceThreshold: 55, maxRiskPerTrade: "0.75", maxOpenPositions: 3, stopLossPerTrade: "0.75", dailyLossLimitPct: "20.00", trailingDrawdownPct: "5.00" },
   },
   aggressive: {
     label: "Aggressive — أقصى الفرص",
@@ -29,18 +29,19 @@ const PRESETS = {
     color: "var(--color-loss)",
     dimColor: "var(--color-loss-dim)",
     borderColor: "oklch(0.660 0.155 20 / 0.30)",
-    values: { minConfidenceThreshold: 45, maxRiskPerTrade: "1.00", maxOpenPositions: 4, stopLossPerTrade: "1.00", dailyLossLimitPct: "30.00" },
+    values: { minConfidenceThreshold: 45, maxRiskPerTrade: "1.00", maxOpenPositions: 4, stopLossPerTrade: "1.00", dailyLossLimitPct: "30.00", trailingDrawdownPct: "7.00" },
   },
 } as const;
 
 type PresetKey = keyof typeof PRESETS;
 
 function SettingRow({
-  label, description, value, onChange, type = "number", min, max, step, prefix, suffix
+  label, description, value, onChange, type = "number", min, max, step, prefix, suffix, readOnly
 }: {
   label: string; description: string; value: string | number;
-  onChange: (v: string) => void; type?: "number" | "text";
+  onChange?: (v: string) => void; type?: "number" | "text";
   min?: number; max?: number; step?: number; prefix?: string; suffix?: string;
+  readOnly?: boolean;
 }) {
   return (
     <div
@@ -56,10 +57,17 @@ function SettingRow({
         <input
           type={type}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => onChange?.(e.target.value)}
           min={min} max={max} step={step}
+          readOnly={readOnly}
           className="hj-input tabular-nums text-right"
-          style={{ width: "6rem", fontFamily: "var(--font-serif)", fontSize: "0.875rem" }}
+          style={{
+            width: "6rem",
+            fontFamily: "var(--font-serif)",
+            fontSize: "0.875rem",
+            opacity: readOnly ? 0.6 : 1,
+            cursor: readOnly ? "not-allowed" : "text",
+          }}
         />
         {suffix && <span style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>{suffix}</span>}
       </div>
@@ -79,9 +87,13 @@ export default function RiskSettings() {
     dailyLossLimitPct: "25.00",
     stopLossPerTrade: "1.00",
     maxRiskPerTrade: "1.00",
-    minConfidenceThreshold: 45,
+    minConfidenceThreshold: 55,
     maxOpenPositions: 3,
+    trailingDrawdownPct: "5.00",
   });
+
+  // Read-only display of peak balance from DB
+  const peakBalance = riskQuery.data?.peakBalance ? parseFloat(riskQuery.data.peakBalance) : 1000;
 
   const [activePreset, setActivePreset] = useState<PresetKey | null>("balanced");
 
@@ -94,6 +106,7 @@ export default function RiskSettings() {
       maxOpenPositions: preset.values.maxOpenPositions,
       stopLossPerTrade: preset.values.stopLossPerTrade,
       dailyLossLimitPct: preset.values.dailyLossLimitPct,
+      trailingDrawdownPct: preset.values.trailingDrawdownPct,
     }));
     setActivePreset(key);
     toast.info(`Applied ${preset.label.split(" — ")[0]} preset`);
@@ -107,6 +120,7 @@ export default function RiskSettings() {
         maxRiskPerTrade: riskQuery.data.maxRiskPerTrade,
         minConfidenceThreshold: riskQuery.data.minConfidenceThreshold,
         maxOpenPositions: riskQuery.data.maxOpenPositions,
+        trailingDrawdownPct: riskQuery.data.trailingDrawdownPct ?? "5.00",
       });
     }
   }, [riskQuery.data]);
@@ -118,6 +132,7 @@ export default function RiskSettings() {
       maxRiskPerTrade: settings.maxRiskPerTrade,
       minConfidenceThreshold: settings.minConfidenceThreshold,
       maxOpenPositions: settings.maxOpenPositions,
+      trailingDrawdownPct: settings.trailingDrawdownPct,
     });
   };
 
@@ -132,6 +147,11 @@ export default function RiskSettings() {
   const riskBg    = riskLevel === "low" ? "var(--color-profit-dim)" : riskLevel === "medium" ? "oklch(0.65 0.18 55 / 0.08)" : "var(--color-loss-dim)";
   const riskBorder = riskLevel === "low" ? "oklch(0.720 0.130 155 / 0.30)" : riskLevel === "medium" ? "oklch(0.65 0.18 55 / 0.30)" : "oklch(0.660 0.155 20 / 0.30)";
   const riskColor  = riskLevel === "low" ? "var(--color-profit)" : riskLevel === "medium" ? "var(--color-gold)" : "var(--color-loss)";
+
+  // Trailing drawdown status
+  const trailingPct = parseFloat(settings.trailingDrawdownPct) || 5;
+  const trailingEnabled = trailingPct > 0;
+  const drawdownFloor = peakBalance * (1 - trailingPct / 100);
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
@@ -311,7 +331,7 @@ export default function RiskSettings() {
             label="Min AI Confidence"
             description="Only execute trades when AI confidence is above this threshold"
             value={settings.minConfidenceThreshold}
-            onChange={(v) => setSettings(s => ({ ...s, minConfidenceThreshold: parseInt(v) || 45 }))}
+            onChange={(v) => setSettings(s => ({ ...s, minConfidenceThreshold: parseInt(v) || 55 }))}
             min={30} max={95} step={1} suffix="%"
           />
           <SettingRow
@@ -324,6 +344,86 @@ export default function RiskSettings() {
         </div>
       </div>
 
+      {/* Trailing Drawdown Protection — Scientific Risk Management */}
+      <div
+        className="rounded-2xl p-5"
+        style={{
+          background: trailingEnabled ? "oklch(0.25 0.06 260 / 0.15)" : "var(--color-bg-surface)",
+          border: `1px solid ${trailingEnabled ? "oklch(0.55 0.18 260 / 0.35)" : "var(--color-border-subtle)"}`,
+        }}
+      >
+        <div className="flex items-center gap-2.5 mb-4">
+          <div
+            className="p-1.5 rounded-lg"
+            style={{
+              background: trailingEnabled ? "oklch(0.55 0.18 260 / 0.15)" : "var(--color-bg-elevated)",
+              border: `1px solid ${trailingEnabled ? "oklch(0.55 0.18 260 / 0.35)" : "var(--color-border-subtle)"}`,
+            }}
+          >
+            <TrendingDown size={13} style={{ color: trailingEnabled ? "oklch(0.65 0.18 260)" : "var(--color-text-tertiary)" }} />
+          </div>
+          <div className="flex-1">
+            <h3 style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-text-primary)" }}>
+              Trailing Drawdown Protection
+              {trailingEnabled && (
+                <span
+                  className="ml-2 px-1.5 py-0.5 rounded text-xs"
+                  style={{ background: "oklch(0.55 0.18 260 / 0.15)", color: "oklch(0.65 0.18 260)", fontWeight: 500 }}
+                >
+                  ACTIVE
+                </span>
+              )}
+            </h3>
+            <p style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", marginTop: "0.0625rem" }}>
+              Scientific risk management — protects accumulated profits without capping upside
+            </p>
+          </div>
+        </div>
+
+        {/* Peak balance display */}
+        <div
+          className="flex items-center justify-between p-3 rounded-xl mb-4"
+          style={{ background: "var(--color-bg-elevated)", border: "1px solid var(--color-border-subtle)" }}
+        >
+          <div className="flex items-center gap-2">
+            <TrendingUp size={13} style={{ color: "var(--color-profit)" }} />
+            <span style={{ fontSize: "0.8125rem", color: "var(--color-text-secondary)" }}>Peak Balance (auto-tracked)</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-profit)", fontFamily: "var(--font-serif)" }}>
+              ${peakBalance.toFixed(2)}
+            </span>
+            {trailingEnabled && (
+              <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>
+                Floor: ${drawdownFloor.toFixed(2)}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <SettingRow
+          label="Trailing Drawdown %"
+          description="Engine stops if balance drops more than this % below peak balance (0 = disabled)"
+          value={settings.trailingDrawdownPct}
+          onChange={(v) => setSettings(s => ({ ...s, trailingDrawdownPct: v }))}
+          min={0} max={20} step={0.5} suffix="%"
+        />
+
+        {trailingEnabled && (
+          <div
+            className="mt-3 p-3 rounded-xl flex items-start gap-2"
+            style={{ background: "oklch(0.55 0.18 260 / 0.08)", border: "1px solid oklch(0.55 0.18 260 / 0.20)" }}
+          >
+            <Info size={12} style={{ color: "oklch(0.65 0.18 260)", flexShrink: 0, marginTop: "0.125rem" }} />
+            <p style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)", lineHeight: 1.5 }}>
+              Engine will pause if balance falls below <strong style={{ color: "oklch(0.65 0.18 260)" }}>${drawdownFloor.toFixed(2)}</strong> (${peakBalance.toFixed(2)} peak − {trailingPct}%).
+              Peak balance updates automatically as profits grow — protecting more capital over time.
+              Set to 0 to disable.
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* Philosophy info box */}
       <div
         className="flex items-start gap-3 p-4 rounded-xl"
@@ -332,11 +432,13 @@ export default function RiskSettings() {
         <Info size={14} style={{ color: "var(--color-accent)", flexShrink: 0, marginTop: "0.125rem" }} />
         <div style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
           <p>
-            <strong style={{ color: "var(--color-text-primary)" }}>Investment Philosophy — Protect the Trade, Not the Day:</strong>{" "}
-            Instead of capping daily profits, each trade has its own stop loss. If the market is strong, the engine keeps trading and capturing gains. The day only stops if total losses hit {settings.dailyLossLimitPct}% of capital.
+            <strong style={{ color: "var(--color-text-primary)" }}>Scientific Risk Management — Unlimited Upside, Protected Downside:</strong>{" "}
+            No daily profit cap. The engine keeps trading as long as profits are growing.
+            Trailing Drawdown Protection ({settings.trailingDrawdownPct}%) automatically locks in gains by stopping trading
+            only when balance drops {settings.trailingDrawdownPct}% from its all-time peak — not from the starting balance.
           </p>
           <p style={{ marginTop: "0.375rem" }}>
-            Current settings: Daily loss cap {settings.dailyLossLimitPct}% · Stop loss per trade {settings.stopLossPerTrade}% · Max risk {settings.maxRiskPerTrade}% · Min confidence {settings.minConfidenceThreshold}%.
+            Current settings: Daily loss cap {settings.dailyLossLimitPct}% · Stop loss per trade {settings.stopLossPerTrade}% · Max risk {settings.maxRiskPerTrade}% · Min confidence {settings.minConfidenceThreshold}% · Trailing drawdown {settings.trailingDrawdownPct}%.
           </p>
         </div>
       </div>

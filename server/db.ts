@@ -215,6 +215,7 @@ export async function updateRiskSettings(settings: Partial<{
   maxRiskPerTrade: string;
   minConfidenceThreshold: number;
   maxOpenPositions: number;
+  trailingDrawdownPct: string;
 }>) {
   const db = await getDb();
   if (!db) return;

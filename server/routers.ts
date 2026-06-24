@@ -341,6 +341,7 @@ export const appRouter = router({
         maxRiskPerTrade: z.string().optional(),
         minConfidenceThreshold: z.number().optional(),
         maxOpenPositions: z.number().optional(),
+        trailingDrawdownPct: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         await updateRiskSettings(input);

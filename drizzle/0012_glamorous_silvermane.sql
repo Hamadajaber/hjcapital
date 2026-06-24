@@ -1,0 +1,2 @@
+ALTER TABLE `risk_settings` ADD `trailingDrawdownPct` decimal(5,2) DEFAULT '5.00' NOT NULL;--> statement-breakpoint
+ALTER TABLE `risk_settings` ADD `peakBalance` decimal(12,2) DEFAULT '1000.00' NOT NULL;

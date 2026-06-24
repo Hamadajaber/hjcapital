@@ -96,10 +96,13 @@ export const riskSettings = mysqlTable("risk_settings", {
   // Max risk per trade as % of capital
   maxRiskPerTrade: decimal("maxRiskPerTrade", { precision: 5, scale: 2 }).notNull().default("1.00"),
   minConfidenceThreshold: int("minConfidenceThreshold").notNull().default(72),
-  maxOpenPositions: int("maxOpenPositions").notNull().default(3),
+    maxOpenPositions: int("maxOpenPositions").notNull().default(3),
+  // Trailing drawdown protection: stop engine if balance drops more than X% from peak balance (0 = disabled)
+  trailingDrawdownPct: decimal("trailingDrawdownPct", { precision: 5, scale: 2 }).notNull().default("5.00"),
+  // Peak balance tracker — updated every cycle when current balance exceeds previous peak
+  peakBalance: decimal("peakBalance", { precision: 12, scale: 2 }).notNull().default("1000.00"),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
-
 export type RiskSettings = typeof riskSettings.$inferSelect;
 
 // AI Advisor chat messages

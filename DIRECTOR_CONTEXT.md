@@ -12,11 +12,11 @@
 | اسم المشروع | HJ Capital — منصة حمادة الاستثمارية |
 | الهدف | منصة تداول آلي مدعومة بالذكاء الاصطناعي تتصل بـ Capital.com |
 | المالك | حمادة جابر |
-| الرصيد الحالي | ~$1,021 على Capital.com (ربح ~$21) |
+| الرصيد الحالي | ~$1,014-1,073 على Capital.com (ربح ~$14-73) |
 | الموقع | https://hjcapital.vip |
 | GitHub | https://github.com/Hamadajaber/hjcapital (private) |
 | مسار المشروع | `/home/ubuntu/hj-capital-platform` |
-| آخر Checkpoint | `6de7b7f9` |
+| آخر Checkpoint | `8288d9fe` (Round 48) — Round 49 checkpoint pending |
 
 ---
 
@@ -108,6 +108,11 @@ hj-capital-platform/
 | Round 42 | نظام العمل متعدد الـ Chats: DIRECTOR_CONTEXT.md، hjcapital-workflow Skill، scripts/git-sync.sh، GitHub sync | ✅ |
 | Round 43 | 3 bug fixes: broker epic->friendly name mapping، Reconciliation P&L محسّن، Client sentiment retry logic | ✅ |
 | Round 44 | تحديث DIRECTOR_CONTEXT.md، Telegram alert للصفقات المعادلة، تأكيد EURUSD/GBPUSD غير محجوبة | ✅ |
+| Round 45 | Hard size cap (max 2 units)، 60-min cooldown بعد خسارة، رفع confidence threshold من 45% إلى 55% | ✅ |
+| Round 46 | Daily Drawdown Chart، Per-Instrument Bar Chart، Weekly Summary card، weeklyReportHandler | ✅ |
+| Round 47 | dealId tracking، balance sync كل cycle، dealId backfill، Dashboard يعرض live balance | ✅ |
+| Round 48 | initialBalance=$1000، /positions Telegram command، auto-register webhook | ✅ |
+| Round 49 | إزالة Daily Profit Lock، Trailing Drawdown Protection (5% من peak)، dynamic Daily Loss Limit، تحديث RiskSettings frontend | ✅ |
 
 ---
 
@@ -122,9 +127,11 @@ hj-capital-platform/
 | Market-Hours Watcher بدلاً من جدول ثابت | الأسواق تفتح/تغلق بشكل ديناميكي | Round 41 |
 | openInstruments يستخدم friendly names | broker epics كانت تحجب EURUSD/GBPUSD خطأً | Round 43 |
 | Telegram alert للصفقات المعادلة | إشعار فوري عند إغلاق Capital.com لصفقة عبر SL/TP | Round 44 |
-| Round 42 | نظام العمل متعدد الـ Chats: DIRECTOR_CONTEXT.md، hjcapital-workflow Skill، scripts/git-sync.sh، GitHub sync | ✅ |
-| Round 43 | 3 bug fixes: broker epic->friendly name mapping، Reconciliation P&L محسّن، Client sentiment retry logic | ✅ |
-| Round 44 | تحديث DIRECTOR_CONTEXT.md، Telegram alert للصفقات المعادلة، تأكيد EURUSD/GBPUSD غير محجوبة | ✅ |
+| Hard size cap (max 2 units) | منع خسارة -$57 USDJPY type | Round 45 |
+| 60-min cooldown بعد خسارة | منع تكرار GOLD BUY ×3 | Round 45 |
+| Confidence threshold 45%→55% | تحسين Win Rate من 38.9% | Round 45 |
+| إزالة Daily Profit Lock | لا حد للأرباح — فقط حماية الخسائر | Round 49 |
+| Trailing Drawdown Protection (5%) | يوقف التداول إذا انخفض الرصيد 5% عن الذروة | Round 49 |
 | Trailing stop عند 50%/75% | تأمين الأرباح تدريجياً | Round 28 |
 | SL/TP Guard بـ 0.1% tolerance | منع رفض الأوامر من Capital.com | Round 37-38 |
 
@@ -186,12 +193,14 @@ git push origin main
 > يُحدّث هذا القسم في نهاية كل جلسة عمل.
 
 ### أولوية عالية
-- [x] مراقبة أداء المحرك — المحرك يعمل (Cycle #18+، رصيد $1,021)
-- [ ] تحليل نتائج الصفقات الأولى وتعديل الاستراتيجية إذا لزم
+- [x] مراقبة أداء المحرك — المحرك يعمل في LIVE mode
+- [x] Trailing Drawdown Protection (5% من peak) — مفعّل الآن (Round 49)
+- [ ] نشر المنصة على hjcapital.vip لتفعيل Telegram webhook الرسمي
+- [ ] تحليل نتائج الصفقات بعد أسبوع وتعديل الاستراتيجية
 
 ### أولوية متوسطة
 - [x] إضافة Telegram alert للصفقات المعادلة (Round 44)
-- [ ] لوحة تحكم للـ Risk Management (رسم بياني للـ drawdown)
+- [x] لوحة تحكم للـ Risk Management — تم تحسينها (Round 46)
 - [ ] إضافة backtesting حقيقي بدلاً من الـ simulation الحالي
 
 ### أولوية منخفضة
@@ -200,7 +209,22 @@ git push origin main
 
 ---
 
-## 11. معلومات تقنية مهمة
+## 11. حالة إدارة المخاطر (Round 49)
+
+| المعامل | القيمة | الوصف |
+|---|---|---|
+| dailyLossLimitPct | 25% | يوقف التداول إذا تجاوزت الخسارة اليومية 25% من رأس المال |
+| trailingDrawdownPct | 5% | يوقف التداول إذا انخفض الرصيد 5% عن أعلى قيمة له |
+| peakBalance | $1,000+ | يتحدث تلقائياً عند كل ارتفاع جديد في الرصيد |
+| stopLossPerTrade | 1% | كل صفقة لها stop loss بـ 1% من رأس المال |
+| maxRiskPerTrade | 1% | الحد الأقصى للمخاطرة في صفقة واحدة |
+| minConfidenceThreshold | 55% | الحد الأدنى لثقة الـ AI لفتح صفقة |
+| maxOpenPositions | 3 | الحد الأقصى لعدد الصفقات المفتوحة في نفس الوقت |
+| maxPositionSize | 2 units | الحد الأقصى لحجم الصفقة (تم تخفيضه من 10 في Round 45) |
+
+---
+
+## 12. معلومات تقنية مهمة
 
 ### متغيرات البيئة المهمة
 ```
@@ -229,7 +253,7 @@ pnpm dev
 
 ---
 
-## 12. سجل التحديثات
+## 13. سجل التحديثات
 
 | التاريخ | التحديث | بواسطة |
 |---|---|---|
@@ -237,6 +261,11 @@ pnpm dev
 | 2026-06-19 | Round 42: نظام العمل متعدد الـ Chats + GitHub sync | Manus AI |
 | 2026-06-20 | Round 43: 3 bug fixes (epic mapping، reconciliation P&L، sentiment retry) | Manus AI |
 | 2026-06-20 | Round 44: Telegram reconciliation alert + تحديث DIRECTOR_CONTEXT | Manus AI |
+| 2026-06-24 | Round 45: Hard size cap (max 2 units), 60-min cooldown, confidence 55% | Manus AI |
+| 2026-06-24 | Round 46: Daily Drawdown Chart, Per-Instrument Bar Chart, Weekly Report | Manus AI |
+| 2026-06-24 | Round 47: dealId tracking, balance sync, Dashboard live balance | Manus AI |
+| 2026-06-24 | Round 48: initialBalance=$1000, /positions Telegram command, webhook auto-register | Manus AI |
+| 2026-06-25 | Round 49: Trailing Drawdown Protection (5%), remove Daily Profit Lock, RiskSettings UI update | Manus AI |
 
 ---
 
