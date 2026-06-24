@@ -56,7 +56,7 @@ import {
   getInstrumentSentiment,
   formatSentimentForPrompt,
 } from "./sentimentAnalysis";
-import { getDb, getPriceAlerts, triggerPriceAlert, getPortfolio, updateEngineIntelligence, closeTrade } from "./db";
+import { getDb, getPriceAlerts, triggerPriceAlert, getPortfolio, updateEngineIntelligence, closeTrade, updatePortfolioBalance } from "./db";
 import {
   evaluateClosedTrade,
   formatLessonsForPrompt,
@@ -380,6 +380,24 @@ async function runCycle() {
           // Build set of epics currently open on Capital.com
           const brokerEpics = new Set(openPositions.map((p) => p.epic));
 
+          // ███ DEALID BACKFILL ███
+          // For existing open trades that were opened before dealId tracking was added,
+          // match them to Capital.com positions by epic and backfill the dealId.
+          for (const pos of openPositions) {
+            const friendlyName = Object.entries(INSTRUMENT_EPICS).find(([, v]) => v === pos.epic)?.[0] ?? pos.epic;
+            const matchingDbTrade = dbOpenTrades.find(
+              (t) => !t.dealId && (t.instrument === friendlyName || (INSTRUMENT_EPICS[t.instrument] ?? t.instrument) === pos.epic)
+            );
+            if (matchingDbTrade && pos.dealId) {
+              const { trades: tradesTable2 } = await import("../drizzle/schema");
+              const { eq: eq2 } = await import("drizzle-orm");
+              await dbConn.update(tradesTable2)
+                .set({ dealId: pos.dealId })
+                .where(eq2(tradesTable2.id, matchingDbTrade.id));
+              console.log(`[AutoTrade] DealId backfill: trade #${matchingDbTrade.id} (${matchingDbTrade.instrument}) → dealId=${pos.dealId}`);
+            }
+          }
+
           // Fetch recent transaction history to get real close prices/P&L
           // Capital.com API constraint: max date range is 1 day (24h).
           // We use 23h to stay safely within the limit.
@@ -629,6 +647,13 @@ async function runCycle() {
     // Previously each call fetched balance independently (extra API calls + stale values).
     const cycleAccountBalance = await getCurrentBalance(_engineState.mode).catch(() => 250);
     console.log(`[AutoTrade] Cycle balance: $${cycleAccountBalance.toFixed(2)} (${_engineState.mode} mode)`);
+    // ███ BALANCE SYNC ███ — persist live Capital.com balance to DB every cycle
+    // This ensures our dashboard always shows the real broker balance, not the stale $250 default.
+    if (_engineState.mode === "live" && cycleAccountBalance > 0) {
+      await updatePortfolioBalance(cycleAccountBalance.toFixed(2)).catch((e) =>
+        console.warn("[AutoTrade] Balance sync failed:", e)
+      );
+    }
 
     // Portfolio manager bypass: if 0 open positions, always allow at least 1 trade
     // regardless of maxOpenPositions setting (prevents engine from being stuck at 0)
@@ -1734,6 +1759,7 @@ async function executeDecision(
 
       let tradeId: number | undefined;
       let actualEntry = decision.entryPrice ?? 0;
+      let brokerDealId: string | undefined; // Capital.com deal ID from placeOrder confirmation
       // These will be set in live mode after the SL/TP calculation block
       let finalSL: number | undefined;
       let finalTP: number | undefined;
@@ -1932,6 +1958,7 @@ async function executeDecision(
           takeProfit: finalTP,
         });
         actualEntry = result.level;
+        brokerDealId = result.dealId;
 
         // Final zero-price check on broker-confirmed entry
         if (!actualEntry || actualEntry <= 0 || isNaN(actualEntry)) {
@@ -1983,6 +2010,8 @@ async function executeDecision(
         // Store the ACTUAL SL/TP sent to the broker (not the raw AI estimate)
         stopLoss: dbSL ? dbSL.toFixed(5) : null,
         takeProfit: dbTP ? dbTP.toFixed(5) : null,
+        // Store Capital.com deal ID for cross-referencing with broker
+        dealId: brokerDealId ?? null,
       });
 
       tradeId = (tradeResult as any).insertId;

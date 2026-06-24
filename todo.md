@@ -475,3 +475,11 @@
 - [x] Add weeklyReportHandler in scheduledHandlers.ts
 - [x] Register /api/scheduled/weekly-report in index.ts
 - [x] 108/108 tests pass | 0 TypeScript errors
+
+## Round 47 — Sync Fix
+- [x] Add dealId field to trades schema + DB migration
+- [x] Save broker dealId from placeOrder result into DB for every new trade
+- [x] Add dealId backfill: match existing open DB trades to Capital.com positions by epic
+- [x] Fix balance sync: persist live Capital.com balance to DB every engine cycle
+- [x] Fix Dashboard: use live Capital.com balance as primary source (not stale DB $250)
+- [x] Fix initialBalance reference: use $1000 as base for total return calculation

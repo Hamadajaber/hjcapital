@@ -1,0 +1,1 @@
+ALTER TABLE `trades` ADD `dealId` varchar(128);

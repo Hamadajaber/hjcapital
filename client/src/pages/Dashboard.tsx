@@ -109,8 +109,13 @@ export default function Dashboard() {
     onError:   () => toast.error("Failed to generate signals"),
   });
 
-  const balance       = parseFloat(portfolioQuery.data?.balance ?? "250");
-  const initialBal    = parseFloat(portfolioQuery.data?.initialBalance ?? "250");
+  // Use live Capital.com balance as primary source (synced every cycle to DB).
+  // Fall back to DB balance if live query hasn't loaded yet.
+  const liveBalance   = liveBalanceQuery.data?.balance;
+  const livePnl       = liveBalanceQuery.data?.profitLoss;
+  const liveAvailable = liveBalanceQuery.data?.available;
+  const balance       = liveBalance ?? parseFloat(portfolioQuery.data?.balance ?? "250");
+  const initialBal    = parseFloat(portfolioQuery.data?.initialBalance ?? "1000");
   const totalReturn   = balance - initialBal;
   const totalReturnPct = ((totalReturn / initialBal) * 100).toFixed(2);
   const mode          = portfolioQuery.data?.mode ?? "paper";
@@ -123,9 +128,6 @@ export default function Dashboard() {
   const latestSignals = signalsQuery.data?.slice(0, 5) ?? [];
   const balanceHistory = generateBalanceHistory(balance);
   const dailyPnl      = stats?.totalPnl ?? 0;
-  const liveBalance   = liveBalanceQuery.data?.balance;
-  const livePnl       = liveBalanceQuery.data?.profitLoss;
-  const liveAvailable = liveBalanceQuery.data?.available;
 
   const lessonsQuery = trpc.intelligence.getLessons.useQuery({ limit: 1 }, { refetchInterval: 120000 });
   const lessonsStatsQuery = trpc.intelligence.getLessons.useQuery({ limit: 100 }, { refetchInterval: 120000 });

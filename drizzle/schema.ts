@@ -61,6 +61,8 @@ export const trades = mysqlTable("trades", {
   autoTradeSessionId: int("autoTradeSessionId"),
   // Close reason: 'ai_close' | 'sl_hit' | 'tp_hit' | 'reconciled' | 'manual'
   closeReason: varchar("closeReason", { length: 32 }),
+  // Capital.com deal ID for cross-referencing with broker
+  dealId: varchar("dealId", { length: 128 }),
 });
 
 export type Trade = typeof trades.$inferSelect;
