@@ -218,11 +218,15 @@ export default function Performance() {
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
   const [equityDays, setEquityDays] = useState(30);
 
+  const [drawdownDays, setDrawdownDays] = useState(30);
+
   const tradesQuery     = trpc.trades.list.useQuery({ status: "closed" });
   const portfolioQuery  = trpc.portfolio.get.useQuery();
   const equityQuery     = trpc.performance.equityHistory.useQuery({ days: equityDays });
   const drawdownQuery   = trpc.performance.maxDrawdown.useQuery();
   const heatmapQuery    = trpc.performance.instrumentPerformance.useQuery();
+  const dailyDDQuery    = trpc.performance.dailyDrawdown.useQuery({ days: drawdownDays });
+  const weeklySummary   = trpc.performance.weeklySummary.useQuery();
 
   const trades         = tradesQuery.data ?? [];
   const balance        = parseFloat(portfolioQuery.data?.balance ?? "250");
@@ -520,17 +524,24 @@ export default function Performance() {
             />
           </div>
 
-          {/* Drawdown chart */}
-          <SectionCard title="Drawdown Chart — 90 Days">
-            {equityData.length === 0 ? emptyState("No closed trades yet") : (
+          {/* Daily Drawdown Chart */}
+          <SectionCard title="Daily Drawdown Chart">
+            <div className="flex gap-2 mb-4">
+              {[7, 14, 30, 60, 90].map(d => (
+                <button key={d} onClick={() => setDrawdownDays(d)}
+                  className="px-3 py-1 rounded-lg text-xs font-medium transition-all"
+                  style={{
+                    background: drawdownDays === d ? "var(--color-accent)" : "var(--color-bg-elevated)",
+                    color: drawdownDays === d ? "oklch(0.1 0 0)" : "var(--color-text-secondary)",
+                    border: "1px solid var(--color-border-subtle)",
+                  }}>
+                  {d}d
+                </button>
+              ))}
+            </div>
+            {(dailyDDQuery.data ?? []).length === 0 ? emptyState("No closed trades yet") : (
               <ResponsiveContainer width="100%" height={240}>
-                <AreaChart
-                  data={equityData.map((d, i, arr) => {
-                    const peak = Math.max(...arr.slice(0, i + 1).map(x => x.equity));
-                    const dd = peak > 0 ? ((peak - d.equity) / peak) * 100 : 0;
-                    return { ...d, drawdown: -Math.round(dd * 10) / 10 };
-                  })}
-                  margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
+                <AreaChart data={dailyDDQuery.data ?? []} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
                   <defs>
                     <linearGradient id="ddGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="var(--color-loss)" stopOpacity={0.4} />
@@ -542,11 +553,82 @@ export default function Performance() {
                   <YAxis tick={{ fontSize: 11, fill: "var(--color-text-tertiary)" }} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} />
                   <Tooltip content={<CustomTooltip />} />
                   <ReferenceLine y={0} stroke="var(--color-border-default)" strokeDasharray="4 4" />
-                  <Area type="monotone" dataKey="drawdown" name="Drawdown %" stroke="var(--color-loss)" strokeWidth={2} fill="url(#ddGradient)" dot={false} />
+                  <Area type="monotone" dataKey="drawdownPct" name="Drawdown %" stroke="var(--color-loss)" strokeWidth={2} fill="url(#ddGradient)" dot={false} />
+                  <Area type="monotone" dataKey="dailyPnl" name="Daily P&L $" stroke="var(--color-profit)" strokeWidth={1.5} fill="none" dot={false} strokeDasharray="4 2" />
                 </AreaChart>
               </ResponsiveContainer>
             )}
           </SectionCard>
+
+          {/* Per-Instrument Trade Distribution */}
+          <SectionCard title="Per-Instrument Trade Distribution">
+            {(heatmapQuery.data ?? []).length === 0 ? emptyState("No closed trades yet") : (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart
+                  data={[...(heatmapQuery.data ?? [])].sort((a, b) => b.totalPnl - a.totalPnl)}
+                  margin={{ top: 5, right: 10, bottom: 30, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" vertical={false} />
+                  <XAxis dataKey="instrument" tick={{ fontSize: 10, fill: "var(--color-text-tertiary)" }} tickLine={false} axisLine={false} angle={-30} textAnchor="end" interval={0} />
+                  <YAxis tick={{ fontSize: 11, fill: "var(--color-text-tertiary)" }} tickLine={false} axisLine={false} tickFormatter={v => `$${v}`} />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0].payload;
+                      return (
+                        <div className="rounded-xl px-4 py-3" style={{ background: "var(--color-bg-overlay)", border: "1px solid var(--color-border-default)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4)" }}>
+                          <p style={{ fontWeight: 700, fontSize: "0.875rem", color: "var(--color-text-primary)", marginBottom: "0.25rem" }}>{d.instrument}</p>
+                          <p className="tabular-nums" style={{ fontSize: "0.8125rem", color: d.totalPnl >= 0 ? "var(--color-profit)" : "var(--color-loss)" }}>P&L: {d.totalPnl >= 0 ? "+" : ""}${d.totalPnl.toFixed(2)}</p>
+                          <p style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>{d.tradeCount} trades · {d.winRate.toFixed(0)}% WR</p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <ReferenceLine y={0} stroke="var(--color-border-default)" strokeDasharray="4 4" />
+                  <Bar dataKey="totalPnl" name="Total P&L" radius={[4, 4, 0, 0]}>
+                    {[...(heatmapQuery.data ?? [])].sort((a, b) => b.totalPnl - a.totalPnl).map((entry, i) => (
+                      <Cell key={i} fill={entry.totalPnl >= 0 ? "var(--color-profit)" : "var(--color-loss)"} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </SectionCard>
+
+          {/* Weekly Summary Card */}
+          {weeklySummary.data && weeklySummary.data.totalTrades > 0 && (
+            <SectionCard title="This Week's Summary">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: "Trades", value: String(weeklySummary.data.totalTrades), color: "var(--color-text-primary)" },
+                  { label: "Win Rate", value: `${weeklySummary.data.winRate}%`, color: weeklySummary.data.winRate >= 50 ? "var(--color-profit)" : "var(--color-loss)" },
+                  { label: "Weekly P&L", value: `${weeklySummary.data.totalPnl >= 0 ? "+" : ""}$${weeklySummary.data.totalPnl.toFixed(2)}`, color: weeklySummary.data.totalPnl >= 0 ? "var(--color-profit)" : "var(--color-loss)" },
+                  { label: "End Balance", value: `$${weeklySummary.data.endBalance.toFixed(2)}`, color: "var(--color-text-primary)" },
+                ].map(item => (
+                  <div key={item.label} className="rounded-lg p-3" style={{ background: "var(--color-bg-elevated)", border: "1px solid var(--color-border-subtle)" }}>
+                    <p style={{ fontSize: "0.6875rem", color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{item.label}</p>
+                    <p className="tabular-nums mt-1" style={{ fontSize: "1rem", fontWeight: 600, fontFamily: "var(--font-serif)", color: item.color }}>{item.value}</p>
+                  </div>
+                ))}
+              </div>
+              {weeklySummary.data.bestTrade && (
+                <div className="mt-3 flex flex-wrap gap-3">
+                  <span className="px-3 py-1 rounded-full text-xs" style={{ background: "oklch(0.35 0.12 145 / 0.3)", color: "var(--color-profit)", border: "1px solid oklch(0.5 0.15 145 / 0.3)" }}>
+                    Best: {weeklySummary.data.bestTrade.instrument} +${weeklySummary.data.bestTrade.pnl.toFixed(2)}
+                  </span>
+                  {weeklySummary.data.worstTrade && (
+                    <span className="px-3 py-1 rounded-full text-xs" style={{ background: "oklch(0.35 0.12 25 / 0.3)", color: "var(--color-loss)", border: "1px solid oklch(0.5 0.15 25 / 0.3)" }}>
+                      Worst: {weeklySummary.data.worstTrade.instrument} ${weeklySummary.data.worstTrade.pnl.toFixed(2)}
+                    </span>
+                  )}
+                  {weeklySummary.data.topInstrument && (
+                    <span className="px-3 py-1 rounded-full text-xs" style={{ background: "oklch(0.3 0.1 260 / 0.3)", color: "var(--color-accent)", border: "1px solid oklch(0.5 0.15 260 / 0.3)" }}>
+                      Top: {weeklySummary.data.topInstrument.instrument} ${weeklySummary.data.topInstrument.totalPnl >= 0 ? "+" : ""}${weeklySummary.data.topInstrument.totalPnl.toFixed(2)}
+                    </span>
+                  )}
+                </div>
+              )}
+            </SectionCard>
+          )}
         </div>
       )}
 

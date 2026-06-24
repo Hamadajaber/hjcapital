@@ -467,3 +467,11 @@
 - [x] Fix 2: 60-minute cooldown after losing trade on same instrument (prevents GOLD BUY ×3 repeat)
 - [x] Fix 3: Raise confidence threshold from 45% to 55% (DB updated + code default updated)
 - [x] All 108 tests pass, 0 TypeScript errors
+
+## Round 46 — Performance Dashboard + Weekly Auto-Report
+- [x] Add Daily Drawdown Chart with 7/14/30/60/90d filter buttons
+- [x] Add Per-Instrument Trade Distribution Bar Chart (colored by P&L)
+- [x] Add This Week's Summary card with best/worst trade badges
+- [x] Add weeklyReportHandler in scheduledHandlers.ts
+- [x] Register /api/scheduled/weekly-report in index.ts
+- [x] 108/108 tests pass | 0 TypeScript errors

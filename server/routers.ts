@@ -13,7 +13,7 @@ import {
   getScheduleConfig, updateScheduleConfig,
   getPriceAlerts, createPriceAlert, deletePriceAlert,
   getEquityHistory, getMaxDrawdown, getInstrumentPerformance,
-  getStrategyComparison,
+  getStrategyComparison, getDailyDrawdown, getWeeklyPerformanceSummary,
 } from "./db";
 import { setTelegramWebhook } from "./telegram";
 import {
@@ -691,6 +691,16 @@ export const appRouter = router({
 
     instrumentPerformance: ownerProcedure.query(async () => {
       return await getInstrumentPerformance();
+    }),
+
+    dailyDrawdown: ownerProcedure
+      .input(z.object({ days: z.number().min(7).max(90).default(30) }))
+      .query(async ({ input }) => {
+        return await getDailyDrawdown(input.days);
+      }),
+
+    weeklySummary: ownerProcedure.query(async () => {
+      return await getWeeklyPerformanceSummary();
     }),
   }),
 

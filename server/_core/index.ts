@@ -8,7 +8,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { autoTradeStartHandler, autoTradeStopHandler } from "../scheduledHandlers";
+import { autoTradeStartHandler, autoTradeStopHandler, weeklyReportHandler } from "../scheduledHandlers";
 import { handleTelegramUpdate, TelegramUpdate } from "../telegram";
 import { startAutoTrade, stopAutoTrade, getEngineState, getActiveSession, CORE_INSTRUMENTS } from "../autoTradeEngine";
 import { getAccountBalance, isAnyMarketOpen, getNextMarketEvent } from "../capitalcom";
@@ -43,6 +43,7 @@ async function startServer() {
   // Scheduled Heartbeat handlers — must be registered BEFORE Vite/static fallthrough
   app.post("/api/scheduled/auto-trade-start", autoTradeStartHandler);
   app.post("/api/scheduled/auto-trade-stop", autoTradeStopHandler);
+  app.post("/api/scheduled/weekly-report", weeklyReportHandler);
 
   // Telegram Bot Webhook — handles /start /stop /status /balance commands
   app.post("/api/telegram/webhook", async (req, res) => {

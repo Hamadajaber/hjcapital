@@ -17,7 +17,7 @@ import {
   getEngineState,
 } from "./autoTradeEngine";
 import { sendTelegramMessage, sendDailySummary } from "./telegram";
-import { getDailyStats, getPortfolio } from "./db";
+import { getDailyStats, getPortfolio, getWeeklyPerformanceSummary } from "./db";
 
 // ─── Auto-Trade Start Handler ─────────────────────────────────────────────────
 
@@ -146,6 +146,84 @@ export async function autoTradeStopHandler(req: Request, res: Response) {
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     console.error("[Scheduled] auto-trade-stop failed:", error);
+    return res.status(500).json({
+      error,
+      context: { url: req.url, taskUid: (req as any).taskUid },
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
+
+// ─── Weekly Report Handler ────────────────────────────────────────────────────
+// Triggered every Friday at 20:00 UTC (23:00 Cairo time) via Heartbeat cron.
+// Sends a comprehensive weekly performance summary to Telegram.
+
+export async function weeklyReportHandler(req: Request, res: Response) {
+  try {
+    const user = await sdk.authenticateRequest(req);
+    if (!user.isCron) {
+      return res.status(403).json({ error: "cron-only endpoint" });
+    }
+
+    console.log("[Scheduled] Generating weekly performance report...");
+
+    const summary = await getWeeklyPerformanceSummary();
+    const port = await getPortfolio();
+    const balance = port ? parseFloat(port.balance) : summary.endBalance;
+
+    const now = new Date();
+    const weekEnd = now.toLocaleDateString("ar-EG", {
+      timeZone: "Africa/Cairo",
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString("ar-EG", {
+      timeZone: "Africa/Cairo",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+
+    const pnlEmoji = summary.totalPnl >= 0 ? "✅" : "❌";
+    const pnlSign = summary.totalPnl >= 0 ? "+" : "";
+    const winRateEmoji = summary.winRate >= 50 ? "🟢" : summary.winRate >= 35 ? "🟡" : "🔴";
+
+    let text = `📊 <b>التقرير الأسبوعي — HJ Capital</b>
+📅 ${weekStart} → ${weekEnd}
+━━━━━━━━━━━━━━━━━━
+📈 إجمالي الصفقات: <b>${summary.totalTrades}</b>
+✅ صفقات رابحة: <b>${summary.wins}</b>
+❌ صفقات خاسرة: <b>${summary.losses}</b>
+${winRateEmoji} نسبة النجاح: <b>${summary.winRate.toFixed(1)}%</b>
+━━━━━━━━━━━━━━━━━━
+${pnlEmoji} إجمالي الربح/الخسارة: <b>${pnlSign}$${summary.totalPnl.toFixed(2)}</b>`;
+
+    if (summary.bestTrade) {
+      text += `\n🏆 أفضل صفقة: <b>${summary.bestTrade.instrument} +$${summary.bestTrade.pnl.toFixed(2)}</b>`;
+    }
+    if (summary.worstTrade) {
+      text += `\n📉 أسوأ صفقة: <b>${summary.worstTrade.instrument} $${summary.worstTrade.pnl.toFixed(2)}</b>`;
+    }
+    if (summary.topInstrument) {
+      const topSign = summary.topInstrument.totalPnl >= 0 ? "+" : "";
+      text += `\n📌 أفضل أداة: <b>${summary.topInstrument.instrument} ${topSign}$${summary.topInstrument.totalPnl.toFixed(2)}</b>`;
+    }
+
+    text += `\n━━━━━━━━━━━━━━━━━━
+💰 الرصيد الحالي: <b>$${balance.toFixed(2)}</b>
+🤖 الاستراتيجية: Trend Following + MTF Confirmation
+━━━━━━━━━━━━━━━━━━
+<i>تقرير تلقائي أسبوعي — HJ Capital Auto Trade</i>`;
+
+    await sendTelegramMessage(text);
+    console.log("[Scheduled] Weekly report sent successfully.");
+
+    return res.json({ ok: true, sentAt: new Date().toISOString(), summary });
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    console.error("[Scheduled] weekly-report failed:", error);
     return res.status(500).json({
       error,
       context: { url: req.url, taskUid: (req as any).taskUid },

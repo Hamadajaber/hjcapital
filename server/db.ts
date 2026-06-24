@@ -390,6 +390,85 @@ export async function getMaxDrawdown(): Promise<{ maxDrawdown: number; maxDrawdo
   };
 }
 
+// ─── Daily Drawdown Series ──────────────────────────────────────────────────
+
+export async function getDailyDrawdown(days = 30): Promise<Array<{ date: string; drawdownPct: number; drawdownAbs: number; dailyPnl: number }>> {
+  const history = await getEquityHistory(days);
+  if (history.length === 0) return [];
+
+  let peak = 0;
+  return history.map(({ date, equity, pnl }) => {
+    if (equity > peak) peak = equity;
+    const drawdownAbs = peak > 0 ? peak - equity : 0;
+    const drawdownPct = peak > 0 ? (drawdownAbs / peak) * 100 : 0;
+    return {
+      date,
+      drawdownPct: -Math.round(drawdownPct * 10) / 10, // negative for chart
+      drawdownAbs: -Math.round(drawdownAbs * 100) / 100,
+      dailyPnl: Math.round(pnl * 100) / 100,
+    };
+  });
+}
+
+// ─── Weekly Performance Summary ──────────────────────────────────────────────
+
+export async function getWeeklyPerformanceSummary(): Promise<{
+  totalTrades: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  totalPnl: number;
+  bestTrade: { instrument: string; pnl: number } | null;
+  worstTrade: { instrument: string; pnl: number } | null;
+  topInstrument: { instrument: string; totalPnl: number } | null;
+  startBalance: number;
+  endBalance: number;
+}> {
+  const db = await getDb();
+  if (!db) return { totalTrades: 0, wins: 0, losses: 0, winRate: 0, totalPnl: 0, bestTrade: null, worstTrade: null, topInstrument: null, startBalance: 0, endBalance: 0 };
+
+  const since = new Date();
+  since.setDate(since.getDate() - 7);
+
+  const weekTrades = await db
+    .select()
+    .from(trades)
+    .where(and(eq(trades.status, "closed"), gte(trades.closedAt!, since)))
+    .orderBy(desc(trades.closedAt));
+
+  const wins = weekTrades.filter(t => parseFloat(t.pnl ?? "0") > 0);
+  const losses = weekTrades.filter(t => parseFloat(t.pnl ?? "0") < 0);
+  const totalPnl = weekTrades.reduce((s, t) => s + parseFloat(t.pnl ?? "0"), 0);
+
+  const sorted = [...weekTrades].sort((a, b) => parseFloat(b.pnl ?? "0") - parseFloat(a.pnl ?? "0"));
+  const bestTrade = sorted[0] ? { instrument: sorted[0].instrument, pnl: parseFloat(sorted[0].pnl ?? "0") } : null;
+  const worstTrade = sorted[sorted.length - 1] ? { instrument: sorted[sorted.length - 1].instrument, pnl: parseFloat(sorted[sorted.length - 1].pnl ?? "0") } : null;
+
+  // Top instrument by total P&L
+  const byInst: Record<string, number> = {};
+  for (const t of weekTrades) byInst[t.instrument] = (byInst[t.instrument] ?? 0) + parseFloat(t.pnl ?? "0");
+  const topEntry = Object.entries(byInst).sort((a, b) => b[1] - a[1])[0];
+  const topInstrument = topEntry ? { instrument: topEntry[0], totalPnl: Math.round(topEntry[1] * 100) / 100 } : null;
+
+  // Balance from portfolio
+  const portRows = await db.select().from(portfolio).limit(1);
+  const endBalance = portRows[0] ? parseFloat(portRows[0].balance) : 0;
+  const startBalance = endBalance - totalPnl;
+
+  return {
+    totalTrades: weekTrades.length,
+    wins: wins.length,
+    losses: losses.length,
+    winRate: weekTrades.length > 0 ? Math.round((wins.length / weekTrades.length) * 1000) / 10 : 0,
+    totalPnl: Math.round(totalPnl * 100) / 100,
+    bestTrade,
+    worstTrade,
+    topInstrument,
+    startBalance: Math.round(startBalance * 100) / 100,
+    endBalance: Math.round(endBalance * 100) / 100,
+  };
+}
+
 // ─── Instrument Performance Heatmap ──────────────────────────────────────────
 
 export async function getInstrumentPerformance(): Promise<Array<{
