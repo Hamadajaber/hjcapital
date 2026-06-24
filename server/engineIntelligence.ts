@@ -461,9 +461,10 @@ export function calculateATRPositionSize(
   }
 
   // Size = risk amount / SL distance
-  // Clamp between 0.01 (min) and 10 (max) to prevent extreme sizes
+  // Clamp between 0.01 (min) and 2 (max) to prevent extreme sizes.
+  // Max 2 units prevents catastrophic losses like the USDJPY -$57 incident (was 10 units).
   const rawSize = riskAmount / slDistance;
-  const size = Math.max(0.01, Math.min(10, parseFloat(rawSize.toFixed(2))));
+  const size = Math.max(0.01, Math.min(2, parseFloat(rawSize.toFixed(2))));
 
   return {
     size,

@@ -651,7 +651,53 @@ async function runCycle() {
       const allInstruments = getOpenMarkets(CORE_INSTRUMENTS);
 
       // Filter out instruments already in open positions
-      const candidateInstruments = allInstruments.filter((inst) => !openInstruments.includes(inst));
+      // ███ COOLDOWN FILTER ███
+      // After a losing trade on an instrument, block it for 60 minutes.
+      // This prevents the engine from re-entering the same losing trade repeatedly
+      // (e.g. GOLD BUY -$10.56 ×3 in one hour on 14 June).
+      const COOLDOWN_MINUTES = 60;
+      const cooldownCutoff = new Date(Date.now() - COOLDOWN_MINUTES * 60 * 1000);
+      let cooledDownInstruments: string[] = [];
+      try {
+        const dbConn = await getDb();
+        if (dbConn) {
+          const { trades: tradesTable } = await import("../drizzle/schema");
+          const { gte: gteOp, and: andOp, eq: eqOp } = await import("drizzle-orm");
+          const recentLosers = await dbConn
+            .select({ instrument: tradesTable.instrument })
+            .from(tradesTable)
+            .where(
+              andOp(
+                eqOp(tradesTable.mode, _engineState!.mode),
+                gteOp(tradesTable.closedAt, cooldownCutoff)
+              )
+            );
+          // Instruments with a losing trade (pnl < 0) in the last 60 minutes
+          const recentLosersAll = await dbConn
+            .select({ instrument: tradesTable.instrument, pnl: tradesTable.pnl })
+            .from(tradesTable)
+            .where(
+              andOp(
+                eqOp(tradesTable.mode, _engineState!.mode),
+                gteOp(tradesTable.closedAt, cooldownCutoff)
+              )
+            );
+          cooledDownInstruments = [...new Set(
+            recentLosersAll
+              .filter((t) => t.pnl !== null && parseFloat(String(t.pnl)) < 0)
+              .map((t) => t.instrument)
+          )];
+          if (cooledDownInstruments.length > 0) {
+            console.log(`[AutoTrade] COOLDOWN: Blocking ${cooledDownInstruments.join(", ")} for ${COOLDOWN_MINUTES}min after recent loss`);
+          }
+        }
+      } catch (cdErr) {
+        console.warn("[AutoTrade] Cooldown check error:", cdErr);
+      }
+
+      const candidateInstruments = allInstruments.filter(
+        (inst) => !openInstruments.includes(inst) && !cooledDownInstruments.includes(inst)
+      );
 
       if (candidateInstruments.length === 0) {
         await logDecision(_engineState.sessionId, {
@@ -1656,7 +1702,15 @@ async function executeDecision(
     } else if (decision.action === "BUY" || decision.action === "SELL") {
       // Calculate size based on risk
       const balance = await getCurrentBalance(mode);
-      const size = decision.size ?? 1;
+      // ███ HARD SIZE CAP ███
+      // Never risk more than 1% of balance in a single trade.
+      // This prevents catastrophic losses like USDJPY -$57 (size=10 on $1,000 balance).
+      // ATR sizing already targets 1% but the old max was 10 — now capped at 2 absolute.
+      const rawDecisionSize = decision.size ?? 1;
+      const size = Math.max(0.01, Math.min(2, rawDecisionSize));
+      if (rawDecisionSize > 2) {
+        console.warn(`[AutoTrade] HARD SIZE CAP: ${decision.instrument} size reduced from ${rawDecisionSize} to ${size} (max 2 units)`);
+      }
 
       // ███ RISK:REWARD ENFORCEMENT GUARD ███
       // Ensure takeProfit is always at least 1.5× the stop loss distance (target 2×)
@@ -2021,14 +2075,17 @@ async function checkDailyRiskLimits(sessionId: number, mode: "paper" | "live"): 
 
 async function getRiskSettings() {
   const db = await getDb();
-  if (!db) return { dailyLossLimitPct: 25, stopLossPerTrade: 1, maxRiskPerTrade: 1, minConfidenceThreshold: 45, maxOpenPositions: 3 };
+  // Default threshold raised from 45% → 55% (Round 45 improvement).
+  // Analysis showed Win Rate was only 38.9% at 45% threshold.
+  // At 55%, we expect fewer but higher-quality trades.
+  if (!db) return { dailyLossLimitPct: 25, stopLossPerTrade: 1, maxRiskPerTrade: 1, minConfidenceThreshold: 55, maxOpenPositions: 3 };
   const rows = await db.select().from(riskSettings).limit(1);
   const r = rows[0];
   return {
     dailyLossLimitPct: r ? parseFloat(r.dailyLossLimitPct) : 25,
     stopLossPerTrade: r ? parseFloat(r.stopLossPerTrade) : 1,
     maxRiskPerTrade: r ? parseFloat(r.maxRiskPerTrade) : 1,
-    minConfidenceThreshold: r ? r.minConfidenceThreshold : 45,
+    minConfidenceThreshold: r ? r.minConfidenceThreshold : 55,
     maxOpenPositions: r ? r.maxOpenPositions : 3,
   };
 }

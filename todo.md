@@ -460,3 +460,10 @@
 - [x] Update DIRECTOR_CONTEXT.md with Round 42/43/44 fixes and current platform state
 - [x] Add Telegram notification for reconciled trades with real P&L (notifyTradeReconciled)
 - [x] Verify EURUSD/GBPUSD unblocked (epicToFriendly fix applied in Round 43)
+
+## Round 45 — Investment Manager Improvements (2026-06-24)
+- [x] Fix 1: Hard size cap — max 2 units per trade (prevents USDJPY -$57 type losses)
+- [x] Fix 1b: ATR position sizing max reduced from 10 to 2 units in engineIntelligence.ts
+- [x] Fix 2: 60-minute cooldown after losing trade on same instrument (prevents GOLD BUY ×3 repeat)
+- [x] Fix 3: Raise confidence threshold from 45% to 55% (DB updated + code default updated)
+- [x] All 108 tests pass, 0 TypeScript errors
