@@ -4,9 +4,12 @@
  * These handlers are triggered by Manus Heartbeat cron jobs.
  * They auto-start and auto-stop the HJ Auto Trade Engine on a daily schedule.
  *
- * Cron schedule (UTC):
- *   Start: "0 7 * * 1-5"  → 07:00 UTC Mon–Fri = 10:00 AM GMT+3
- *   Stop:  "0 20 * * 1-5" → 20:00 UTC Mon–Fri = 11:00 PM GMT+3
+ * Cron schedule (UTC) — aligned with Capital.com 24/5 market hours:
+ *   Start: "0 21 * * 0"  → 21:00 UTC Sunday = Forex market weekly open
+ *   Stop:  "0 21 * * 5"  → 21:00 UTC Friday = Forex market weekly close
+ *
+ * The MarketWatcher in index.ts handles intra-week auto-start/stop (e.g. after server restart).
+ * These cron jobs are the weekly bookends: start on Sunday, stop on Friday.
  */
 
 import type { Request, Response } from "express";
@@ -36,8 +39,8 @@ export async function autoTradeStartHandler(req: Request, res: Response) {
       return res.json({ ok: true, skipped: "already-running", mode: state.mode });
     }
 
-    // Start in paper mode by default (safe default for scheduled runs)
-    const mode = (req.body?.mode as "paper" | "live") ?? "paper";
+    // Start in LIVE mode (this is the production engine for passive income)
+    const mode = (req.body?.mode as "paper" | "live") ?? "live";
     const cycleIntervalMinutes = (req.body?.cycleIntervalMinutes as number) ?? 15;
 
     console.log(`[Scheduled] Starting auto-trade engine — mode: ${mode}, interval: ${cycleIntervalMinutes}min`);

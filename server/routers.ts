@@ -593,22 +593,22 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         const sessionToken = parseCookie(ctx.req.headers.cookie ?? "")[COOKIE_NAME] ?? "";
 
-        // Create start job (07:00 UTC Mon–Fri = 10:00 Cairo)
+        // Create start job: Sunday 21:00 UTC = when Capital.com Forex markets open for the week
         const startJob = await createHeartbeatJob({
           name: "hj-auto-trade-start",
-          cron: "0 7 * * 1-5",
+          cron: "0 21 * * 0",  // Sunday 21:00 UTC — weekly open
           path: "/api/scheduled/auto-trade-start",
           payload: { mode: input.mode, cycleIntervalMinutes: input.cycleIntervalMinutes },
-          description: `Daily auto-start HJ Auto Trade (${input.mode} mode, ${input.cycleIntervalMinutes}min cycle)`,
+          description: `Weekly auto-start HJ Auto Trade (${input.mode} mode, ${input.cycleIntervalMinutes}min cycle) — Sun 21:00 UTC`,
         }, sessionToken);
 
-        // Create stop job (20:00 UTC Mon–Fri = 23:00 Cairo)
+        // Create stop job: Friday 21:00 UTC = when Capital.com Forex markets close for the week
         const stopJob = await createHeartbeatJob({
           name: "hj-auto-trade-stop",
-          cron: "0 20 * * 1-5",
+          cron: "0 21 * * 5",  // Friday 21:00 UTC — weekly close
           path: "/api/scheduled/auto-trade-stop",
-          payload: { reason: "Scheduled daily stop (end of trading session)" },
-          description: "Daily auto-stop HJ Auto Trade",
+          payload: { reason: "Weekly market close (Fri 21:00 UTC) — engine will auto-restart Sun 21:00 UTC" },
+          description: "Weekly auto-stop HJ Auto Trade — Fri 21:00 UTC",
         }, sessionToken);
 
         await updateScheduleConfig({

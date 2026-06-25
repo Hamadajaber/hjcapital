@@ -281,22 +281,22 @@ async function runCycle() {
       return;
     }
 
-    // 0a. Asian Session Filter — skip trading during low-liquidity Asian session
-    // Asian session (22:00-07:00 UTC = 01:00-10:00 GMT+3) is characterized by:
-    // - Low liquidity and tight ranges
-    // - False breakouts and whipsaws
-    // - Most of our historical losses occurred during this window
-    const nowUtcHour = new Date().getUTCHours();
-    const isAsianSession = nowUtcHour >= 22 || nowUtcHour < 7; // 22:00-07:00 UTC
-    if (isAsianSession) {
-      const sessionMsg = `⏸️ Asian Session Filter: التداول متوقف مؤقتاً (${nowUtcHour}:00 UTC). يُستأنف في 07:00 UTC (10:00 GMT+3) عند بداية London Session.`;
+    // 0a. Market availability check — skip only if NO instruments are open right now.
+    // Capital.com is open 24/5 (Sun 21:00 UTC – Fri 21:00 UTC).
+    // Forex pairs trade nearly 24h, Crypto trades 24/7, Gold/Indices have short daily breaks.
+    // We no longer block the entire Asian session — instead we let getOpenMarkets() filter
+    // instruments per cycle, so the engine always trades whatever IS open.
+    const openMarketsNow = getOpenMarkets(CORE_INSTRUMENTS);
+    if (openMarketsNow.length === 0) {
+      const nowUtcHour = new Date().getUTCHours();
+      const noMarketMsg = `⏸️ لا توجد أسواق مفتوحة حالياً (${nowUtcHour}:00 UTC). التداول متوقف مؤقتاً.`;
       await logDecision(_engineState.sessionId, {
         instrument: "ALL",
         action: "SKIP",
         confidence: 0,
-        reasoning: sessionMsg,
-      }, "skipped", "Asian session — low liquidity");
-      console.log(`[AutoTrade] Cycle skipped: Asian session (${nowUtcHour}:00 UTC)`);
+        reasoning: noMarketMsg,
+      }, "skipped", "No markets open");
+      console.log(`[AutoTrade] Cycle skipped: No markets open (${nowUtcHour}:00 UTC)`);
       return;
     }
 

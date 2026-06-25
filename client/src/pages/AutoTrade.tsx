@@ -939,8 +939,8 @@ export default function AutoTrade() {
                 </p>
                 <p className="text-xs mt-0.5" style={{ color: "var(--color-text-tertiary)" }}>
                   {scheduleQuery.data?.enabled
-                    ? "Engine starts/stops automatically every weekday"
-                    : "Enable to auto-start the engine daily"}
+                    ? "Engine runs 24/5 — Sun 21:00 UTC to Fri 21:00 UTC"
+                    : "Enable to run the engine automatically all week"}
                 </p>
               </div>
               <button
@@ -948,7 +948,7 @@ export default function AutoTrade() {
                   if (scheduleQuery.data?.enabled) {
                     disableScheduleMutation.mutate();
                   } else {
-                    enableScheduleMutation.mutate({ mode: "paper", cycleIntervalMinutes: 15 });
+                    enableScheduleMutation.mutate({ mode: "live", cycleIntervalMinutes: 15 });
                   }
                 }}
                 disabled={enableScheduleMutation.isPending || disableScheduleMutation.isPending}

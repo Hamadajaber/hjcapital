@@ -518,3 +518,13 @@
   - Update philosophy info box to explain scientific risk management
 - [x] TypeScript: 0 errors
 - [x] Tests: 108/108 passing
+
+## Round 50 — 24/5 Always-On Engine (Passive Income Fix)
+- [x] Remove Asian Session Filter (was blocking 9h/day: 22:00-07:00 UTC)
+- [x] Replace with smart market-availability check: skip cycle only if NO instruments are open
+- [x] Update cron schedule: weekly start Sun 21:00 UTC / weekly stop Fri 21:00 UTC (was daily Mon-Fri 07:00-20:00)
+- [x] scheduledHandlers.ts: default mode changed from "paper" to "live"
+- [x] AutoTrade.tsx: schedule description updated to "24/5 Sun 21:00 – Fri 21:00 UTC"
+- [x] AutoTrade.tsx: enable schedule button now defaults to live mode
+- [x] TypeScript: 0 errors
+- [x] Tests: 108/108 passing
