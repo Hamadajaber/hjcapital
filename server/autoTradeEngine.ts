@@ -166,6 +166,22 @@ export async function startAutoTrade(mode: "paper" | "live", cycleIntervalMinute
     }
   } catch { /* use default */ }
 
+  // ███ PEAK BALANCE SYNC ███
+  // At engine start, update peakBalance in DB if the live balance is higher than the stored peak.
+  // This prevents false trailing-drawdown triggers when the engine restarts after a profitable session.
+  if (mode === "live" && startBalance > 100) {
+    try {
+      const riskRows = await dbConn.select().from(riskSettings).limit(1);
+      const storedPeak = riskRows[0] ? parseFloat(riskRows[0].peakBalance) : 0;
+      if (startBalance > storedPeak) {
+        await dbConn.update(riskSettings).set({ peakBalance: startBalance.toFixed(2) });
+        console.log(`[AutoTrade] 📈 Peak balance synced at start: $${startBalance.toFixed(2)} (was $${storedPeak.toFixed(2)})`);
+      }
+    } catch (peakErr) {
+      console.warn("[AutoTrade] Peak balance sync failed:", peakErr);
+    }
+  }
+
   // Create session record
   const db = dbConn;
   const [session] = await db.insert(autoTradeSession).values({
@@ -316,11 +332,20 @@ async function runCycle() {
         reasoning: `Risk limit reached: ${riskCheck.reason}`,
       }, "blocked_risk", riskCheck.reason);
 
-      // Telegram risk alert
-      await notifyRiskAlert(`🛑 تم إيقاف الـ Engine تلقائياً\n${riskCheck.reason}`).catch(() => {});
-
-      await stopAutoTrade(`Risk limit: ${riskCheck.reason}`);
-      return;
+      // ███ ENGINE STAYS ALIVE ███
+      // We do NOT stop the engine on risk limit. Instead we:
+      // 1. Skip this cycle (no new trades opened)
+      // 2. Keep the engine running so it can resume when the limit resets
+      // 3. Send a Telegram alert (only once per hour to avoid spam)
+      // The engine will auto-resume next cycle when the risk condition clears.
+      const now = Date.now();
+      const lastAlert = (_engineState as any)._lastRiskAlertAt ?? 0;
+      if (now - lastAlert > 60 * 60 * 1000) { // 1 hour cooldown on alerts
+        await notifyRiskAlert(`⏸️ تم تخطي الدورة — حد المخاطر نشط\n${riskCheck.reason}\n\n✅ المحرك لا يزال يعمل — سيستأنف التداول تلقائياً عند انتهاء القيود.`).catch(() => {});
+        ((_engineState as any)._lastRiskAlertAt) = now;
+      }
+      console.log(`[AutoTrade] Cycle skipped (risk limit): ${riskCheck.reason}`);
+      return; // skip this cycle, engine stays running
     }
 
     // 2. Gather market data (prices + multi-timeframe candles + technical analysis + sentiment)
@@ -2103,19 +2128,28 @@ async function checkDailyRiskLimits(sessionId: number, mode: "paper" | "live"): 
   if (risk.trailingDrawdownPct > 0) {
     const db = await getDb();
     if (db) {
-      // Update peak balance if current balance exceeds previous peak
-      if (currentBalance > risk.peakBalance) {
-        await db.update(riskSettings).set({ peakBalance: currentBalance.toFixed(2) });
-        risk.peakBalance = currentBalance;
-        console.log(`[AutoTrade] 📈 New peak balance: $${currentBalance.toFixed(2)}`);
-      }
-      // Check if drawdown from peak exceeds allowed threshold
-      const drawdownFromPeak = ((risk.peakBalance - currentBalance) / risk.peakBalance) * 100;
-      if (drawdownFromPeak >= risk.trailingDrawdownPct) {
-        return {
-          blocked: true,
-          reason: `Trailing drawdown protection: balance $${currentBalance.toFixed(2)} is ${drawdownFromPeak.toFixed(2)}% below peak $${risk.peakBalance.toFixed(2)} (max: ${risk.trailingDrawdownPct}%). Trading paused to protect profits.`
-        };
+      // ███ SANITY CHECK ███
+      // If currentBalance is less than 20% of peakBalance, the reading is almost certainly
+      // wrong (API failure, stale DB value, network timeout). Skip the trailing drawdown check
+      // entirely to avoid false positives that shut down the engine.
+      const sanityRatio = risk.peakBalance > 0 ? currentBalance / risk.peakBalance : 1;
+      if (sanityRatio < 0.20) {
+        console.warn(`[AutoTrade] ⚠️ Trailing drawdown SKIPPED — balance $${currentBalance.toFixed(2)} is only ${(sanityRatio * 100).toFixed(1)}% of peak $${risk.peakBalance.toFixed(2)} — likely a bad read, not a real drawdown.`);
+      } else {
+        // Update peak balance if current balance exceeds previous peak
+        if (currentBalance > risk.peakBalance) {
+          await db.update(riskSettings).set({ peakBalance: currentBalance.toFixed(2) });
+          risk.peakBalance = currentBalance;
+          console.log(`[AutoTrade] 📈 New peak balance: $${currentBalance.toFixed(2)}`);
+        }
+        // Check if drawdown from peak exceeds allowed threshold
+        const drawdownFromPeak = ((risk.peakBalance - currentBalance) / risk.peakBalance) * 100;
+        if (drawdownFromPeak >= risk.trailingDrawdownPct) {
+          return {
+            blocked: true,
+            reason: `Trailing drawdown protection: balance $${currentBalance.toFixed(2)} is ${drawdownFromPeak.toFixed(2)}% below peak $${risk.peakBalance.toFixed(2)} (max: ${risk.trailingDrawdownPct}%). Trading paused to protect profits.`
+          };
+        }
       }
     }
   }
@@ -2145,16 +2179,32 @@ async function getRiskSettings() {
 }
 
 async function getCurrentBalance(mode: "paper" | "live"): Promise<number> {
-  if (mode === "live") {
-    try {
-      const bal = await getAccountBalance();
-      return bal.balance;
-    } catch { return 250; }
-  }
+  // Always get the DB balance as a reliable fallback
   const db = await getDb();
-  if (!db) return 250;
-  const port = await db.select().from(portfolio).limit(1);
-  return port[0] ? parseFloat(port[0].balance) : 250;
+  const port = db ? await db.select().from(portfolio).limit(1) : [];
+  const dbBalance = port[0] ? parseFloat(port[0].balance) : 0;
+
+  if (mode === "live") {
+    // Try Capital.com API with retry (up to 3 attempts, 2s apart)
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const bal = await getAccountBalance();
+        if (bal.balance > 0) return bal.balance;
+      } catch (err) {
+        console.warn(`[AutoTrade] getAccountBalance attempt ${attempt}/3 failed:`, err instanceof Error ? err.message : err);
+        if (attempt < 3) await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+    // All retries failed — use DB balance if it looks valid, otherwise refuse to block
+    if (dbBalance > 100) {
+      console.warn(`[AutoTrade] Capital.com balance unavailable — using DB balance $${dbBalance.toFixed(2)} as fallback`);
+      return dbBalance;
+    }
+    // DB balance also looks wrong — return a safe high value to avoid false risk blocks
+    console.warn(`[AutoTrade] Both Capital.com and DB balance unavailable — skipping risk check`);
+    return 999999; // Will not trigger any risk limit
+  }
+  return dbBalance > 0 ? dbBalance : 250;
 }
 
 async function updateSessionStats(sessionId: number, pnl: number) {

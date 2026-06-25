@@ -18,8 +18,9 @@ let _session: CapitalSession | null = null;
  * Create or refresh a Capital.com session
  */
 async function getSession(): Promise<CapitalSession> {
-  // Return cached session if still valid (5 min buffer)
-  if (_session && _session.expiresAt > Date.now() + 5 * 60 * 1000) {
+  // Return cached session if still valid (3 min buffer)
+  // Using a shorter buffer to avoid sending expired tokens that cause 403s
+  if (_session && _session.expiresAt > Date.now() + 3 * 60 * 1000) {
     return _session;
   }
 
@@ -46,8 +47,8 @@ async function getSession(): Promise<CapitalSession> {
   _session = {
     cst,
     securityToken,
-    // Sessions last 10 minutes by default
-    expiresAt: Date.now() + 10 * 60 * 1000,
+    // Capital.com sessions last 10 minutes; we refresh after 8 min to stay ahead of expiry
+    expiresAt: Date.now() + 8 * 60 * 1000,
   };
 
   return _session;
@@ -72,10 +73,17 @@ async function capitalRequest<T>(
     },
   });
 
-  if (response.status === 401) {
-    // Session expired — clear and retry once
+  if (response.status === 401 || response.status === 403) {
+    // 401 = session expired, 403 = Incapsula bot block (session token rejected)
+    // Both require a fresh authentication — clear cached session and retry once
     _session = null;
-    const newSession = await getSession();
+    console.warn(`[CapitalCom] ${response.status} on ${path} — re-authenticating...`);
+    let newSession: CapitalSession;
+    try {
+      newSession = await getSession();
+    } catch (authErr) {
+      throw new Error(`Capital.com re-auth failed after ${response.status}: ${authErr instanceof Error ? authErr.message : authErr}`);
+    }
     const retry = await fetch(`${BASE_URL}${path}`, {
       ...options,
       headers: {
@@ -86,14 +94,15 @@ async function capitalRequest<T>(
       },
     });
     if (!retry.ok) {
-      throw new Error(`Capital.com API error: ${retry.status}`);
+      const retryText = await retry.text();
+      throw new Error(`Capital.com API error after re-auth: ${retry.status} — ${retryText.slice(0, 200)}`);
     }
     return retry.json() as Promise<T>;
   }
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Capital.com API error: ${response.status} — ${text}`);
+    throw new Error(`Capital.com API error: ${response.status} — ${text.slice(0, 500)}`);
   }
 
   return response.json() as Promise<T>;

@@ -528,3 +528,13 @@
 - [x] AutoTrade.tsx: enable schedule button now defaults to live mode
 - [x] TypeScript: 0 errors
 - [x] Tests: 108/108 passing
+
+## Round 51 — Engine Stability Fixes (Anti-Crash)
+- [x] Fix getCurrentBalance: retry Capital.com 3x before falling back to DB balance (no more $250 fallback)
+- [x] Fix trailing drawdown sanity check: skip if balance < 20% of peak (bad read, not real drawdown)
+- [x] Fix engine: no longer calls stopAutoTrade on risk limit — just skips cycle, engine stays alive
+- [x] Fix Capital.com 403 Incapsula: capitalRequest now handles 403 same as 401 (re-auth + retry)
+- [x] Fix session expiry: reduced from 10min to 8min to stay ahead of Capital.com token expiry
+- [x] Fix peakBalance sync at engine start: updates DB peak if live balance > stored peak
+- [x] TypeScript: 0 errors
+- [x] Tests: 108/108 passing
