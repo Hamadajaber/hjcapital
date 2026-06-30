@@ -16,7 +16,7 @@
 | الموقع | https://hjcapital.vip |
 | GitHub | https://github.com/Hamadajaber/hjcapital (private) |
 | مسار المشروع | `/home/ubuntu/hj-capital-platform` |
-| آخر Checkpoint | `b02f6e57` (Round 49) |
+| آخر Checkpoint | `bbf55dea` (Round 51) |
 
 ---
 
@@ -113,6 +113,8 @@ hj-capital-platform/
 | Round 47 | dealId tracking، balance sync كل cycle، dealId backfill، Dashboard يعرض live balance | ✅ |
 | Round 48 | initialBalance=$1000، /positions Telegram command، auto-register webhook | ✅ |
 | Round 49 | إزالة Daily Profit Lock، Trailing Drawdown Protection (5% من peak)، dynamic Daily Loss Limit، تحديث RiskSettings frontend | ✅ |
+| Round 50 | إزالة Asian Session Filter (كان يوقف المحرك 9 ساعات/يوم)، تغيير الـ cron من يومي إلى أسبوعي (Sun 21:00 UTC open / Fri 21:00 UTC close)، المحرك الآن 24/5 مثل Capital.com تماماً | ✅ |
+| Round 51 | 6 إصلاحات استقرار: (1) getCurrentBalance يحاول 3 مرات ثم يرجع لـ DB كبديل، (2) Trailing drawdown يتجاهل الفحص إذا كان الرصيد < 20% من الذروة، (3) المحرك لا يوقف نفسه عند حد المخاطر — يتخطى الدورة فقط، (4) 403 Incapsula يُعالَج مثل 401 بإعادة مصادقة، (5) مدة الجلسة من 10 إلى 8 دقائق، (6) peakBalance يُحدَّث من Capital.com عند بدء المحرك | ✅ |
 
 ---
 
@@ -131,6 +133,10 @@ hj-capital-platform/
 | 60-min cooldown بعد خسارة | منع تكرار GOLD BUY ×3 | Round 45 |
 | Confidence threshold 45%→55% | تحسين Win Rate من 38.9% | Round 45 |
 | إزالة Daily Profit Lock | لا حد للأرباح — فقط حماية الخسائر | Round 49 |
+| إزالة Asian Session Filter | المحرك يعمل 24/5 مثل Capital.com — لا توقف ليلي | Round 50 |
+| Cron أسبوعي بدلاً من يومي | Sun 21:00 UTC open / Fri 21:00 UTC close | Round 50 |
+| getCurrentBalance مع retry + DB fallback | يمنع قراءة $250 الخاطئة عند إعادة التشغيل | Round 51 |
+| Engine لا يوقف نفسه عند risk limit | يتخطى الدورة فقط ويستمر — لا false shutdowns | Round 51 |
 | Trailing Drawdown Protection (5%) | يوقف التداول إذا انخفض الرصيد 5% عن الذروة | Round 49 |
 | Trailing stop عند 50%/75% | تأمين الأرباح تدريجياً | Round 28 |
 | SL/TP Guard بـ 0.1% tolerance | منع رفض الأوامر من Capital.com | Round 37-38 |
@@ -149,6 +155,9 @@ hj-capital-platform/
 | AUDUSD Ghost Position يحجب EURUSD/GBPUSD | epicToFriendly reverse-map في openInstruments | Round 43 |
 | P&L=0.00 على reconciled trades | Multi-fallback name matching + sorted by date + robust regex | Round 43 |
 | Client sentiment TypeError متكرر | Retry 2x بـ 2s delay + single warning on final failure | Round 43 |
+| المحرك يتوقف 9 ساعات/يوم (Asian session filter) | إزالة الفلتر — المحرك يعمل طالما أي أداة مفتوحة | Round 50 |
+| رصيد $250 خاطئ عند إعادة التشغيل يُوقف المحرك | retry 3x + DB fallback + sanity check < 20% peak | Round 51 |
+| 403 Incapsula يوقف كل طلبات Capital.com | إعادة مصادقة تلقائية عند 403 مثل 401 | Round 51 |
 
 ---
 
@@ -195,8 +204,10 @@ git push origin main
 ### أولوية عالية
 - [x] مراقبة أداء المحرك — المحرك يعمل في LIVE mode
 - [x] Trailing Drawdown Protection (5% من peak) — مفعّل الآن (Round 49)
-- [ ] نشر المنصة على hjcapital.vip لتفعيل Telegram webhook الرسمي
-- [ ] تحليل نتائج الصفقات بعد أسبوع وتعديل الاستراتيجية
+- [x] نشر المنصة على hjcapital.vip — المنصة منشورة ✅
+- [x] تحليل نتائج الصفقات بعد أسبوع — تم (تقرير Round 51 الأسبوعي)
+- [ ] تطبيق توصيات التقرير الأسبوعي: رفع confidence إلى 60%، حد خسارة يومي $30
+- [ ] تحسين USDJPY: تقليل حجم الصفقة من 1 إلى 0.5
 
 ### أولوية متوسطة
 - [x] إضافة Telegram alert للصفقات المعادلة (Round 44)
@@ -267,6 +278,10 @@ pnpm dev
 | 2026-06-24 | Round 48: initialBalance=$1000, /positions Telegram command, webhook auto-register | Manus AI |
 | 2026-06-25 | Round 49: Trailing Drawdown Protection (5%), remove Daily Profit Lock, RiskSettings UI update | Manus AI |
 | 2026-06-25 | إيداع $1,000 جديد — initialBalance و peakBalance تم تحديثهما إلى $2,000 | Manus AI |
+| 2026-06-26 | Round 50: إزالة Asian Session Filter، Cron أسبوعي 24/5، AutoTrade UI محدَّث | Manus AI |
+| 2026-06-26 | Round 51: 6 إصلاحات استقرار المحرك — false risk triggers، 403 Incapsula، peakBalance sync | Manus AI |
+| 2026-06-30 | تقرير الأداء الأسبوعي (14-26 يونيو): 150 صفقة، Win Rate 31.3%، P&L -$307.67، أبرز الدروس: NASDAQ/OIL_CRUDE يجب إزالتهما | Manus AI |
+| 2026-06-30 | تحديث DIRECTOR_CONTEXT.md بجولات 50-51 والتقرير الأسبوعي | Manus AI |
 
 ---
 
