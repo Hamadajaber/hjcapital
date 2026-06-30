@@ -461,10 +461,11 @@ export function calculateATRPositionSize(
   }
 
   // Size = risk amount / SL distance
-  // Clamp between 0.01 (min) and 2 (max) to prevent extreme sizes.
-  // Max 2 units prevents catastrophic losses like the USDJPY -$57 incident (was 10 units).
+  // ███ ROUND 52 — TRADING STANDARDS V1 ███
+  // Clamp between 0.01 (min) and 1 (max). Reduced from 2→1 to prevent
+  // catastrophic leverage on high-value indices (US500/GER40) on a $2,000 account.
   const rawSize = riskAmount / slDistance;
-  const size = Math.max(0.01, Math.min(2, parseFloat(rawSize.toFixed(2))));
+  const size = Math.max(0.01, Math.min(1, parseFloat(rawSize.toFixed(2))));
 
   return {
     size,
@@ -475,8 +476,10 @@ export function calculateATRPositionSize(
 
 /**
  * Calculate trailing stop level based on current profit.
- * - At 50% of target → move SL to breakeven
- * - At 75% of target → move SL to +25% of original target
+ * ███ ROUND 52 — TRADING STANDARDS V1 (Aggressive Profit Taking) ███
+ * - At 40% of target → move SL to breakeven (was 50%)
+ * - At 60% of target → move SL to +20% of target (was 75% → +25%)
+ * Rationale: "any absolute profit is better than a percentage" — lock gains earlier.
  */
 export function calculateTrailingStop(
   direction: "BUY" | "SELL",
@@ -492,16 +495,16 @@ export function calculateTrailingStop(
 
   const profitPct = totalTarget > 0 ? (currentProfit / totalTarget) * 100 : 0;
 
-  if (profitPct >= 75) {
-    // Move SL to +25% of target
+  if (profitPct >= 60) {
+    // Move SL to +20% of target
     const newSL = direction === "BUY"
-      ? entryPrice + totalTarget * 0.25
-      : entryPrice - totalTarget * 0.25;
+      ? entryPrice + totalTarget * 0.20
+      : entryPrice - totalTarget * 0.20;
     return {
       newSL: Math.round(newSL * 100000) / 100000,
-      reason: `Trailing stop: profit at ${profitPct.toFixed(0)}% of target — SL moved to +25% profit`,
+      reason: `Trailing stop: profit at ${profitPct.toFixed(0)}% of target — SL moved to +20% profit`,
     };
-  } else if (profitPct >= 50) {
+  } else if (profitPct >= 40) {
     // Move SL to breakeven
     return {
       newSL: entryPrice,

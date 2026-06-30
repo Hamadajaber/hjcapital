@@ -16,7 +16,7 @@
 | الموقع | https://hjcapital.vip |
 | GitHub | https://github.com/Hamadajaber/hjcapital (private) |
 | مسار المشروع | `/home/ubuntu/hj-capital-platform` |
-| آخر Checkpoint | `bbf55dea` (Round 51) |
+| آخر Checkpoint | Round 52 (Trading Standards V1) |
 
 ---
 
@@ -43,22 +43,28 @@
 
 ### طبقة AI
 - Claude يُحلل الإشارة النهائية ويعطي confidence score
-- الحد الأدنى للدخول: 45% confidence (dynamic threshold)
-- إذا كان Win Rate < 50% → threshold يرتفع تلقائياً
+- **الحد الأدنى للدخول: 65% confidence (Conviction Filter — Round 52)**
+- أي صفقة أقل من 65% تُرفض تماماً (لا يتم تصغيرها)
 
 ### إدارة المخاطر
 | المعامل | القيمة |
 |---|---|
-| maxRiskPerTrade | 1% |
+| maxRiskPerTrade | 1% (Fixed Fractional ~$20 على $2,000) |
 | maxOpenPositions | 3 |
-| dailyLossLimit | 25% |
-| Trailing Stop | عند 50% target → breakeven، عند 75% target → +25% profit lock |
+| **maxPositionSize** | **1 وحدة (خُفّض من 2 — Round 52)** |
+| **dailyLossLimit** | **1.5% (~$30 — Round 52)** |
+| **minConfidence** | **65% (Round 52)** |
+| **Cooldown بعد خسارة** | **120 دقيقة (رُفع من 60 — Round 52)** |
+| Trailing Stop | عند 40% target → breakeven، عند 60% target → +20% profit lock (Round 52 — أكثر عدوانية في حجز الربح) |
+| Trailing Drawdown | 5% من قمة الرصيد |
 | SL/TP Guard | 0.1% tolerance — يمنع أي صفقة بـ SL/TP خاطئ |
 
-### الأدوات المتداولة (CORE_INSTRUMENTS)
-`EURUSD, GBPUSD, GOLD, US500, GER40, XAGUSD, USDJPY, ETHUSD, AUDUSD`
+### الأدوات المتداولة (CORE_INSTRUMENTS) — 6 أدوات نخبوية (Round 52)
+`EURUSD, GBPUSD, GOLD, US500, GER40, ETHUSD`
 
-> **محذوفة:** NASDAQ و OIL_CRUDE (خسارة -$103 لكل منهما)
+> **حُذف في Round 52:** `NASDAQ` (خسارة -$106، كان لا يزال يُتداول رغم اعتقاد توثيقه بحذفه)، `USDJPY` (خسارة -$63)، `XAGUSD` (ارتباط عالٍ بالذهب + سيولة أقل)، `AUDUSD` (ثقة منخفضة / تذبذب حول التعادل). الفلسفة: التداول بثقة لا بكثرة.
+
+> **محذوفة نهائياً:** OIL_CRUDE (ساعات تداول مقيّدة) — وRound 52 حذف NASDAQ/USDJPY/XAGUSD/AUDUSD فعلياً من الكود.
 
 ---
 
@@ -115,6 +121,7 @@ hj-capital-platform/
 | Round 49 | إزالة Daily Profit Lock، Trailing Drawdown Protection (5% من peak)، dynamic Daily Loss Limit، تحديث RiskSettings frontend | ✅ |
 | Round 50 | إزالة Asian Session Filter (كان يوقف المحرك 9 ساعات/يوم)، تغيير الـ cron من يومي إلى أسبوعي (Sun 21:00 UTC open / Fri 21:00 UTC close)، المحرك الآن 24/5 مثل Capital.com تماماً | ✅ |
 | Round 51 | 6 إصلاحات استقرار: (1) getCurrentBalance يحاول 3 مرات ثم يرجع لـ DB كبديل، (2) Trailing drawdown يتجاهل الفحص إذا كان الرصيد < 20% من الذروة، (3) المحرك لا يوقف نفسه عند حد المخاطر — يتخطى الدورة فقط، (4) 403 Incapsula يُعالَج مثل 401 بإعادة مصادقة، (5) مدة الجلسة من 10 إلى 8 دقائق، (6) peakBalance يُحدَّث من Capital.com عند بدء المحرك | ✅ |
+| **Round 52** | **Trading Standards V1 (وضع نشط / تداول بثقة):** (1) تقليص الأدوات 10→6 نخبوية (حذف NASDAQ، USDJPY، XAGUSD، AUDUSD)، (2) رفع حد الثقة 55%→65% كفلتر صارم (رفض لا تصغير)، (3) dailyLossLimit 25%→1.5% (~$30)، (4) maxPositionSize 2→1 وحدة، (5) Trailing Stop أعنف: breakeven@40% و +20% lock@60%، (6) Cooldown 60→120 دقيقة، (7) **إصلاح ثغرة الإغلاق**: مطابقة سجل DB بـ dealId بدل أحدث صفقة على الأداة، (8) إصلاح مطابقة Trailing Stop بـ dealId. النتيجة: 105/105 اختبار مستقل عن DB ناجح، 0 أخطاء TypeScript | ✅ |
 
 ---
 
@@ -140,6 +147,10 @@ hj-capital-platform/
 | Trailing Drawdown Protection (5%) | يوقف التداول إذا انخفض الرصيد 5% عن الذروة | Round 49 |
 | Trailing stop عند 50%/75% | تأمين الأرباح تدريجياً | Round 28 |
 | SL/TP Guard بـ 0.1% tolerance | منع رفض الأوامر من Capital.com | Round 37-38 |
+| **Trading Standards V1 (وضع نشط)** | المستخدم اختار صراحة "تداول بثقة لا بكثرة" — صفقات أقل وأعلى جودة بدل 150 صفقة/أسبوعين بـ 31% win | Round 52 |
+| **حصر الأدوات في 6 نخبوية** | حذف أكبر الخاسرين (NASDAQ -$106، USDJPY -$63) والمرتبطات | Round 52 |
+| **minConfidence 65% كرفض صريح** | الصفقات تحت 65% تُرفض بالكامل (Conviction Filter) | Round 52 |
+| Trailing stop أعنف (40%/60%) | حجز الربح أبكر — "أي ربح أفضل من نسبة" | Round 52 |
 
 ---
 
@@ -158,6 +169,8 @@ hj-capital-platform/
 | المحرك يتوقف 9 ساعات/يوم (Asian session filter) | إزالة الفلتر — المحرك يعمل طالما أي أداة مفتوحة | Round 50 |
 | رصيد $250 خاطئ عند إعادة التشغيل يُوقف المحرك | retry 3x + DB fallback + sanity check < 20% peak | Round 51 |
 | 403 Incapsula يوقف كل طلبات Capital.com | إعادة مصادقة تلقائية عند 403 مثل 401 | Round 51 |
+| NASDAQ لا يزال يُتداول رغم "حذفه" في التوثيق (خسارة -$106) | حذفه فعلياً من CORE_INSTRUMENTS | Round 52 |
+| إغلاق سجل DB الخاطئ عند وجود صفقتين على نفس الأداة | مطابقة بـ dealId أولاً (close + trailing stop) | Round 52 |
 
 ---
 
@@ -206,8 +219,10 @@ git push origin main
 - [x] Trailing Drawdown Protection (5% من peak) — مفعّل الآن (Round 49)
 - [x] نشر المنصة على hjcapital.vip — المنصة منشورة ✅
 - [x] تحليل نتائج الصفقات بعد أسبوع — تم (تقرير Round 51 الأسبوعي)
-- [ ] تطبيق توصيات التقرير الأسبوعي: رفع confidence إلى 60%، حد خسارة يومي $30
-- [ ] تحسين USDJPY: تقليل حجم الصفقة من 1 إلى 0.5
+- [x] تطبيق توصيات التقرير الأسبوعي — **تجاوزناها بـ Trading Standards V1 (Round 52): confidence 65%، حد خسارة 1.5% (~$30)**
+- [x] تحسين USDJPY — **تم حذف USDJPY بالكامل (أكبر خاسر ثانٍ) في Round 52**
+- [ ] **مراقبة أداء Round 52 لمدة أسبوع** (هل ارتفع Win Rate وانخفض عدد الصفقات؟) — فتح chat كـ HJCapital Analyst
+- [ ] **تقرير أداء احترافي:** Profit Factor + Sharpe Ratio + Max Drawdown + Equity Curve (مستوحى من تحليل copyalgo)
 
 ### أولوية متوسطة
 - [x] إضافة Telegram alert للصفقات المعادلة (Round 44)
@@ -224,14 +239,15 @@ git push origin main
 
 | المعامل | القيمة | الوصف |
 |---|---|---|
-| dailyLossLimitPct | 25% | يوقف التداول إذا تجاوزت الخسارة اليومية 25% من رأس المال |
+| dailyLossLimitPct | **1.5% (Round 52)** | يوقف فتح صفقات جديدة إذا تجاوزت خسارة اليوم ~$30 |
 | trailingDrawdownPct | 5% | يوقف التداول إذا انخفض الرصيد 5% عن أعلى قيمة له |
 | peakBalance | $2,000 | تم تحديثه بعد الإيداع الجديد — يتحدث تلقائياً عند كل ارتفاع جديد |
 | stopLossPerTrade | 1% | كل صفقة لها stop loss بـ 1% من رأس المال |
 | maxRiskPerTrade | 1% | الحد الأقصى للمخاطرة في صفقة واحدة |
-| minConfidenceThreshold | 55% | الحد الأدنى لثقة الـ AI لفتح صفقة |
+| minConfidenceThreshold | **65% (Round 52)** | الحد الأدنى لثقة الـ AI — أقل منه = رفض صريح |
 | maxOpenPositions | 3 | الحد الأقصى لعدد الصفقات المفتوحة في نفس الوقت |
-| maxPositionSize | 2 units | الحد الأقصى لحجم الصفقة (تم تخفيضه من 10 في Round 45) |
+| maxPositionSize | **1 unit (Round 52)** | الحد الأقصى لحجم الصفقة (خُفّض 2→1) |
+| cooldownAfterLoss | **120 دقيقة (Round 52)** | حظر الأداة بعد صفقة خاسرة (رُفع 60→120) |
 
 ---
 
@@ -282,6 +298,7 @@ pnpm dev
 | 2026-06-26 | Round 51: 6 إصلاحات استقرار المحرك — false risk triggers، 403 Incapsula، peakBalance sync | Manus AI |
 | 2026-06-30 | تقرير الأداء الأسبوعي (14-26 يونيو): 150 صفقة، Win Rate 31.3%، P&L -$307.67، أبرز الدروس: NASDAQ/OIL_CRUDE يجب إزالتهما | Manus AI |
 | 2026-06-30 | تحديث DIRECTOR_CONTEXT.md بجولات 50-51 والتقرير الأسبوعي | Manus AI |
+| 2026-07-01 | **Round 52 — Trading Standards V1 (وضع نشط):** تقليص الأدوات 10→6، confidence 65%، dailyLoss 1.5%، size cap 1، trailing 40%/60%، cooldown 120د، إصلاح ثغرتي الإغلاق والـ trailing stop بـ dealId | Manus AI |
 
 ---
 

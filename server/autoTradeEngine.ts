@@ -128,18 +128,23 @@ let _lastWeeklySummaryDate: string | null = null;
  *
  * NO OIL_CRUDE (has restricted trading hours causing 400 errors)
  */
+/**
+ * ███ ROUND 52 — TRADING STANDARDS V1 (Aggressive, Conviction-based) ███
+ * Universe culled from 10 → 6 ELITE instruments.
+ * REMOVED: NASDAQ (-$106 loss, was still trading despite being marked removed in docs),
+ *          USDJPY (-$63 loss, erratic with current ATR),
+ *          XAGUSD/Silver (highly correlated with Gold but lower liquidity + higher noise),
+ *          AUDUSD (low conviction, near-breakeven churn).
+ * Rationale: trade with conviction, not frequency. Fewer, higher-quality instruments.
+ */
 export const CORE_INSTRUMENTS = [
-  // Forex (4 pairs — diversified across USD, EUR, GBP, JPY)
+  // Forex (2 pairs — most liquid, strongest trends)
   "EURUSD",   // Most liquid forex pair
   "GBPUSD",   // High volatility, strong trends
-  "USDJPY",   // USD strength proxy
-  "AUDUSD",   // Risk-on/risk-off indicator
-  // Commodities (2 — safe haven + inflation hedge)
+  // Commodities (1 — safe haven + inflation hedge)
   "GOLD",     // Safe haven, strong trends
-  "XAGUSD",   // Silver — follows Gold with higher beta
-  // Indices (3 — US + Europe + Asia)
+  // Indices (2 — US + Europe)
   "US500",    // S&P 500 — primary US market
-  "NASDAQ",   // Tech-heavy, strong trends
   "GER40",    // DAX — European market leader
   // Crypto (1 — 24/7 market)
   "ETHUSD",   // Ethereum — strong trends, high liquidity
@@ -530,18 +535,36 @@ async function runCycle() {
       try {
         const dbTs = await getDb();
         if (dbTs && pos.openLevel && pos.currentLevel) {
-          // Get the original trade from DB to find original SL and TP
+          // ███ ROUND 52 — TRAILING STOP DB MATCH FIX ███
+          // Match the DB trade by the broker dealId first (exact), instead of
+          // instrument==pos.epic (which used raw epic, not the friendly name, and
+          // could grab the wrong row when multiple trades share an instrument).
           const { trades: tradesTable } = await import("../drizzle/schema");
           const { eq, and, desc } = await import("drizzle-orm");
-          const [openTrade] = await dbTs
-            .select()
-            .from(tradesTable)
-            .where(and(
-              eq(tradesTable.status, "open"),
-              eq(tradesTable.instrument, pos.epic)
-            ))
-            .orderBy(desc(tradesTable.openedAt))
-            .limit(1);
+          let openTrade: typeof tradesTable.$inferSelect | undefined;
+          if (pos.dealId) {
+            [openTrade] = await dbTs
+              .select()
+              .from(tradesTable)
+              .where(and(
+                eq(tradesTable.status, "open"),
+                eq(tradesTable.dealId, pos.dealId)
+              ))
+              .limit(1);
+          }
+          if (!openTrade) {
+            // Fallback: legacy trades without dealId — match by friendly instrument name
+            const posFriendly = Object.entries(INSTRUMENT_EPICS).find(([, v]) => v === pos.epic)?.[0] ?? pos.epic;
+            [openTrade] = await dbTs
+              .select()
+              .from(tradesTable)
+              .where(and(
+                eq(tradesTable.status, "open"),
+                eq(tradesTable.instrument, posFriendly)
+              ))
+              .orderBy(desc(tradesTable.openedAt))
+              .limit(1);
+          }
 
           if (openTrade && openTrade.stopLoss && openTrade.takeProfit) {
             const originalSL = parseFloat(openTrade.stopLoss);
@@ -702,10 +725,11 @@ async function runCycle() {
 
       // Filter out instruments already in open positions
       // ███ COOLDOWN FILTER ███
-      // After a losing trade on an instrument, block it for 60 minutes.
+      // After a losing trade on an instrument, block it for 120 minutes.
+      // ███ ROUND 52 — TRADING STANDARDS V1: raised 60→120 min ███
       // This prevents the engine from re-entering the same losing trade repeatedly
       // (e.g. GOLD BUY -$10.56 ×3 in one hour on 14 June).
-      const COOLDOWN_MINUTES = 60;
+      const COOLDOWN_MINUTES = 120;
       const cooldownCutoff = new Date(Date.now() - COOLDOWN_MINUTES * 60 * 1000);
       let cooledDownInstruments: string[] = [];
       try {
@@ -1458,7 +1482,7 @@ ${lessonsSection ? `\nPAST LESSONS:\n${lessonsSection}` : ""}
 
 YOUR JOB:
 1. Confirm or veto the ${proposedDirection} signal based on macro context
-2. If confirming: provide confidence (55-85%), precise entry, stop loss, and take profit
+2. If confirming: provide confidence (65-95%), precise entry, stop loss, and take profit. ONLY confirm if you have genuine conviction — trades below 65% confidence WILL be rejected, so do not inflate.
 3. If vetoing: return HOLD with reason (e.g. "major news event in 30 min", "price at key resistance")
 
 CRITICAL RULES FOR SL/TP (violations cause order rejection):
@@ -1468,7 +1492,7 @@ CRITICAL RULES FOR SL/TP (violations cause order rejection):
 - Stop loss distance = 1% to 2% from live price
 - Take profit = 2x to 3x the stop loss distance (minimum 2:1 R:R)
 - NEVER return stopLoss=0 or takeProfit=0 — always calculate real values
-- Confidence 55-65% = normal trade, 65-75% = strong trade, 75%+ = very strong
+- Confidence < 65% = REJECTED (no trade). 65-75% = normal conviction trade, 75-85% = strong, 85%+ = very strong
 
 Respond in JSON:
 {
@@ -1696,17 +1720,35 @@ async function executeDecision(
       // Update trade record — MUST filter by instrument to avoid updating ALL open trades
       const dbExec = await getDb();
       if (dbExec) {
-        // First find the specific open trade for this instrument to get its ID
-        const [openTradeToClose] = await dbExec
-          .select()
-          .from(trades)
-          .where(and(
-            eq(trades.status, "open"),
-            eq(trades.mode, mode),
-            eq(trades.instrument, decision.instrument)
-          ))
-          .orderBy(desc(trades.openedAt))
-          .limit(1);
+        // ███ ROUND 52 — CLOSE-BY-DEALID DATA INTEGRITY FIX ███
+        // Previously matched only by instrument + newest openedAt, which could update the
+        // WRONG DB row when two trades exist on the same instrument. Now match by the exact
+        // dealId that was closed on the broker, falling back to instrument only if needed.
+        let openTradeToClose: typeof trades.$inferSelect | undefined;
+        if (decision.closeDealId) {
+          [openTradeToClose] = await dbExec
+            .select()
+            .from(trades)
+            .where(and(
+              eq(trades.status, "open"),
+              eq(trades.mode, mode),
+              eq(trades.dealId, decision.closeDealId)
+            ))
+            .limit(1);
+        }
+        // Fallback: legacy trades opened before dealId tracking (no dealId stored)
+        if (!openTradeToClose) {
+          [openTradeToClose] = await dbExec
+            .select()
+            .from(trades)
+            .where(and(
+              eq(trades.status, "open"),
+              eq(trades.mode, mode),
+              eq(trades.instrument, decision.instrument)
+            ))
+            .orderBy(desc(trades.openedAt))
+            .limit(1);
+        }
 
         if (openTradeToClose) {
           await dbExec.update(trades)
@@ -2161,17 +2203,17 @@ async function checkDailyRiskLimits(sessionId: number, mode: "paper" | "live"): 
 
 async function getRiskSettings() {
   const db = await getDb();
-  // Default threshold raised from 45% → 55% (Round 45 improvement).
-  // Analysis showed Win Rate was only 38.9% at 45% threshold.
-  // At 55%, we expect fewer but higher-quality trades.
-  if (!db) return { dailyLossLimitPct: 25, stopLossPerTrade: 1, maxRiskPerTrade: 1, minConfidenceThreshold: 55, maxOpenPositions: 3, trailingDrawdownPct: 5, peakBalance: 1000 };
+  // Default threshold raised to 65% (Round 52 — Trading Standards V1).
+  // Weekly report showed Win Rate 31.3% at 55% over 150 trades (-$307).
+  // At 65% (conviction filter), we expect far fewer but higher-quality trades.
+  if (!db) return { dailyLossLimitPct: 1.5, stopLossPerTrade: 1, maxRiskPerTrade: 1, minConfidenceThreshold: 65, maxOpenPositions: 3, trailingDrawdownPct: 5, peakBalance: 1000 };
   const rows = await db.select().from(riskSettings).limit(1);
   const r = rows[0];
   return {
-    dailyLossLimitPct: r ? parseFloat(r.dailyLossLimitPct) : 25,
+    dailyLossLimitPct: r ? parseFloat(r.dailyLossLimitPct) : 1.5,
     stopLossPerTrade: r ? parseFloat(r.stopLossPerTrade) : 1,
     maxRiskPerTrade: r ? parseFloat(r.maxRiskPerTrade) : 1,
-    minConfidenceThreshold: r ? r.minConfidenceThreshold : 55,
+    minConfidenceThreshold: r ? r.minConfidenceThreshold : 65,
     maxOpenPositions: r ? r.maxOpenPositions : 3,
     trailingDrawdownPct: r ? parseFloat(r.trailingDrawdownPct) : 5,
     peakBalance: r ? parseFloat(r.peakBalance) : 1000,

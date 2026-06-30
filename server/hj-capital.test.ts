@@ -84,11 +84,11 @@ describe("HJ Capital — Risk Router", () => {
       maxOpenPositions: 4,
     });
     expect(result.success).toBe(true);
-    // Restore defaults (portfolio-manager baseline)
+    // Restore defaults (Round 52 — Trading Standards V1 baseline)
     await caller.risk.update({
-      dailyLossLimitPct: "25.00",
+      dailyLossLimitPct: "1.50",
       maxRiskPerTrade: "1.00",
-      minConfidenceThreshold: 45,
+      minConfidenceThreshold: 65,
       maxOpenPositions: 3,
     });
   });

@@ -199,10 +199,11 @@ export async function getRiskSettings(): Promise<RiskSettings | undefined> {
   if (result.length > 0) return result[0];
   // Seed defaults
   await db.insert(riskSettings).values({
-    dailyLossLimitPct: "25.00",
+    // ███ ROUND 52 — TRADING STANDARDS V1 ███
+    dailyLossLimitPct: "1.50",          // ~$30 on $2,000 — stop bleeding early
     stopLossPerTrade: "1.00",
-    maxRiskPerTrade: "1.00",
-    minConfidenceThreshold: 45, // Portfolio manager default: take calculated risks
+    maxRiskPerTrade: "1.00",           // Fixed fractional: 1% risk (~$20) per trade
+    minConfidenceThreshold: 65,        // Conviction filter: only high-confidence trades
     maxOpenPositions: 3,
   });
   const seeded = await db.select().from(riskSettings).limit(1);
@@ -222,10 +223,10 @@ export async function updateRiskSettings(settings: Partial<{
   const existing = await db.select().from(riskSettings).limit(1);
   if (existing.length === 0) {
     await db.insert(riskSettings).values({
-      dailyLossLimitPct: settings.dailyLossLimitPct ?? "25.00",
+      dailyLossLimitPct: settings.dailyLossLimitPct ?? "1.50",
       stopLossPerTrade: settings.stopLossPerTrade ?? "1.00",
       maxRiskPerTrade: settings.maxRiskPerTrade ?? "1.00",
-      minConfidenceThreshold: settings.minConfidenceThreshold ?? 45,
+      minConfidenceThreshold: settings.minConfidenceThreshold ?? 65,
       maxOpenPositions: settings.maxOpenPositions ?? 3,
     });
   } else {
