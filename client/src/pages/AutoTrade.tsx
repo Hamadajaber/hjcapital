@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Brain, Zap, Shield, TrendingUp, Square, Activity, Clock, Calendar, Bell, BellRing, Trash2, Plus, Lightbulb, BarChart3, Globe, Wifi, WifiOff } from "lucide-react";
+import { Brain, Zap, Shield, TrendingUp, Square, Activity, Clock, Calendar, Bell, BellRing, Trash2, Plus, Lightbulb, BarChart3, Globe, Wifi, WifiOff, Sparkles } from "lucide-react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatTime(date: Date | string | null) {
@@ -523,6 +523,103 @@ function PriceAlertsCard() {
   );
 }
 
+// ─── TradingAgents Pipeline Toggle ────────────────────────────────────────────
+function AgentPipelineSettings() {
+  const pipelineQuery = trpc.intelligence.getAgentPipeline.useQuery();
+  const updateMutation = trpc.intelligence.updateAgentPipeline.useMutation({
+    onSuccess: (data) => {
+      pipelineQuery.refetch();
+      const labels = { off: "عادي", light: "ذكي", full: "كامل" } as const;
+      toast.success(`تم التفعيل: وضع ${labels[data.mode as keyof typeof labels]}`);
+    },
+    onError: () => toast.error("فشل حفظ الإعداد — حاول مرة أخرى"),
+  });
+
+  const current = pipelineQuery.data?.mode ?? "off";
+  const isUpdating = updateMutation.isPending;
+
+  const options = [
+    {
+      id: "off" as const,
+      label: "عادي",
+      sub: "نموذج واحد — أسرع وأرخص",
+    },
+    {
+      id: "light" as const,
+      label: "ذكي ✨",
+      sub: "TradingAgents — Bull/Bear + Portfolio",
+      recommended: true,
+    },
+    {
+      id: "full" as const,
+      label: "كامل",
+      sub: "ذكي + مناظرة المخاطر",
+    },
+  ];
+
+  return (
+    <div className="hj-card p-5">
+      <h2 className="section-label flex items-center gap-2 mb-2">
+        <Sparkles size={13} style={{ color: "var(--color-gold)" }} />
+        تحليل TradingAgents
+      </h2>
+      <p className="text-xs mb-4" style={{ color: "var(--color-text-tertiary)", lineHeight: 1.5 }}>
+        اختر طريقة اتخاذ القرار. الوضع <strong>ذكي</strong> يُفعّل مناظرة Bull/Bear قبل كل صفقة — موصى به للتجربة على Paper أولاً.
+      </p>
+
+      <div className="space-y-2">
+        {options.map((opt) => {
+          const active = current === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              disabled={isUpdating}
+              onClick={() => updateMutation.mutate({ mode: opt.id })}
+              className="w-full text-right rounded-xl p-3 transition-all disabled:opacity-50"
+              style={{
+                background: active ? "var(--color-accent-dim)" : "var(--color-bg-elevated)",
+                border: active
+                  ? "2px solid var(--color-accent)"
+                  : "1px solid var(--color-border-subtle)",
+              }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span
+                  className="text-sm font-semibold"
+                  style={{
+                    color: active ? "var(--color-accent)" : "var(--color-text-primary)",
+                    fontFamily: "var(--font-serif)",
+                  }}
+                >
+                  {opt.label}
+                  {opt.recommended && !active && (
+                    <span className="text-xs font-normal mr-1" style={{ color: "var(--color-gold)" }}>
+                      {" "}— موصى به
+                    </span>
+                  )}
+                </span>
+                {active && (
+                  <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "var(--color-accent)", color: "oklch(0.1 0 0)" }}>
+                    مُفعّل
+                  </span>
+                )}
+              </div>
+              <p className="text-xs mt-1" style={{ color: "var(--color-text-tertiary)" }}>{opt.sub}</p>
+            </button>
+          );
+        })}
+      </div>
+
+      {current !== "off" && (
+        <p className="text-xs mt-3 p-2 rounded-lg" style={{ background: "var(--color-profit-bg)", color: "var(--color-profit)" }}>
+          ✅ TradingAgents مُفعّل — راقب Decision Log لرؤية [AGENT PIPELINE]
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function AutoTrade() {
   const [mode, setMode] = useState<"paper" | "live">("paper");
@@ -773,6 +870,8 @@ export default function AutoTrade() {
               </div>
             )}
           </div>
+
+          <AgentPipelineSettings />
 
           {/* Risk Parameters Card */}
           <div className="hj-card p-5">

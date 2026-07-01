@@ -235,6 +235,10 @@ export const engineIntelligence = mysqlTable("engine_intelligence", {
   lastWinRateWarnDate: varchar("lastWinRateWarnDate", { length: 10 }),
   // Last date a weekly summary was sent (YYYY-MM-DD) — persisted to survive server restarts
   lastWeeklySummaryDate: varchar("lastWeeklySummaryDate", { length: 10 }),
+  // TradingAgents-inspired multi-agent pipeline (off | light | full)
+  agentPipelineMode: mysqlEnum("agentPipelineMode", ["off", "light", "full"])
+    .notNull()
+    .default("off"),
   // Last time intelligence was updated
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

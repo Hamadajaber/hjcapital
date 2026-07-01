@@ -56,7 +56,8 @@ import {
   evaluateClosedTrade,
 } from "./engineIntelligence";
 import { getWSState, getAllCachedPrices } from "./capitalcomWS";
-import { getRecentLessons, getEngineIntelligence } from "./db";
+import { getRecentLessons, getEngineIntelligence, updateEngineIntelligence, ensureAgentPipelineColumn } from "./db";
+import { invalidateAgentPipelineConfigCache } from "./agentPipeline";
 
 // ─── Owner-only guard ─────────────────────────────────────────────────────────
 // Uses role-based check (admin) as primary guard.
@@ -800,6 +801,31 @@ Respond ONLY with valid JSON:
             ageMs: Date.now() - p.timestamp,
           })),
         };
+      }),
+
+    getAgentPipeline: ownerProcedure.query(async () => {
+      await ensureAgentPipelineColumn();
+      const intel = await getEngineIntelligence();
+      const mode = intel?.agentPipelineMode ?? "off";
+      return {
+        mode,
+        enabled: mode !== "off",
+        description:
+          mode === "off"
+            ? "الوضع العادي — نموذج واحد"
+            : mode === "light"
+              ? "ذكي — Bull/Bear + Portfolio Manager (TradingAgents)"
+              : "كامل — مع مناظرة المخاطر",
+      };
+    }),
+
+    updateAgentPipeline: ownerProcedure
+      .input(z.object({ mode: z.enum(["off", "light", "full"]) }))
+      .mutation(async ({ input }) => {
+        await ensureAgentPipelineColumn();
+        await updateEngineIntelligence({ agentPipelineMode: input.mode });
+        invalidateAgentPipelineConfigCache();
+        return { success: true, mode: input.mode };
       }),
   }),
 

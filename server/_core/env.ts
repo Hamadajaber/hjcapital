@@ -11,4 +11,6 @@ export const ENV = {
   capitalApiKey: process.env.CAPITAL_COM_API_KEY ?? "",
   capitalEmail: process.env.CAPITAL_COM_EMAIL ?? "",
   capitalPassword: process.env.CAPITAL_COM_PASSWORD ?? "",
+  // TradingAgents-inspired multi-agent pipeline (off | light | full)
+  agentPipelineMode: process.env.HJ_AGENT_PIPELINE_MODE ?? "off",
 };

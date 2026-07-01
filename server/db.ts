@@ -1,4 +1,4 @@
-import { eq, desc, and, gte, lte } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser, users,
@@ -581,6 +581,24 @@ export async function get7DayWinRate(): Promise<{ winRate: number; totalTrades: 
 
 // ─── Engine Intelligence ──────────────────────────────────────────────────────
 
+/** Adds agentPipelineMode column on existing deployments (safe to call repeatedly). */
+export async function ensureAgentPipelineColumn(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.execute(sql`
+      ALTER TABLE engine_intelligence
+      ADD COLUMN agentPipelineMode enum('off','light','full') NOT NULL DEFAULT 'off'
+    `);
+    console.log("[Database] Added engine_intelligence.agentPipelineMode column");
+  } catch (err: unknown) {
+    const msg = String(err);
+    if (!msg.includes("Duplicate column")) {
+      console.warn("[Database] ensureAgentPipelineColumn:", msg);
+    }
+  }
+}
+
 export async function getEngineIntelligence(): Promise<EngineIntelligence | null> {
   const db = await getDb();
   if (!db) return null;
@@ -592,6 +610,7 @@ export async function getEngineIntelligence(): Promise<EngineIntelligence | null
     winRate7d: "0.00",
     trades7d: 0,
     marketRegimes: {},
+    agentPipelineMode: "off",
   });
   const seeded = await db.select().from(engineIntelligence).limit(1);
   return seeded[0] ?? null;
@@ -604,6 +623,7 @@ export async function updateEngineIntelligence(patch: Partial<{
   trades7d: number;
   lastWinRateWarnDate: string | null;
   lastWeeklySummaryDate: string | null;
+  agentPipelineMode: "off" | "light" | "full";
 }>): Promise<void> {
   const db = await getDb();
   if (!db) return;
@@ -614,6 +634,7 @@ export async function updateEngineIntelligence(patch: Partial<{
       winRate7d: patch.winRate7d ?? "0.00",
       trades7d: patch.trades7d ?? 0,
       marketRegimes: patch.marketRegimes ?? {},
+      agentPipelineMode: patch.agentPipelineMode ?? "off",
     });
   } else {
     await db.update(engineIntelligence).set(patch);

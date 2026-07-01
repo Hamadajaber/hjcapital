@@ -12,6 +12,7 @@ import { autoTradeStartHandler, autoTradeStopHandler, weeklyReportHandler } from
 import { handleTelegramUpdate, TelegramUpdate, setTelegramWebhook } from "../telegram";
 import { startAutoTrade, stopAutoTrade, getEngineState, getActiveSession, CORE_INSTRUMENTS } from "../autoTradeEngine";
 import { getAccountBalance, isAnyMarketOpen, getNextMarketEvent } from "../capitalcom";
+import { ensureAgentPipelineColumn } from "../db";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -178,6 +179,7 @@ async function startServer() {
 
   // Initial check after 5s (let DB connections settle)
   setTimeout(async () => {
+    await ensureAgentPipelineColumn().catch(() => {});
     await marketHoursWatcher();
     // Then check every 5 minutes
     setInterval(marketHoursWatcher, WATCHER_INTERVAL_MS);

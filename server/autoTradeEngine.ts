@@ -72,6 +72,7 @@ import {
   runEnsembleAnalysis,
   getEnsembleSizeMultiplier,
 } from "./engineIntelligence";
+import { runAgentPipeline, resolveAgentPipelineConfig } from "./agentPipeline";
 import type { MarketRegime, EnsembleResult } from "./engineIntelligence";
 import {
   autoTradeSession,
@@ -1467,7 +1468,62 @@ async function analyzeInstrument(
 
   const lessonsSection = await formatLessonsForPrompt(instrument).catch(() => "");
 
-  // ─── AI CONFIRMATION ONLY ──────────────────────────────────────────────────────────────
+  // ─── TRADINGAGENTS PIPELINE (optional) ───────────────────────────────────────────────
+  const agentConfig = await resolveAgentPipelineConfig();
+  if (agentConfig.enabled) {
+    try {
+      const candles1hForPipeline =
+        instTechnical && instTechnical.candles1h.length >= 14
+          ? instTechnical.candles1h.map((c: OHLCVCandle) => ({
+              open: c.open,
+              high: c.high,
+              low: c.low,
+              close: c.close,
+              volume: c.volume,
+              timestamp: c.timestamp,
+            }))
+          : undefined;
+
+      const pipelineResult = await runAgentPipeline({
+        instrument,
+        technicalSummary5m: instTechnical?.technicalSummary5m,
+        technicalSummary1h: instTechnical?.technicalSummary1h,
+        technicalSummary4h: instTechnical?.technicalSummary4h,
+        mtfSignalSummary: rulesPassedSummary,
+        proposedDirection,
+        sentimentText: (marketContext.sentiment as Record<string, string> | undefined)?.[instrument],
+        newsHeadlines: ((marketContext.news as string[]) ?? []).slice(0, 8),
+        clientSentiment,
+        lessons: lessonsSection || undefined,
+        livePrice: livePrice || undefined,
+        session,
+        candles1h: candles1hForPipeline,
+        accountBalance,
+        confidenceThreshold: effectiveThreshold,
+      });
+
+      console.log(
+        `[AutoTrade] Agent pipeline (${agentConfig.mode}): ${instrument} → ${pipelineResult.decision.action} ` +
+          `(${pipelineResult.agentCallCount} LLM calls)`
+      );
+
+      if (pipelineResult.decision.action !== "HOLD") {
+        return {
+          ...pipelineResult.decision,
+          reasoning: `${pipelineResult.decision.reasoning} | MTF: ${rulesPassedSummary}`,
+        };
+      }
+
+      return pipelineResult.decision;
+    } catch (pipelineErr) {
+      console.warn(
+        `[AutoTrade] Agent pipeline failed for ${instrument}, falling back to single-model confirmation:`,
+        pipelineErr
+      );
+    }
+  }
+
+  // ─── AI CONFIRMATION ONLY (default / fallback) ───────────────────────────────────────
   // The 3 MTF rules already confirmed a ${proposedDirection} signal.
   // AI now reviews the signal and provides: confidence score, entry/SL/TP, and can veto if macro is unfavorable.
   const confirmationPrompt = `You are HJ Capital's risk manager. Our technical system has generated a ${proposedDirection} signal for ${instrument}.
