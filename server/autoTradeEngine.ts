@@ -1361,16 +1361,16 @@ async function analyzeInstrument(
     trendDirection = emaTrend.trend;
     trendDescription = emaTrend.description;
 
-    // EMA Gap Filter: require minimum 0.15% separation between EMA50 and EMA200
-    // Flat markets (EMA gap < 0.15%) produce false signals — skip them
+    // EMA Gap Filter: require minimum 0.30% separation between EMA50 and EMA200
+    // Round 54: raised 0.15%→0.30% — only trade strong trends, not marginal ones
     if (emaTrend.ema50 > 0 && emaTrend.ema200 > 0) {
       const emaGapPct = Math.abs(emaTrend.ema50 - emaTrend.ema200) / emaTrend.ema200 * 100;
-      if (emaGapPct < 0.15) {
+      if (emaGapPct < 0.30) {
         return {
           instrument,
           action: "HOLD",
           confidence: 0,
-          reasoning: `EMA gap too small (${emaGapPct.toFixed(3)}% < 0.15%) — market is ranging/flat, no clear trend`,
+          reasoning: `EMA gap too small (${emaGapPct.toFixed(3)}% < 0.30%) — market is ranging/flat, no clear trend`,
         };
       }
     }

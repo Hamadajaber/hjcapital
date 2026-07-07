@@ -400,8 +400,10 @@ export function calculateATRStopLoss(
   }
   const atr = atrSum / 14;
 
-  const slDistance = atr * 1.5;
-  const tpDistance = atr * 1.5 * riskRewardRatio;
+  // ███ ROUND 54 — ATR multiplier raised 1.5→2.5 to avoid noise-triggered SL hits
+  // Analysis showed 72.4% loss rate caused by SL too close to entry (random noise)
+  const slDistance = atr * 2.5;
+  const tpDistance = atr * 2.5 * riskRewardRatio;
 
   const stopLoss = direction === "BUY"
     ? entryPrice - slDistance
@@ -421,7 +423,7 @@ export function calculateATRStopLoss(
 
 /**
  * Calculate position size based on ATR and account balance.
- * Risk 1% of balance per trade, size = (balance × riskPct) / (ATR × 1.5)
+ * Risk 1% of balance per trade, size = (balance × riskPct) / (ATR × 2.5)
  * This equalizes risk across all instruments regardless of their volatility.
  */
 export function calculateATRPositionSize(
