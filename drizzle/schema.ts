@@ -63,6 +63,8 @@ export const trades = mysqlTable("trades", {
   closeReason: varchar("closeReason", { length: 32 }),
   // Capital.com deal ID for cross-referencing with broker
   dealId: varchar("dealId", { length: 128 }),
+  // Which broker executed this trade: 'capitalcom' | 'binance'
+  broker: mysqlEnum("broker", ["capitalcom", "binance"]).default("capitalcom"),
 });
 
 export type Trade = typeof trades.$inferSelect;
@@ -244,3 +246,37 @@ export const engineIntelligence = mysqlTable("engine_intelligence", {
 });
 
 export type EngineIntelligence = typeof engineIntelligence.$inferSelect;
+
+// ─── Multi-Broker Support ────────────────────────────────────────────────────
+
+// Broker configuration — which broker is active for trading
+export const brokerConfig = mysqlTable("broker_config", {
+  id: int("id").autoincrement().primaryKey(),
+  // Active broker: 'capitalcom' | 'binance' | 'both'
+  activeBroker: mysqlEnum("activeBroker", ["capitalcom", "binance", "both"])
+    .notNull()
+    .default("capitalcom"),
+  // In 'both' mode: route crypto to Binance, everything else to Capital.com
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type BrokerConfig = typeof brokerConfig.$inferSelect;
+
+// Broker credentials — encrypted storage for API keys
+// Encryption: AES-256-GCM with server-side key derived from JWT_SECRET
+export const brokerCredentials = mysqlTable("broker_credentials", {
+  id: int("id").autoincrement().primaryKey(),
+  broker: mysqlEnum("broker", ["capitalcom", "binance"]).notNull(),
+  // Encrypted fields (AES-256-GCM: iv:authTag:ciphertext in hex)
+  encryptedApiKey: text("encryptedApiKey"),
+  encryptedApiSecret: text("encryptedApiSecret"),
+  // For Capital.com (email/password auth)
+  encryptedEmail: varchar("encryptedEmail", { length: 512 }),
+  encryptedPassword: varchar("encryptedPassword", { length: 512 }),
+  // Binance-specific: use testnet?
+  useTestnet: boolean("useTestnet").notNull().default(false),
+  // Connection status
+  lastTestedAt: timestamp("lastTestedAt"),
+  lastTestResult: mysqlEnum("lastTestResult", ["success", "failed"]),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type BrokerCredentials = typeof brokerCredentials.$inferSelect;
