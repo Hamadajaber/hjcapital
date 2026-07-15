@@ -552,4 +552,4 @@
 - [x] Add Learning Dashboard page (LearningDashboard.tsx) with 3 tabs: Instrument Scores, Lessons, Adjustments
 - [x] Add Self-Learning route to sidebar and App.tsx routing
 - [x] TypeScript: 0 errors
-- [ ] Run tests, checkpoint, push to GitHub, restart engine
+- [x] Run tests (115/115 passing), checkpoint (852d2177), push to GitHub (2836a23), engine running

@@ -11,12 +11,6 @@ export const ENV = {
   capitalApiKey: process.env.CAPITAL_COM_API_KEY ?? "",
   capitalEmail: process.env.CAPITAL_COM_EMAIL ?? "",
   capitalPassword: process.env.CAPITAL_COM_PASSWORD ?? "",
-  // Binance API credentials (optional — can also be stored encrypted in DB)
-  binanceApiKey: process.env.BINANCE_API_KEY ?? "",
-  binanceApiSecret: process.env.BINANCE_API_SECRET ?? "",
-  binanceTestnet: process.env.BINANCE_TESTNET === "true",
-  // Active broker: 'capitalcom' | 'binance' | 'both' (default: capitalcom)
-  activeBroker: (process.env.ACTIVE_BROKER ?? "capitalcom") as "capitalcom" | "binance" | "both",
   // TradingAgents-inspired multi-agent pipeline (off | light | full)
   agentPipelineMode: process.env.HJ_AGENT_PIPELINE_MODE ?? "off",
 };

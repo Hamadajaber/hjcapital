@@ -26,11 +26,19 @@ export const SentimentBandSchema = z.enum([
 ]);
 export type SentimentBand = z.infer<typeof SentimentBandSchema>;
 
-export const ResearchPlanSchema = z.object({
+// Some models return strategic_actions as an array of strings — normalize to a joined string.
+const _ResearchPlanRaw = z.object({
   recommendation: PortfolioRatingSchema,
   rationale: z.string(),
-  strategic_actions: z.string(),
+  strategic_actions: z.union([z.string(), z.array(z.string())]),
 });
+
+export const ResearchPlanSchema = _ResearchPlanRaw.transform((d) => ({
+  ...d,
+  strategic_actions: Array.isArray(d.strategic_actions)
+    ? d.strategic_actions.join("; ")
+    : d.strategic_actions,
+}));
 export type ResearchPlan = z.infer<typeof ResearchPlanSchema>;
 
 export const TraderProposalSchema = z.object({
