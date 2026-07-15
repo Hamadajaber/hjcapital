@@ -612,18 +612,29 @@ export const appRouter = router({
           description: "Weekly auto-stop HJ Auto Trade — Fri 21:00 UTC",
         }, sessionToken);
 
+        // Create weekly meta-analysis job: Friday 21:30 UTC — after market close, AI reviews lessons
+        const metaJob = await createHeartbeatJob({
+          name: "hj-weekly-meta-analysis",
+          cron: "0 30 21 * * 5",  // Friday 21:30 UTC — 30 min after market close
+          path: "/api/scheduled/weekly-meta-analysis",
+          payload: {},
+          description: "Weekly AI meta-analysis — reads all lessons and auto-adjusts strategy thresholds",
+        }, sessionToken).catch(() => null);
+
         await updateScheduleConfig({
           enabled: true,
           defaultMode: input.mode,
           cycleIntervalMinutes: input.cycleIntervalMinutes,
           startTaskUid: startJob.taskUid,
           stopTaskUid: stopJob.taskUid,
+          metaAnalysisTaskUid: metaJob?.taskUid ?? null,
         });
 
         return {
           success: true,
           startTaskUid: startJob.taskUid,
           stopTaskUid: stopJob.taskUid,
+          metaAnalysisTaskUid: metaJob?.taskUid ?? null,
           nextStart: startJob.nextExecutionAt,
           nextStop: stopJob.nextExecutionAt,
         };
@@ -642,11 +653,15 @@ export const appRouter = router({
       if (config.stopTaskUid) {
         try { await deleteHeartbeatJob(config.stopTaskUid, sessionToken); } catch {}
       }
+      if (config.metaAnalysisTaskUid) {
+        try { await deleteHeartbeatJob(config.metaAnalysisTaskUid, sessionToken); } catch {}
+      }
 
       await updateScheduleConfig({
         enabled: false,
         startTaskUid: null,
         stopTaskUid: null,
+        metaAnalysisTaskUid: null,
       });
 
       return { success: true };
@@ -843,6 +858,59 @@ Respond ONLY with valid JSON:
     get: ownerProcedure.query(async () => {
       return await getStrategyComparison();
     }),
+  }),
+
+  // ─── Self-Learning Engine ───────────────────────────────────────────────────
+  learning: router({
+    // Instrument performance scores
+    instrumentScores: ownerProcedure.query(async () => {
+      const { getAllInstrumentPerformance } = await import("./learningEngine");
+      return getAllInstrumentPerformance();
+    }),
+
+    // Strategy adjustment history
+    adjustments: ownerProcedure
+      .input(z.object({ limit: z.number().min(1).max(100).default(20) }))
+      .query(async ({ input }) => {
+        const { getStrategyAdjustments } = await import("./learningEngine");
+        return getStrategyAdjustments(input.limit);
+      }),
+
+    // Recent trade lessons
+    lessons: ownerProcedure
+      .input(z.object({ instrument: z.string().optional(), limit: z.number().min(1).max(100).default(20) }))
+      .query(async ({ input }) => {
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) return [];
+        const { tradeLessons } = await import("../drizzle/schema");
+        const { desc, eq } = await import("drizzle-orm");
+        let query = db.select().from(tradeLessons).orderBy(desc(tradeLessons.createdAt)).limit(input.limit);
+        if (input.instrument) {
+          query = db.select().from(tradeLessons).where(eq(tradeLessons.instrument, input.instrument)).orderBy(desc(tradeLessons.createdAt)).limit(input.limit) as typeof query;
+        }
+        return query;
+      }),
+
+    // Trigger manual meta-analysis
+    triggerMetaAnalysis: ownerProcedure.mutation(async () => {
+      const { runWeeklyMetaAnalysis } = await import("./learningEngine");
+      runWeeklyMetaAnalysis().catch(console.error); // fire-and-forget
+      return { success: true, message: "Meta-analysis started in background" };
+    }),
+
+    // Toggle instrument enabled/disabled
+    toggleInstrument: ownerProcedure
+      .input(z.object({ instrument: z.string(), enabled: z.boolean() }))
+      .mutation(async ({ input }) => {
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) throw new Error("DB not available");
+        const { instrumentPerformance } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        await db.update(instrumentPerformance).set({ isEnabled: input.enabled }).where(eq(instrumentPerformance.instrument, input.instrument));
+        return { success: true };
+      }),
   }),
 
   reconciliation: router({

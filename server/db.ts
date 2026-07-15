@@ -275,6 +275,7 @@ export async function updateScheduleConfig(patch: Partial<{
   cycleIntervalMinutes: number;
   startTaskUid: string | null;
   stopTaskUid: string | null;
+  metaAnalysisTaskUid: string | null;
 }>): Promise<void> {
   const db = await getDb();
   if (!db) return;

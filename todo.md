@@ -538,3 +538,18 @@
 - [x] Fix peakBalance sync at engine start: updates DB peak if live balance > stored peak
 - [x] TypeScript: 0 errors
 - [x] Tests: 108/108 passing
+
+## Round 55 — Self-Learning Engine + Instrument Expansion
+
+- [x] Add EURUSD + GBPUSD to active instruments list in autoTradeEngine.ts (already present)
+- [x] Reduce EMA gap filter from 0.30% to 0.20% in autoTradeEngine.ts
+- [x] Add instrument_performance + strategy_adjustments DB tables via SQL
+- [x] Build learningEngine.ts: analyzeClosedTrade() — after every closed trade, AI analyzes outcome, saves lesson, updates instrument score
+- [x] Build weekly meta-analysis: runWeeklyMetaAnalysis() reads all lessons + scores, auto-adjusts thresholds, disables weak instruments
+- [x] Register /api/scheduled/weekly-meta-analysis handler in index.ts + scheduledHandlers.ts
+- [x] Add weekly-meta-analysis Heartbeat job (Fri 21:30 UTC) to enableSchedule in routers.ts
+- [x] Add learning tRPC router: instrumentScores, adjustments, lessons, triggerMetaAnalysis, toggleInstrument
+- [x] Add Learning Dashboard page (LearningDashboard.tsx) with 3 tabs: Instrument Scores, Lessons, Adjustments
+- [x] Add Self-Learning route to sidebar and App.tsx routing
+- [x] TypeScript: 0 errors
+- [ ] Run tests, checkpoint, push to GitHub, restart engine

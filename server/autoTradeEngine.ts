@@ -73,6 +73,7 @@ import {
   getEnsembleSizeMultiplier,
 } from "./engineIntelligence";
 import { runAgentPipeline, resolveAgentPipelineConfig } from "./agentPipeline";
+import { analyzeClosedTrade } from "./learningEngine";
 import type { MarketRegime, EnsembleResult } from "./engineIntelligence";
 import {
   autoTradeSession,
@@ -502,6 +503,22 @@ async function runCycle() {
                 originalReasoning: dbTrade.aiReasoning ?? "No reasoning recorded",
                 marketConditionsAtEntry: `Reconciled close (broker closed position). Mode: ${dbTrade.mode ?? "live"}, Confidence: ${dbTrade.aiConfidence ?? 0}%`,
                 mode: (dbTrade.mode as "paper" | "live") ?? "live",
+              }).catch(() => {});
+
+              // Self-Learning Engine: update instrument performance score
+              analyzeClosedTrade({
+                tradeId: dbTrade.id,
+                instrument: dbTrade.instrument,
+                direction: dbTrade.direction as "BUY" | "SELL",
+                entryPrice: parseFloat(dbTrade.openPrice ?? "0"),
+                exitPrice: parseFloat(closePrice),
+                pnl: parseFloat(pnl),
+                size: parseFloat(dbTrade.size ?? "1"),
+                openedAt: dbTrade.openedAt,
+                closedAt: new Date(),
+                closeReason: "reconciled",
+                aiReasoning: dbTrade.aiReasoning ?? undefined,
+                aiConfidence: dbTrade.aiConfidence ?? undefined,
               }).catch(() => {});
 
               // Send Telegram notification for reconciled trade (Capital.com closed it via SL/TP/Manual)
@@ -1361,16 +1378,16 @@ async function analyzeInstrument(
     trendDirection = emaTrend.trend;
     trendDescription = emaTrend.description;
 
-    // EMA Gap Filter: require minimum 0.30% separation between EMA50 and EMA200
-    // Round 54: raised 0.15%→0.30% — only trade strong trends, not marginal ones
+    // EMA Gap Filter: require minimum 0.20% separation between EMA50 and EMA200
+    // Round 54: raised 0.15%→0.30% — Round 55: lowered to 0.20% to allow more signals
     if (emaTrend.ema50 > 0 && emaTrend.ema200 > 0) {
       const emaGapPct = Math.abs(emaTrend.ema50 - emaTrend.ema200) / emaTrend.ema200 * 100;
-      if (emaGapPct < 0.30) {
+      if (emaGapPct < 0.20) {
         return {
           instrument,
           action: "HOLD",
           confidence: 0,
-          reasoning: `EMA gap too small (${emaGapPct.toFixed(3)}% < 0.30%) — market is ranging/flat, no clear trend`,
+          reasoning: `EMA gap too small (${emaGapPct.toFixed(3)}% < 0.20%) — market is ranging/flat, no clear trend`,
         };
       }
     }
@@ -1822,6 +1839,22 @@ async function executeDecision(
             originalReasoning: decision.reasoning,
             marketConditionsAtEntry: `Mode: ${mode}, Confidence: ${decision.confidence}%`,
             mode,
+          }).catch(() => {});
+
+          // Self-Learning Engine: update instrument performance score
+          analyzeClosedTrade({
+            tradeId: openTradeToClose.id,
+            instrument: decision.instrument,
+            direction: decision.positionDirection ?? "BUY",
+            entryPrice: decision.positionOpenLevel ?? decision.entryPrice ?? 0,
+            exitPrice: confirmedCloseLevel ?? decision.positionCurrentLevel ?? decision.entryPrice ?? 0,
+            pnl,
+            size: decision.size ?? 1,
+            openedAt: openTradeToClose.openedAt,
+            closedAt: new Date(),
+            closeReason: "ai_close",
+            aiReasoning: decision.reasoning,
+            aiConfidence: decision.confidence,
           }).catch(() => {});
         }
       }

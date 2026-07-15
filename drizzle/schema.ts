@@ -63,8 +63,6 @@ export const trades = mysqlTable("trades", {
   closeReason: varchar("closeReason", { length: 32 }),
   // Capital.com deal ID for cross-referencing with broker
   dealId: varchar("dealId", { length: 128 }),
-  // Which broker executed this trade: 'capitalcom' | 'binance'
-  broker: mysqlEnum("broker", ["capitalcom", "binance"]).default("capitalcom"),
 });
 
 export type Trade = typeof trades.$inferSelect;
@@ -181,6 +179,8 @@ export const scheduleConfig = mysqlTable("schedule_config", {
   // Human-readable schedule description
   startCron: varchar("startCron", { length: 64 }).default("0 7 * * 1-5"),   // 07:00 UTC = 10:00 Cairo
   stopCron: varchar("stopCron", { length: 64 }).default("0 20 * * 1-5"),    // 20:00 UTC = 23:00 Cairo
+  // Weekly meta-analysis Heartbeat task UID
+  metaAnalysisTaskUid: varchar("metaAnalysisTaskUid", { length: 65 }),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
@@ -247,36 +247,50 @@ export const engineIntelligence = mysqlTable("engine_intelligence", {
 
 export type EngineIntelligence = typeof engineIntelligence.$inferSelect;
 
-// ─── Multi-Broker Support ────────────────────────────────────────────────────
-
-// Broker configuration — which broker is active for trading
-export const brokerConfig = mysqlTable("broker_config", {
+// Instrument Performance — per-instrument win/loss stats for self-learning
+export const instrumentPerformance = mysqlTable("instrument_performance", {
   id: int("id").autoincrement().primaryKey(),
-  // Active broker: 'capitalcom' | 'binance' | 'both'
-  activeBroker: mysqlEnum("activeBroker", ["capitalcom", "binance", "both"])
-    .notNull()
-    .default("capitalcom"),
-  // In 'both' mode: route crypto to Binance, everything else to Capital.com
+  instrument: varchar("instrument", { length: 32 }).notNull().unique(),
+  wins: int("wins").notNull().default(0),
+  losses: int("losses").notNull().default(0),
+  totalTrades: int("totalTrades").notNull().default(0),
+  totalPnl: decimal("totalPnl", { precision: 12, scale: 2 }).notNull().default("0.00"),
+  avgPnl: decimal("avgPnl", { precision: 10, scale: 2 }).notNull().default("0.00"),
+  winRate: decimal("winRate", { precision: 5, scale: 2 }).notNull().default("0.00"),
+  // AI-computed score 0-100 (higher = better instrument for current market conditions)
+  score: int("score").notNull().default(50),
+  // AI analysis summary for this instrument
+  aiAnalysis: text("aiAnalysis"),
+  // Recommended confidence threshold for this instrument (null = use global)
+  recommendedConfidence: int("recommendedConfidence"),
+  // Whether this instrument is enabled for trading
+  isEnabled: boolean("isEnabled").notNull().default(true),
+  lastTradeAt: timestamp("lastTradeAt"),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
-export type BrokerConfig = typeof brokerConfig.$inferSelect;
 
-// Broker credentials — encrypted storage for API keys
-// Encryption: AES-256-GCM with server-side key derived from JWT_SECRET
-export const brokerCredentials = mysqlTable("broker_credentials", {
+export type InstrumentPerformance = typeof instrumentPerformance.$inferSelect;
+export type InsertInstrumentPerformance = typeof instrumentPerformance.$inferInsert;
+
+// Strategy Adjustments — log of auto-adjustments made by the meta-analysis AI
+export const strategyAdjustments = mysqlTable("strategy_adjustments", {
   id: int("id").autoincrement().primaryKey(),
-  broker: mysqlEnum("broker", ["capitalcom", "binance"]).notNull(),
-  // Encrypted fields (AES-256-GCM: iv:authTag:ciphertext in hex)
-  encryptedApiKey: text("encryptedApiKey"),
-  encryptedApiSecret: text("encryptedApiSecret"),
-  // For Capital.com (email/password auth)
-  encryptedEmail: varchar("encryptedEmail", { length: 512 }),
-  encryptedPassword: varchar("encryptedPassword", { length: 512 }),
-  // Binance-specific: use testnet?
-  useTestnet: boolean("useTestnet").notNull().default(false),
-  // Connection status
-  lastTestedAt: timestamp("lastTestedAt"),
-  lastTestResult: mysqlEnum("lastTestResult", ["success", "failed"]),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  // What was adjusted
+  adjustmentType: varchar("adjustmentType", { length: 64 }).notNull(),
+  // Old value (JSON string)
+  oldValue: text("oldValue"),
+  // New value (JSON string)
+  newValue: text("newValue"),
+  // AI reasoning for this adjustment
+  reasoning: text("reasoning").notNull(),
+  // Number of trades analyzed to make this decision
+  tradesAnalyzed: int("tradesAnalyzed").notNull().default(0),
+  // Number of lessons read
+  lessonsRead: int("lessonsRead").notNull().default(0),
+  // Source: 'post_trade' | 'weekly_meta' | 'manual'
+  source: varchar("source", { length: 32 }).notNull().default("weekly_meta"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
-export type BrokerCredentials = typeof brokerCredentials.$inferSelect;
+
+export type StrategyAdjustment = typeof strategyAdjustments.$inferSelect;
+export type InsertStrategyAdjustment = typeof strategyAdjustments.$inferInsert;

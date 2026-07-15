@@ -21,6 +21,7 @@ import {
 } from "./autoTradeEngine";
 import { sendTelegramMessage, sendDailySummary } from "./telegram";
 import { getDailyStats, getPortfolio, getWeeklyPerformanceSummary } from "./db";
+import { runWeeklyMetaAnalysis } from "./learningEngine";
 
 // ─── Auto-Trade Start Handler ─────────────────────────────────────────────────
 
@@ -149,6 +150,33 @@ export async function autoTradeStopHandler(req: Request, res: Response) {
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     console.error("[Scheduled] auto-trade-stop failed:", error);
+    return res.status(500).json({
+      error,
+      context: { url: req.url, taskUid: (req as any).taskUid },
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
+
+// ─── Weekly Meta-Analysis Handler ───────────────────────────────────────────
+// Triggered every Friday at 20:00 UTC via Heartbeat cron.
+// AI reads all lessons + instrument scores and auto-adjusts strategy thresholds.
+
+export async function weeklyMetaAnalysisHandler(req: Request, res: Response) {
+  try {
+    const user = await sdk.authenticateRequest(req);
+    if (!user.isCron) {
+      return res.status(403).json({ error: "cron-only endpoint" });
+    }
+
+    console.log("[Scheduled] Running weekly meta-analysis...");
+    await runWeeklyMetaAnalysis();
+    console.log("[Scheduled] Weekly meta-analysis complete.");
+
+    return res.json({ ok: true, completedAt: new Date().toISOString() });
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    console.error("[Scheduled] weekly-meta-analysis failed:", error);
     return res.status(500).json({
       error,
       context: { url: req.url, taskUid: (req as any).taskUid },

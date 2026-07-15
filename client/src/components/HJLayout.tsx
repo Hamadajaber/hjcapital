@@ -32,6 +32,7 @@ const NAV_ITEMS = [
   { path: "/risk",        label: "Risk Settings",icon: Shield },
   { path: "/market-hours", label: "Market Hours",  icon: Clock },
   { path: "/lessons",      label: "AI Lessons",    icon: Lightbulb },
+  { path: "/learning",     label: "Self-Learning",  icon: FlaskConical },
 ];
 
 // Items shown in the mobile bottom nav (most important 5)
