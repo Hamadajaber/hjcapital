@@ -33,6 +33,7 @@ const NAV_ITEMS = [
   { path: "/market-hours", label: "Market Hours",  icon: Clock },
   { path: "/lessons",      label: "AI Lessons",    icon: Lightbulb },
   { path: "/learning",     label: "Self-Learning",  icon: FlaskConical },
+  { path: "/knowledge",     label: "Knowledge Base",  icon: Brain },
 ];
 
 // Items shown in the mobile bottom nav (most important 5)

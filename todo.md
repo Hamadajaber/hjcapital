@@ -584,3 +584,16 @@
 - [x] Add instrument-specific size caps: forex max 2, gold max 1, indices/crypto max 0.5
 - [x] TypeScript: 0 errors | Tests: 115/115 passing
 - [x] Checkpoint + GitHub sync
+
+## Round 58 — نظام تراكم المعرفة والتعلم المستمر (Continuous Learning System)
+
+### المفهوم: المنصة تتعلم من كل صفقة وتتطور تلقائياً
+- [x] إضافة جدول knowledge_base: طبقات المعرفة (صفقة، أسبوع، حدث سوق، نمط)
+- [x] إضافة جدول instrument_profiles: ملف شخصي لكل أداة يتراكم مع الزمن
+- [x] إضافة جدول market_regime_memory: ذاكرة أنظمة السوق (صاعد/هابط/جانبي)
+- [x] بناء knowledgeEngine.ts: استخراج المعرفة من كل صفقة + ملفات الأدوات + ذاكرة أنظمة السوق
+- [x] دمج المعرفة مع autoTradeEngine: المعرفة تُغذّي قرارات التداول مباشرة في كل دورة
+- [x] حلقة التحسين الذاتي: runStrategicMetaAnalysis() يقرأ كل المعرفة ويُحدّث القواعد
+- [x] knowledge router في routers.ts: 6 endpoints
+- [x] صفحة KnowledgeBase.tsx: 3 تبويبات (قاعدة المعرفة، ملفات الأدوات، أنظمة السوق)
+- [x] TypeScript: 0 أخطاء | 115/115 اختبار ✅

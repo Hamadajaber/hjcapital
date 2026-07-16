@@ -939,8 +939,74 @@ Respond ONLY with valid JSON:
         aiConfidence: r.aiConfidence,
       }));
     }),
+    }),
+
+  // ─── Knowledge Engine Router ───────────────────────────────────────────────
+  knowledge: router({
+    // Get knowledge base stats and recent entries
+    stats: protectedProcedure.query(async () => {
+      const { getKnowledgeStats } = await import("./knowledgeEngine");
+      return getKnowledgeStats();
+    }),
+
+    // Get all knowledge entries
+    list: protectedProcedure
+      .input(z.object({
+        subject: z.string().optional(),
+        type: z.string().optional(),
+        limit: z.number().min(1).max(200).default(50),
+      }))
+      .query(async ({ input }) => {
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) return [];
+        const { knowledgeBase } = await import("../drizzle/schema");
+        const { eq, desc, and } = await import("drizzle-orm");
+        let query = db.select().from(knowledgeBase).where(eq(knowledgeBase.isActive, true));
+        const rows = await db
+          .select()
+          .from(knowledgeBase)
+          .where(
+            input.subject
+              ? and(eq(knowledgeBase.isActive, true), eq(knowledgeBase.subject, input.subject))
+              : eq(knowledgeBase.isActive, true)
+          )
+          .orderBy(desc(knowledgeBase.confidence), desc(knowledgeBase.validations))
+          .limit(input.limit);
+        return rows;
+      }),
+
+    // Get all instrument profiles
+    instrumentProfiles: protectedProcedure.query(async () => {
+      const { getAllInstrumentProfiles } = await import("./knowledgeEngine");
+      return getAllInstrumentProfiles();
+    }),
+
+    // Get market regime history
+    regimeHistory: protectedProcedure.query(async () => {
+      const { getMarketRegimeHistory } = await import("./knowledgeEngine");
+      return getMarketRegimeHistory(20);
+    }),
+
+    // Trigger strategic meta-analysis manually
+    triggerMetaAnalysis: protectedProcedure.mutation(async () => {
+      const { runStrategicMetaAnalysis } = await import("./knowledgeEngine");
+      runStrategicMetaAnalysis().catch(console.error);
+      return { started: true, message: "Strategic meta-analysis started in background" };
+    }),
+
+    // Get relevant knowledge for a specific instrument
+    forInstrument: protectedProcedure
+      .input(z.object({ instrument: z.string() }))
+      .query(async ({ input }) => {
+        const { getRelevantKnowledge, getInstrumentProfile } = await import("./knowledgeEngine");
+        const [knowledgeText, profile] = await Promise.all([
+          getRelevantKnowledge(input.instrument, 10),
+          getInstrumentProfile(input.instrument),
+        ]);
+        return { knowledgeText, profile };
+      }),
   }),
 });
-
 export type AppRouter = typeof appRouter;
 

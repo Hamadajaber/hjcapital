@@ -74,6 +74,7 @@ import {
 } from "./engineIntelligence";
 import { runAgentPipeline, resolveAgentPipelineConfig } from "./agentPipeline";
 import { analyzeClosedTrade } from "./learningEngine";
+import { getRelevantKnowledge, extractTradeKnowledge } from "./knowledgeEngine";
 import type { MarketRegime, EnsembleResult } from "./engineIntelligence";
 import {
   autoTradeSession,
@@ -572,6 +573,22 @@ async function runCycle() {
                 closeReason: "reconciled",
                 aiReasoning: dbTrade.aiReasoning ?? undefined,
                 aiConfidence: dbTrade.aiConfidence ?? undefined,
+              }).catch(() => {});
+
+              // Knowledge Engine: extract deep knowledge from this trade
+              extractTradeKnowledge({
+                id: dbTrade.id,
+                instrument: dbTrade.instrument,
+                direction: dbTrade.direction as "BUY" | "SELL",
+                openPrice: parseFloat(dbTrade.openPrice ?? "0"),
+                closePrice: parseFloat(closePrice),
+                pnl: parseFloat(pnl),
+                size: parseFloat(dbTrade.size ?? "1"),
+                openedAt: dbTrade.openedAt,
+                closedAt: new Date(),
+                closeReason: "reconciled",
+                reasoning: dbTrade.aiReasoning ?? undefined,
+                confidence: dbTrade.aiConfidence ?? undefined,
               }).catch(() => {});
 
               // Send Telegram notification for reconciled trade (Capital.com closed it via SL/TP/Manual)
@@ -1230,6 +1247,11 @@ async function analyzeMarket(
     Object.keys(technical).slice(0, 2).map((inst) => formatLessonsForPrompt(inst))
   ).then((arr) => arr.filter(Boolean).join("\n"));
 
+  // Fetch accumulated knowledge from Knowledge Engine (Layer 1-5)
+  const knowledgeSection = await Promise.all(
+    Object.keys(technical).slice(0, 3).map((inst) => getRelevantKnowledge(inst, 3))
+  ).then((arr) => arr.filter(Boolean).join("\n"));
+
   // Determine trading session for context
   const utcHourMain = new Date().getUTCHours();
   const sessionMain = utcHourMain >= 7 && utcHourMain < 16 ? "London Session (high liquidity)" :
@@ -1256,6 +1278,9 @@ ${clientSentiment ? `\nCAPITAL.COM CLIENT SENTIMENT (Contrarian):${clientSentime
 
 PAST LESSONS (learn from these):
 ${lessonsSection || "No lessons yet — this is early in the learning cycle"}
+
+ACCUMULATED KNOWLEDGE BASE (validated patterns and rules):
+${knowledgeSection || "Knowledge base is empty — first trades will build it"}
 
 LATEST NEWS HEADLINES:
 ${news.slice(0, 5).join("\n")}
@@ -1908,6 +1933,22 @@ async function executeDecision(
             closeReason: "ai_close",
             aiReasoning: decision.reasoning,
             aiConfidence: decision.confidence,
+          }).catch(() => {});
+
+          // Knowledge Engine: extract deep knowledge from this AI-closed trade
+          extractTradeKnowledge({
+            id: openTradeToClose.id,
+            instrument: decision.instrument,
+            direction: decision.positionDirection ?? "BUY",
+            openPrice: decision.positionOpenLevel ?? decision.entryPrice ?? 0,
+            closePrice: confirmedCloseLevel ?? decision.positionCurrentLevel ?? decision.entryPrice ?? 0,
+            pnl,
+            size: decision.size ?? 1,
+            openedAt: openTradeToClose.openedAt,
+            closedAt: new Date(),
+            closeReason: "ai_close",
+            reasoning: decision.reasoning,
+            confidence: decision.confidence,
           }).catch(() => {});
         }
       }

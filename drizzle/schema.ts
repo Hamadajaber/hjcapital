@@ -294,3 +294,77 @@ export const strategyAdjustments = mysqlTable("strategy_adjustments", {
 
 export type StrategyAdjustment = typeof strategyAdjustments.$inferSelect;
 export type InsertStrategyAdjustment = typeof strategyAdjustments.$inferInsert;
+
+// Knowledge Base — structured knowledge accumulated from all trading experience
+export const knowledgeBase = mysqlTable("knowledge_base", {
+  id: int("id").autoincrement().primaryKey(),
+  // trade_pattern | instrument_insight | market_regime | risk_rule | strategy_rule | event_memory
+  knowledgeType: varchar("knowledge_type", { length: 32 }).notNull(),
+  // Instrument name or 'GLOBAL'
+  subject: varchar("subject", { length: 64 }).notNull().default("GLOBAL"),
+  title: varchar("title", { length: 256 }).notNull(),
+  content: text("content").notNull(),
+  // Confidence score 0-100
+  confidence: int("confidence").notNull().default(50),
+  // Times validated by subsequent trades
+  validations: int("validations").notNull().default(0),
+  // Times contradicted
+  contradictions: int("contradictions").notNull().default(0),
+  // post_trade | weekly_analysis | meta_analysis | manual
+  source: varchar("source", { length: 32 }).notNull().default("post_trade"),
+  tags: json("tags"),
+  isActive: boolean("isActive").notNull().default(true),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type KnowledgeEntry = typeof knowledgeBase.$inferSelect;
+export type InsertKnowledgeEntry = typeof knowledgeBase.$inferInsert;
+
+// Instrument Profiles — deep per-instrument memory that grows over time
+export const instrumentProfiles = mysqlTable("instrument_profiles", {
+  id: int("id").autoincrement().primaryKey(),
+  instrument: varchar("instrument", { length: 32 }).notNull().unique(),
+  bestTradingHours: json("bestTradingHours"),
+  bestTradingDays: json("bestTradingDays"),
+  behaviorPatterns: text("behaviorPatterns"),
+  riskFactors: text("riskFactors"),
+  recommendedStrategy: text("recommendedStrategy"),
+  avgAtr: decimal("avgAtr", { precision: 12, scale: 5 }),
+  // 1.0 = normal, 0.5 = half size, 2.0 = double
+  sizeMultiplier: decimal("sizeMultiplier", { precision: 4, scale: 2 }).notNull().default("1.00"),
+  lifetimePnl: decimal("lifetimePnl", { precision: 12, scale: 2 }).notNull().default("0.00"),
+  lifetimeTrades: int("lifetimeTrades").notNull().default(0),
+  // BUY | SELL | NEUTRAL
+  bestDirection: varchar("bestDirection", { length: 8 }).notNull().default("NEUTRAL"),
+  regimePerformance: json("regimePerformance"),
+  profileSummary: text("profileSummary"),
+  version: int("version").notNull().default(1),
+  lastAnalyzedAt: timestamp("lastAnalyzedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type InstrumentProfile = typeof instrumentProfiles.$inferSelect;
+export type InsertInstrumentProfile = typeof instrumentProfiles.$inferInsert;
+
+// Market Regime Memory — what worked in each market condition
+export const marketRegimeMemory = mysqlTable("market_regime_memory", {
+  id: int("id").autoincrement().primaryKey(),
+  // trending_up | trending_down | ranging | high_volatility | low_volatility | crisis
+  regime: varchar("regime", { length: 32 }).notNull(),
+  instrument: varchar("instrument", { length: 32 }).notNull().default("GLOBAL"),
+  startDate: varchar("startDate", { length: 10 }).notNull(),
+  endDate: varchar("endDate", { length: 10 }),
+  successfulStrategies: text("successfulStrategies"),
+  failedStrategies: text("failedStrategies"),
+  keyLessons: text("keyLessons"),
+  winRate: decimal("winRate", { precision: 5, scale: 2 }),
+  totalPnl: decimal("totalPnl", { precision: 12, scale: 2 }),
+  totalTrades: int("totalTrades").notNull().default(0),
+  regimeConfidence: int("regimeConfidence").notNull().default(70),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type MarketRegimeMemory = typeof marketRegimeMemory.$inferSelect;
+export type InsertMarketRegimeMemory = typeof marketRegimeMemory.$inferInsert;
