@@ -145,9 +145,10 @@ export const CORE_INSTRUMENTS = [
   "GBPUSD",   // High volatility, strong trends
   // Commodities (1 — safe haven + inflation hedge)
   "GOLD",     // Safe haven, strong trends
-  // Indices (2 — US + Europe)
+  // Indices (1 — US only; GER40/DE40 removed: -$384 loss in 16 days, 80% of total loss)
   "US500",    // S&P 500 — primary US market
-  "GER40",    // DAX — European market leader
+  // "GER40",  // ⛔ DISABLED: DE40 caused -$384 loss (16 Jul 2026). Too volatile for account size < $2,000.
+  //            // Re-enable only when account > $5,000 with dedicated risk budget.
   // Crypto (1 — 24/7 market)
   "ETHUSD",   // Ethereum — strong trends, high liquidity
 ];
@@ -1940,9 +1941,21 @@ async function executeDecision(
       // This prevents catastrophic losses like USDJPY -$57 (size=10 on $1,000 balance).
       // ATR sizing already targets 1% but the old max was 10 — now capped at 2 absolute.
       const rawDecisionSize = decision.size ?? 1;
-      const size = Math.max(0.01, Math.min(2, rawDecisionSize));
-      if (rawDecisionSize > 2) {
-        console.warn(`[AutoTrade] HARD SIZE CAP: ${decision.instrument} size reduced from ${rawDecisionSize} to ${size} (max 2 units)`);
+      // ███ INSTRUMENT-SPECIFIC SIZE CAPS ███
+      // High-volatility instruments (indices, crypto) get tighter size limits.
+      // DE40/GER40 lesson: 1 unit = ~$350 loss in a single bad trade.
+      // Forex pairs: max 2 units. Indices/Crypto: max 0.5 units. Gold: max 1 unit.
+      const HIGH_VOL_INSTRUMENTS = ["GER40", "US500", "NASDAQ", "US100", "ETHUSD", "BTCUSD"];
+      const GOLD_INSTRUMENTS = ["GOLD", "XAUUSD"];
+      let maxSizeForInstrument = 2;   // default: forex
+      if (HIGH_VOL_INSTRUMENTS.includes(decision.instrument)) {
+        maxSizeForInstrument = 0.5;   // indices + crypto: max 0.5
+      } else if (GOLD_INSTRUMENTS.includes(decision.instrument)) {
+        maxSizeForInstrument = 1;     // gold: max 1 unit
+      }
+      const size = Math.max(0.01, Math.min(maxSizeForInstrument, rawDecisionSize));
+      if (rawDecisionSize > maxSizeForInstrument) {
+        console.warn(`[AutoTrade] INSTRUMENT SIZE CAP: ${decision.instrument} size reduced from ${rawDecisionSize} to ${size} (max ${maxSizeForInstrument} for this instrument type)`);
       }
 
       // ███ RISK:REWARD ENFORCEMENT GUARD ███
@@ -2333,6 +2346,34 @@ async function checkDailyRiskLimits(sessionId: number, mode: "paper" | "live"): 
             reason: `Trailing drawdown protection: balance $${currentBalance.toFixed(2)} is ${drawdownFromPeak.toFixed(2)}% below peak $${risk.peakBalance.toFixed(2)} (max: ${risk.trailingDrawdownPct}%). Trading paused to protect profits.`
           };
         }
+      }
+    }
+  }
+
+  // ── Per-Instrument Daily Loss Cap ────────────────────────────────────────────
+  // Prevents a single instrument from causing catastrophic losses in one day.
+  // Cap: $50 max loss per instrument per day (protects against DE40-style disasters).
+  // High-volatility instruments (indices, crypto) have tighter cap: $30.
+  const HIGH_VOLATILITY_INSTRUMENTS = ["GER40", "US500", "NASDAQ", "US100", "ETHUSD", "BTCUSD"];
+  const INSTRUMENT_DAILY_LOSS_CAP_NORMAL = 50;   // $50 max loss per instrument per day
+  const INSTRUMENT_DAILY_LOSS_CAP_HIGH_VOL = 30; // $30 for high-volatility instruments
+
+  // Group today's closed trades by instrument
+  const instrumentPnl: Record<string, number> = {};
+  for (const t of todayTrades) {
+    const inst = t.instrument ?? "UNKNOWN";
+    instrumentPnl[inst] = (instrumentPnl[inst] ?? 0) + parseFloat(t.pnl ?? "0");
+  }
+  for (const [inst, pnl] of Object.entries(instrumentPnl)) {
+    if (pnl < 0) {
+      const cap = HIGH_VOLATILITY_INSTRUMENTS.includes(inst)
+        ? INSTRUMENT_DAILY_LOSS_CAP_HIGH_VOL
+        : INSTRUMENT_DAILY_LOSS_CAP_NORMAL;
+      if (Math.abs(pnl) >= cap) {
+        return {
+          blocked: true,
+          reason: `Per-instrument loss cap reached for ${inst}: $${Math.abs(pnl).toFixed(2)} loss today (cap: $${cap}). No new trades on ${inst} today.`
+        };
       }
     }
   }

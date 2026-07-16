@@ -569,3 +569,18 @@
 - [x] TypeScript: 0 errors
 - [x] Tests: 115/115 passing
 - [x] Checkpoint + GitHub sync
+
+## Round 57 — DE40 Disaster Analysis & Strategic Fixes
+
+### Capital.com Analytics (1–16 Jul 2026):
+# - Total P&L: -$478.69 | 33 trades | Win rate: 36.36% | Profit Factor: 0.21
+# - DE40 alone: -$384.17 (80% of total loss!)
+# - Single worst trade: DE40 16 Jul 14:49 → -$350.02
+# - Avg win: +$10.61 (2h 16m) | Avg loss: -$28.86 (3h 49m) → R/R inverted 1:2.72
+
+### Fixes Applied:
+- [x] Remove GER40/DE40 from CORE_INSTRUMENTS (disabled with explanation comment)
+- [x] Add per-instrument daily loss cap: $50 for forex/gold, $30 for indices/crypto
+- [x] Add instrument-specific size caps: forex max 2, gold max 1, indices/crypto max 0.5
+- [x] TypeScript: 0 errors | Tests: 115/115 passing
+- [x] Checkpoint + GitHub sync
