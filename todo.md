@@ -553,3 +553,19 @@
 - [x] Add Self-Learning route to sidebar and App.tsx routing
 - [x] TypeScript: 0 errors
 - [x] Run tests (115/115 passing), checkpoint (852d2177), push to GitHub (2836a23), engine running
+
+## Round 56 — Balance Discrepancy Fix (Telegram $39 vs Capital.com $500)
+
+### Root Causes Identified:
+# 1. Transaction history window was only 23h — missed all trades closed during server hibernation/downtime
+# 2. P&L calculation ignored Spread and Overnight Financing costs
+# 3. Telegram only reported trades it could match — silent $0 for unmatched reconciliations
+# 4. DB portfolio balance was never synced from Capital.com — drifted silently over time
+
+### Fixes Applied:
+- [x] Extend transaction history from 23h to 7 days (7 parallel 23h calls, deduplicated by reference)
+- [x] Add per-cycle balance sync: fetch live balance from Capital.com and update DB every cycle
+- [x] Add discrepancy alert: if gap > $20 → console warning; if gap > $50 → Telegram alert
+- [x] TypeScript: 0 errors
+- [x] Tests: 115/115 passing
+- [x] Checkpoint + GitHub sync

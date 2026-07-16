@@ -290,6 +290,37 @@ async function runCycle() {
   console.log(`[AutoTrade] Cycle #${_engineState.cycleCount} starting...`);
 
   try {
+    // 0-PRE. Balance Sync: sync DB portfolio balance from Capital.com every cycle
+    // This ensures the DB reflects the true broker balance including spread, financing, and
+    // any manual changes — preventing silent drift between DB and reality.
+    if (_engineState.mode === 'live') {
+      try {
+        const liveBal = await getAccountBalance();
+        if (liveBal.balance > 0) {
+          const db = await getDb();
+          if (db) {
+            // Check for significant discrepancy before syncing
+            const port = await db.select().from(portfolio).limit(1);
+            const dbBal = port[0] ? parseFloat(port[0].balance) : 0;
+            const discrepancy = Math.abs(liveBal.balance - dbBal);
+            if (discrepancy > 20 && dbBal > 0) {
+              console.warn(`[AutoTrade] ⚠️ Balance discrepancy detected: DB=$${dbBal.toFixed(2)}, Capital.com=$${liveBal.balance.toFixed(2)}, gap=$${discrepancy.toFixed(2)}`);
+              // Alert via Telegram if gap > $50
+              if (discrepancy > 50) {
+                await notifyRiskAlert(
+                  `⚠️ فجوة في الرصيد\nDB: $${dbBal.toFixed(2)}\nCapital.com: $${liveBal.balance.toFixed(2)}\nالفجوة: $${discrepancy.toFixed(2)}\n\nتم التصحيح تلقائياً.`
+                ).catch(() => {});
+              }
+            }
+            // Sync DB balance to broker truth
+            await updatePortfolioBalance(liveBal.balance.toFixed(2));
+          }
+        }
+      } catch (balSyncErr) {
+        console.warn('[AutoTrade] Balance sync failed (non-critical):', balSyncErr instanceof Error ? balSyncErr.message : balSyncErr);
+      }
+    }
+
     // 0. Check Economic Calendar — skip if high-impact event in next 4 hours
     const calendarCheck = await checkEconomicCalendar();
     if (calendarCheck.shouldSkip) {
@@ -430,14 +461,35 @@ async function runCycle() {
             }
           }
 
-          // Fetch recent transaction history to get real close prices/P&L
+          // Fetch transaction history to get real close prices/P&L
           // Capital.com API constraint: max date range is 1 day (24h).
-          // We use 23h to stay safely within the limit.
+          // FIX: We now make multiple calls to cover up to 7 days, catching trades missed
+          // during server hibernation or downtime. Each call covers a 23h window.
           // Date format must be: YYYY-MM-DDTHH:MM:SS (ISO 8601, no milliseconds, no Z suffix)
           let recentTransactions: Awaited<ReturnType<typeof getTransactionHistory>> = [];
           try {
-            const from23h = new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString().slice(0, 19);
-            recentTransactions = await getTransactionHistory(from23h, undefined, 100);
+            // Fetch last 7 days in 23h chunks to stay within Capital.com's 24h limit
+            const txWindows = [1, 2, 3, 4, 5, 6, 7];
+            const allTxResults = await Promise.allSettled(
+              txWindows.map(daysAgo => {
+                const toTime = new Date(Date.now() - (daysAgo - 1) * 23 * 60 * 60 * 1000).toISOString().slice(0, 19);
+                const fromTime = new Date(Date.now() - daysAgo * 23 * 60 * 60 * 1000).toISOString().slice(0, 19);
+                return getTransactionHistory(fromTime, toTime, 100);
+              })
+            );
+            for (const result of allTxResults) {
+              if (result.status === 'fulfilled') {
+                recentTransactions = recentTransactions.concat(result.value);
+              }
+            }
+            // Remove duplicates by reference
+            const seen = new Set<string>();
+            recentTransactions = recentTransactions.filter(tx => {
+              if (seen.has(tx.reference)) return false;
+              seen.add(tx.reference);
+              return true;
+            });
+            console.log(`[AutoTrade] Reconciliation: fetched ${recentTransactions.length} transactions from last 7 days`);
           } catch (txErr) {
             console.warn("[AutoTrade] Reconciliation: could not fetch transaction history:", txErr);
           }
