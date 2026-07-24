@@ -1007,6 +1007,83 @@ Respond ONLY with valid JSON:
         return { knowledgeText, profile };
       }),
   }),
+
+  // ─── Governance Router ────────────────────────────────────────────────────────
+  governance: router({
+    // Manual recovery: reset peakBalance to current live balance
+    manualRecovery: ownerProcedure.mutation(async () => {
+      const { triggerManualRecovery } = await import("./selfGovernanceEngine");
+      return triggerManualRecovery();
+    }),
+
+    // Trigger monthly report manually
+    monthlyReport: ownerProcedure.mutation(async () => {
+      const db = await import("./db").then(m => m.getDb());
+      if (!db) return { success: false, message: "Database not available" };
+      const { generateMonthlyReport } = await import("./selfGovernanceEngine");
+      generateMonthlyReport(db, "live").catch(console.error);
+      return { success: true, message: "Monthly report generation started" };
+    }),
+
+    // Get all auto-adjustments history
+    adjustmentHistory: ownerProcedure
+      .input(z.object({ limit: z.number().optional() }).optional())
+      .query(async ({ input }) => {
+        const { getDb } = await import("./db");
+        const { strategyAdjustments } = await import("../drizzle/schema");
+        const { desc } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) return [];
+        return db.select().from(strategyAdjustments)
+          .orderBy(desc(strategyAdjustments.createdAt))
+          .limit(input?.limit ?? 50);
+      }),
+
+    // Get current governance status
+    status: ownerProcedure.query(async () => {
+      const { getDb } = await import("./db");
+      const { riskSettings, trades, strategyAdjustments } = await import("../drizzle/schema");
+      const { desc, eq, and, gte } = await import("drizzle-orm");
+      const { getAccountBalance } = await import("./capitalcom");
+      const db = await getDb();
+      if (!db) return null;
+
+      const [riskRows, recentAdjustments] = await Promise.all([
+        db.select().from(riskSettings).limit(1),
+        db.select().from(strategyAdjustments).orderBy(desc(strategyAdjustments.createdAt)).limit(5),
+      ]);
+
+      const risk = riskRows[0];
+      let liveBalance = 0;
+      let balanceError = "";
+      try {
+        const bal = await getAccountBalance();
+        liveBalance = bal.balance;
+      } catch (e) {
+        balanceError = String(e);
+      }
+
+      const peakBalance = risk ? parseFloat(risk.peakBalance) : 0;
+      const drawdownPct = peakBalance > 0 && liveBalance > 0
+        ? ((peakBalance - liveBalance) / peakBalance) * 100
+        : 0;
+      const trailingPct = risk ? parseFloat(risk.trailingDrawdownPct) : 10;
+      const isBlocked = drawdownPct >= trailingPct;
+
+      return {
+        liveBalance,
+        peakBalance,
+        drawdownPct,
+        trailingPct,
+        isBlocked,
+        balanceError,
+        currentConfidence: risk?.minConfidenceThreshold ?? 65,
+        currentDailyLoss: risk ? parseFloat(risk.dailyLossLimitPct) : 1.5,
+        maxPositions: risk?.maxOpenPositions ?? 3,
+        recentAdjustments,
+      };
+    }),
+  }),
 });
 export type AppRouter = typeof appRouter;
 

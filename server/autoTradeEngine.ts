@@ -74,6 +74,7 @@ import {
 } from "./engineIntelligence";
 import { runAgentPipeline, resolveAgentPipelineConfig } from "./agentPipeline";
 import { analyzeClosedTrade } from "./learningEngine";
+import { runGovernanceCycle } from "./selfGovernanceEngine";
 import { getRelevantKnowledge, extractTradeKnowledge } from "./knowledgeEngine";
 import type { MarketRegime, EnsembleResult } from "./engineIntelligence";
 import {
@@ -292,6 +293,17 @@ async function runCycle() {
   console.log(`[AutoTrade] Cycle #${_engineState.cycleCount} starting...`);
 
   try {
+    // -1. Self-Governance: auto-recovery, auto-heal, auto-risk-scaling, monthly report
+    // This runs every cycle and fixes any issues automatically without human intervention.
+    try {
+      const govResult = await runGovernanceCycle(_engineState.mode);
+      if (govResult.actionsPerformed.length > 0) {
+        console.log(`[AutoTrade] Governance actions: ${govResult.actionsPerformed.join(" | ")}`);
+      }
+    } catch (govErr) {
+      console.warn("[AutoTrade] Governance cycle error (non-critical):", govErr instanceof Error ? govErr.message : govErr);
+    }
+
     // 0-PRE. Balance Sync: sync DB portfolio balance from Capital.com every cycle
     // This ensures the DB reflects the true broker balance including spread, financing, and
     // any manual changes — preventing silent drift between DB and reality.

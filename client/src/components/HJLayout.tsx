@@ -34,6 +34,7 @@ const NAV_ITEMS = [
   { path: "/lessons",      label: "AI Lessons",    icon: Lightbulb },
   { path: "/learning",     label: "Self-Learning",  icon: FlaskConical },
   { path: "/knowledge",     label: "Knowledge Base",  icon: Brain },
+  { path: "/autonomous",    label: "Auto-Governance",  icon: Zap, highlight: true },
 ];
 
 // Items shown in the mobile bottom nav (most important 5)
