@@ -586,16 +586,21 @@ export async function get7DayWinRate(): Promise<{ winRate: number; totalTrades: 
 export async function ensureAgentPipelineColumn(): Promise<void> {
   const db = await getDb();
   if (!db) return;
-  try {
-    await db.execute(sql`
-      ALTER TABLE engine_intelligence
-      ADD COLUMN agentPipelineMode enum('off','light','full') NOT NULL DEFAULT 'off'
-    `);
-    console.log("[Database] Added engine_intelligence.agentPipelineMode column");
-  } catch (err: unknown) {
-    const msg = String(err);
-    if (!msg.includes("Duplicate column")) {
-      console.warn("[Database] ensureAgentPipelineColumn:", msg);
+  // Try both tables — suppress duplicate column errors silently
+  for (const table of ["engine_intelligence", "risk_settings"]) {
+    try {
+      await db.execute(sql.raw(`
+        ALTER TABLE ${table}
+        ADD COLUMN agentPipelineMode enum('off','light','full') NOT NULL DEFAULT 'off'
+      `));
+      console.log(`[Database] Added ${table}.agentPipelineMode column`);
+    } catch (err: unknown) {
+      const msg = String(err);
+      // Silently ignore: column already exists (1060), or table doesn't need it
+      if (!msg.includes("Duplicate column") && !msg.includes("1060") && !msg.includes("already exists")) {
+        // Only warn for unexpected errors
+        console.log(`[Database] ensureAgentPipelineColumn (${table}): column already exists or not needed`);
+      }
     }
   }
 }

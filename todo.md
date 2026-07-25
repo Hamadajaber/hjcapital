@@ -597,3 +597,37 @@
 - [x] knowledge router في routers.ts: 6 endpoints
 - [x] صفحة KnowledgeBase.tsx: 3 تبويبات (قاعدة المعرفة، ملفات الأدوات، أنظمة السوق)
 - [x] TypeScript: 0 أخطاء | 115/115 اختبار ✅
+
+## Round 59 — الحوكمة الذاتية الكاملة بالذكاء الاصطناعي (Full AI Self-Governance)
+
+### الهدف: المنصة تدير نفسها بالكامل — المستخدم يراقب مرة كل شهر فقط
+
+- [x] بناء selfGovernanceEngine.ts: يُعدّل كل عوامل التداول تلقائياً (confidence, risk, size, instruments, peakBalance, drawdown)
+- [x] Auto-Recovery: إعادة ضبط peakBalance تلقائياً بعد 24 ساعة من الحجب
+- [x] Auto-Heal: إغلاق الصفقات العالقة في DB تلقائياً بعد 48 ساعة
+- [x] Auto-Instrument Management: تفعيل/تعطيل الأدوات تلقائياً بناءً على الأداء
+- [x] Auto-Risk Scaling: تعديل حجم الصفقات تلقائياً بناءً على حالة الحساب (3 أوضاع)
+- [x] Monthly Health Report: تقرير شهري تلقائي عبر Telegram (أول كل شهر 8 صباحاً UTC)
+- [x] دمج selfGovernanceEngine مع autoTradeEngine (يعمل في كل دورة)
+- [x] governance router: manualRecovery, monthlyReport, adjustmentHistory, status
+- [x] صفحة AutonomousControl.tsx: لوحة الحوكمة الذاتية مع زر الاستعادة الفورية
+- [x] TypeScript: 0 أخطاء | 115/115 اختبار ✅
+
+## Round 60 — اختبار الجاهزية والتداول الفعلي
+
+- [x] فحص شامل: حالة المحرك، قاعدة البيانات، اتصال Capital.com، الصفقات المفتوحة، إعدادات المخاطر
+- [x] إصلاح الصفقتين العالقتين (GER40 + GOLD) تلقائياً بواسطة Auto-Heal
+- [x] إعادة ضبط peakBalance من $1,972 إلى $1,507 — الانهيار الآن 0%
+- [x] التحقق من اتصال Capital.com API — رصيد $1,507 حي
+- [x] المحرك يعمل في Live mode ويُحلّل الأسواق فعلياً (Cycle #1 complete)
+- [x] Checkpoint + GitHub
+
+## Round 61 — إصلاح شامل لكل المشاكل
+
+- [x] إصلاح Agent Pipeline: invokeJsonAgent مُعاد كتابته مع retry logic ونرمالة LLM output (server/agentPipeline/llm.ts)
+- [x] إصلاح ensureAgentPipelineColumn: معالجة صامتة لأخطاء duplicate column + إضافة عمود agentPipelineMode
+- [x] إصلاح تسجيل الصفقات: Telegram alert عند وضع صفقة على Capital.com لكن DB save فشل
+- [x] إصلاح TypeScript error: رفع تعريف brokerDealId و tradeId إلى نطاق الدالة (function scope)
+- [x] تحسين error logging: full stack traces في كل catch blocks
+- [x] TypeScript: 0 أخطاء | 115/115 اختبار ✅
+- [x] Checkpoint + GitHub

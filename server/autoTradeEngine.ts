@@ -1854,6 +1854,11 @@ async function executeDecision(
     return;
   }
 
+  // Hoisted to function scope so the catch block can reference them for the
+  // "broker trade placed but DB save failed" alert.
+  let tradeId: number | undefined;
+  let brokerDealId: string | undefined;
+
   try {
     if (decision.action === "CLOSE" && decision.closeDealId) {
       // Close existing position
@@ -2031,9 +2036,8 @@ async function executeDecision(
         }
       }
 
-      let tradeId: number | undefined;
       let actualEntry = decision.entryPrice ?? 0;
-      let brokerDealId: string | undefined; // Capital.com deal ID from placeOrder confirmation
+      // tradeId and brokerDealId are declared at function scope (above the try block)
       // These will be set in live mode after the SL/TP calculation block
       let finalSL: number | undefined;
       let finalTP: number | undefined;
@@ -2318,8 +2322,17 @@ async function executeDecision(
     }
 
   } catch (err) {
-    await logDecision(sessionId, decision, "error", String(err));
-    console.error("[AutoTrade] Execution error:", err);
+    const errMsg = String(err);
+    const errStack = err instanceof Error ? err.stack : errMsg;
+    await logDecision(sessionId, decision, "error", errMsg);
+    console.error("[AutoTrade] Execution error:", errStack);
+
+    // ❗ Critical: if trade was placed on broker but DB save failed, alert immediately
+    if (brokerDealId && !tradeId) {
+      const alertMsg = `⚠️ CRITICAL: Trade placed on Capital.com (dealId=${brokerDealId}) but DB save FAILED!\nInstrument: ${decision.instrument} ${decision.action}\nError: ${errMsg}`;
+      console.error("[AutoTrade]", alertMsg);
+      await notifyOwner({ title: "\u26a0\ufe0f Trade DB Save Failed", content: alertMsg }).catch(() => {});
+    }
   }
 }
 
