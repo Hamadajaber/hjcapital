@@ -71,6 +71,12 @@ import {
   checkEconomicCalendar,
   runEnsembleAnalysis,
   getEnsembleSizeMultiplier,
+  getDailyBias,
+  isTradeAlignedWithDailyBias,
+  formatDailyBiasForPrompt,
+  getCurrentTradingSession,
+  isInstrumentTradableInSession,
+  checkVolatilityFilter,
 } from "./engineIntelligence";
 import { runAgentPipeline, resolveAgentPipelineConfig } from "./agentPipeline";
 import { analyzeClosedTrade } from "./learningEngine";
@@ -122,37 +128,29 @@ let _lastWeeklySummaryDate: string | null = null;
 // ─── Instrument Universe ─────────────────────────────────────────────────────
 
 /**
- * Strategy: Trend Following with Multi-Timeframe Confirmation
- * ─────────────────────────────────────────────────────────────
- * 10 fixed instruments selected for:
- *  - High liquidity (tight spreads)
- *  - Strong trending behavior
- *  - Low correlation to each other (risk distribution)
- *  - 24h availability (Forex) + session-based (Indices, Gold)
- *
- * NO OIL_CRUDE (has restricted trading hours causing 400 errors)
- */
-/**
- * ███ ROUND 52 — TRADING STANDARDS V1 (Aggressive, Conviction-based) ███
- * Universe culled from 10 → 6 ELITE instruments.
- * REMOVED: NASDAQ (-$106 loss, was still trading despite being marked removed in docs),
- *          USDJPY (-$63 loss, erratic with current ATR),
- *          XAGUSD/Silver (highly correlated with Gold but lower liquidity + higher noise),
- *          AUDUSD (low conviction, near-breakeven churn).
- * Rationale: trade with conviction, not frequency. Fewer, higher-quality instruments.
+ * Strategy: Trend Following with Multi-Timeframe Confirmation + Daily Bias Filter
+ * ─────────────────────────────────────────────────────
+ * ███ ROUND 62 — PROFESSIONAL STRATEGY UPGRADE ███
+ * REMOVED from active universe (Profit Factor < 0.65):
+ *   - ETHUSD: PF=0.57, Win Rate 13%, -$7.76 total — disabled pending strategy review
+ *   - US500:  PF=0.62, Win Rate 25%, -$8.57 total — disabled pending strategy review
+ * KEPT (best performers):
+ *   - EURUSD: PF=1.18, Win Rate 35%, +$0.25 — only profitable instrument
+ *   - GOLD:   PF=0.95, Win Rate 50%, -$5.50 — near breakeven, improving
+ *   - GBPUSD: PF=0.19 — kept for diversity; strict session filter applied
+ * NEW: Daily Bias Filter (EMA200 on Daily) + Session Filter per instrument
  */
 export const CORE_INSTRUMENTS = [
   // Forex (2 pairs — most liquid, strongest trends)
-  "EURUSD",   // Most liquid forex pair
-  "GBPUSD",   // High volatility, strong trends
+  "EURUSD",   // Best performer: PF=1.18, Win Rate 35%
+  "GBPUSD",   // Kept for diversity; strict session filter (London only)
   // Commodities (1 — safe haven + inflation hedge)
-  "GOLD",     // Safe haven, strong trends
-  // Indices (1 — US only; GER40/DE40 removed: -$384 loss in 16 days, 80% of total loss)
-  "US500",    // S&P 500 — primary US market
-  // "GER40",  // ⛔ DISABLED: DE40 caused -$384 loss (16 Jul 2026). Too volatile for account size < $2,000.
-  //            // Re-enable only when account > $5,000 with dedicated risk budget.
-  // Crypto (1 — 24/7 market)
-  "ETHUSD",   // Ethereum — strong trends, high liquidity
+  "GOLD",     // Near breakeven: PF=0.95, Win Rate 50% — improving
+  // ⛔ DISABLED (Round 62 — Profit Factor < 0.65):
+  // "US500",  // PF=0.62, Win Rate 25%, -$8.57 — re-enable when PF > 1.0
+  // "ETHUSD", // PF=0.57, Win Rate 13%, -$7.76 — re-enable when PF > 1.0
+  // ⛔ PREVIOUSLY DISABLED:
+  // "GER40",  // DE40 caused -$384 loss. Re-enable only when account > $5,000.
 ];
 
 // ─── Engine Control ───────────────────────────────────────────────────────────
@@ -1082,6 +1080,7 @@ interface MultiTimeframeData {
   candles5m: OHLCVCandle[];
   candles1h: OHLCVCandle[];
   candles4h: OHLCVCandle[];
+  candlesDaily: OHLCVCandle[]; // ███ ROUND 62: Daily candles for Daily Bias Filter (EMA200)
   technicalSummary5m: string;
   technicalSummary1h: string;
   technicalSummary4h: string;
@@ -1126,12 +1125,16 @@ async function gatherMarketContext(): Promise<Record<string, unknown>> {
     // Small delay between instruments (skip for first)
     if (i > 0) await sleep(300);
 
-    // Fetch 3 timeframes sequentially per instrument to stay within rate limits
+    // Fetch 4 timeframes sequentially per instrument to stay within rate limits
+    // ███ ROUND 62: Added Daily candles for Daily Bias Filter (EMA200)
     const c5m = await getCandles(epic, "MINUTE_5", 50).catch(() => [] as OHLCVCandle[]);
     await sleep(150);
     const c1h = await getCandles(epic, "HOUR", 50).catch(() => [] as OHLCVCandle[]);
     await sleep(150);
     const c4h = await getCandles(epic, "HOUR_4", 250).catch(() => [] as OHLCVCandle[]);
+    await sleep(150);
+    // 250 daily candles = enough for EMA200 calculation
+    const cDaily = await getCandles(epic, "DAY", 250).catch(() => [] as OHLCVCandle[]);
 
     // Convert to Candle format for technical analysis
     const toCandles = (arr: OHLCVCandle[]): Candle[] =>
@@ -1151,6 +1154,7 @@ async function gatherMarketContext(): Promise<Record<string, unknown>> {
       candles5m: c5m,
       candles1h: c1h,
       candles4h: c4h,
+      candlesDaily: cDaily,
       technicalSummary5m: summary5m,
       technicalSummary1h: summary1h,
       technicalSummary4h: summary4h,
@@ -1456,6 +1460,50 @@ async function analyzeInstrument(
     };
   }
 
+  // ─── PRE-FILTER 1: Session Filter ───────────────────────────────────────────────────────────────────────
+  // ███ ROUND 62: Block trading in low-liquidity sessions per instrument
+  const sessionInfo = getCurrentTradingSession();
+  const sessionCheck = isInstrumentTradableInSession(instrument, sessionInfo);
+  if (!sessionCheck.tradable) {
+    return {
+      instrument,
+      action: "HOLD",
+      confidence: 0,
+      reasoning: `[Session Filter] ${sessionCheck.reason}`,
+    };
+  }
+  console.log(`[AutoTrade] Session OK: ${sessionCheck.reason}`);
+
+  // ─── PRE-FILTER 2: Daily Bias Filter (EMA200 on Daily) ───────────────────────────────────────────────────────────────────────
+  // ███ ROUND 62: Primary directional filter — no trade against the daily trend
+  let dailyBiasData: ReturnType<typeof getDailyBias> = { bias: "unknown", ema200: 0, currentPrice: 0, description: "No daily data" };
+  if (instTechnical && instTechnical.candlesDaily.length >= 20) {
+    const dailyCandles = instTechnical.candlesDaily.map((c: OHLCVCandle) => ({
+      open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume, timestamp: c.timestamp
+    }));
+    dailyBiasData = getDailyBias(dailyCandles);
+    console.log(`[AutoTrade] Daily Bias [${instrument}]: ${dailyBiasData.description}`);
+  }
+
+  // ─── PRE-FILTER 3: Volatility Filter ───────────────────────────────────────────────────────────────────────
+  // ███ ROUND 62: Block trades when ATR > 2× baseline (abnormal volatility = unpredictable SL hits)
+  if (instTechnical && instTechnical.candles1h.length >= 28) {
+    const candles1hForVol = instTechnical.candles1h.map((c: OHLCVCandle) => ({
+      open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume, timestamp: c.timestamp
+    }));
+    const volCheck = checkVolatilityFilter(candles1hForVol, instrument);
+    if (!volCheck.tradable) {
+      console.log(`[AutoTrade] ${volCheck.reason}`);
+      return {
+        instrument,
+        action: "HOLD",
+        confidence: 0,
+        reasoning: volCheck.reason,
+      };
+    }
+    console.log(`[AutoTrade] Volatility OK: ${volCheck.reason}`);
+  }
+
   // ─── RULE 1: Daily Trend Filter (EMA50 vs EMA200 on 4H candles) ────────────────────
   let trendDirection: "up" | "down" | "neutral" = "neutral";
   let trendDescription = "No 4H data";
@@ -1552,13 +1600,30 @@ async function analyzeInstrument(
   }
 
   const proposedDirection = buySignal ? "BUY" : "SELL";
+
+  // ─── HYBRID FILTER: Daily Bias alignment check (applied AFTER MTF rules confirm a signal) ────────────────────
+  // ███ ROUND 62: Block trades that go AGAINST the daily trend (EMA200)
+  const biasCheck = isTradeAlignedWithDailyBias(proposedDirection, dailyBiasData.bias);
+  if (!biasCheck.allowed) {
+    console.log(`[AutoTrade] Daily Bias BLOCKED ${instrument} ${proposedDirection}: ${biasCheck.reason}`);
+    return {
+      instrument,
+      action: "HOLD",
+      confidence: 0,
+      reasoning: `[Daily Bias Filter] ${biasCheck.reason} | MTF rules passed but daily trend opposes: ${dailyBiasData.description}`,
+    };
+  }
+  console.log(`[AutoTrade] Daily Bias ALLOWED ${instrument} ${proposedDirection}: ${biasCheck.reason}`);
+
+  const dailyBiasLine = formatDailyBiasForPrompt(instrument, dailyBiasData);
   const rulesPassedSummary = [
+    `✅ Daily Bias: ${dailyBiasData.bias.toUpperCase()} (${dailyBiasData.description})`,
     `✅ Trend: ${trendDirection} (${trendDescription})`,
     `✅ 1H: ${macdDescription}`,
     `✅ 5m: ${triggerDescription}`,
   ].join(" | ");
 
-  console.log(`[AutoTrade] MTF signal: ${instrument} ${proposedDirection} — ${rulesPassedSummary}`);
+  console.log(`[AutoTrade] MTF+Bias signal: ${instrument} ${proposedDirection} — ${rulesPassedSummary}`);
 
   // Get current price for SL/TP calculation
   const priceData = prices.find((p: any) => p.epic === instrument || p.epic === (INSTRUMENT_EPICS[instrument] ?? instrument));
@@ -1567,11 +1632,9 @@ async function analyzeInstrument(
     ? `${instrument}: bid=${priceData.bid}, ask=${priceData.ask}, change=${priceData.pctChange?.toFixed(2)}%`
     : `${instrument}: price unavailable`;
 
-  // Determine trading session for context
-  const utcHour = new Date().getUTCHours();
-  const session = utcHour >= 7 && utcHour < 16 ? "London Session" :
-    utcHour >= 13 && utcHour < 22 ? "New York Session" :
-    "Asian Session (lower liquidity)";
+  // Determine trading session for context (using already-computed sessionInfo)
+  const utcHour = sessionInfo.utcHour;
+  const session = sessionInfo.description;
 
   const lessonsSection = await formatLessonsForPrompt(instrument).catch(() => "");
 
@@ -1631,40 +1694,46 @@ async function analyzeInstrument(
   }
 
   // ─── AI CONFIRMATION ONLY (default / fallback) ───────────────────────────────────────
-  // The 3 MTF rules already confirmed a ${proposedDirection} signal.
-  // AI now reviews the signal and provides: confidence score, entry/SL/TP, and can veto if macro is unfavorable.
-  const confirmationPrompt = `You are HJ Capital's risk manager. Our technical system has generated a ${proposedDirection} signal for ${instrument}.
+  // ███ ROUND 62: Enhanced confirmation prompt with Daily Bias + Session context
+  // The 4 pre-filters (Session + Daily Bias + EMA Gap + MTF rules) already confirmed a ${proposedDirection} signal.
+  // AI now acts as final quality gate: macro context, news risk, and precise SL/TP.
+  const confirmationPrompt = `You are HJ Capital's senior risk manager. Our multi-layer technical system has generated a HIGH-QUALITY ${proposedDirection} signal for ${instrument} that has passed ALL pre-filters.
 
-SIGNAL EVIDENCE:
+✅ PRE-FILTER RESULTS (ALL PASSED):
 ${rulesPassedSummary}
 
 LIVE PRICE: ${priceLine}
-SESSION: ${session}
-${clientSentiment ? `\nCLIENT SENTIMENT (Contrarian): ${clientSentiment}` : ""}
-${lessonsSection ? `\nPAST LESSONS:\n${lessonsSection}` : ""}
+TRADING SESSION: ${session}
+${dailyBiasLine}
+${clientSentiment ? `\nCLIENT SENTIMENT (Contrarian signal): ${clientSentiment}` : ""}
+${lessonsSection ? `\nLESSONS FROM PAST TRADES (apply these):\n${lessonsSection}` : ""}
 
-YOUR JOB:
-1. Confirm or veto the ${proposedDirection} signal based on macro context
-2. If confirming: provide confidence (65-95%), precise entry, stop loss, and take profit. ONLY confirm if you have genuine conviction — trades below 65% confidence WILL be rejected, so do not inflate.
-3. If vetoing: return HOLD with reason (e.g. "major news event in 30 min", "price at key resistance")
+YOUR ROLE — Final Quality Gate:
+1. CONFIRM the ${proposedDirection} signal if macro context supports it (no major news risk, no key S/R level blocking, no divergence with fundamentals)
+2. VETO (return HOLD) ONLY if you see a specific, concrete reason: upcoming high-impact news, price at major resistance/support, extreme overbought/oversold on daily, or fundamental contradiction
+3. Do NOT veto based on general uncertainty — the pre-filters already handled that
+4. Provide confidence 70-95% only. Confidence below 70% = REJECTED automatically, so be honest
 
-CRITICAL RULES FOR SL/TP (violations cause order rejection):
-- Current live price is: ${livePrice}
-- For ${proposedDirection === "BUY" ? "BUY" : "SELL"} orders:
-  ${proposedDirection === "BUY" ? `  stopLoss MUST be LESS THAN ${livePrice} (e.g. ${(livePrice * 0.99).toFixed(5)})\n  takeProfit MUST be GREATER THAN ${livePrice} (e.g. ${(livePrice * 1.02).toFixed(5)})` : `  stopLoss MUST be GREATER THAN ${livePrice} (e.g. ${(livePrice * 1.01).toFixed(5)})\n  takeProfit MUST be LESS THAN ${livePrice} (e.g. ${(livePrice * 0.98).toFixed(5)})`}
-- Stop loss distance = 1% to 2% from live price
-- Take profit = 2x to 3x the stop loss distance (minimum 2:1 R:R)
-- NEVER return stopLoss=0 or takeProfit=0 — always calculate real values
-- Confidence < 65% = REJECTED (no trade). 65-75% = normal conviction trade, 75-85% = strong, 85%+ = very strong
+CRITICAL SL/TP RULES (violations = order rejected by broker):
+- Live price: ${livePrice}
+- Direction: ${proposedDirection}
+${proposedDirection === "BUY"
+  ? `- stopLoss MUST be BELOW ${livePrice} — example: ${(livePrice * 0.988).toFixed(5)}
+- takeProfit MUST be ABOVE ${livePrice} — example: ${(livePrice * 1.02).toFixed(5)}`
+  : `- stopLoss MUST be ABOVE ${livePrice} — example: ${(livePrice * 1.012).toFixed(5)}
+- takeProfit MUST be BELOW ${livePrice} — example: ${(livePrice * 0.98).toFixed(5)}`}
+- SL distance: 1.0% to 2.5% from entry
+- TP distance: minimum 2× SL distance (2:1 R:R required)
+- NEVER return 0 for stopLoss or takeProfit
 
-Respond in JSON:
+Respond ONLY in valid JSON:
 {
   "action": "${proposedDirection}" or "HOLD",
-  "confidence": 65,
-  "reasoning": "All 3 MTF rules confirmed. 4H uptrend strong. Entry at current ask, SL below recent swing low.",
+  "confidence": 75,
+  "reasoning": "Daily bias BULLISH (price above EMA200). London session high liquidity. 4H uptrend confirmed. SL below recent swing low at ${(livePrice * 0.988).toFixed(5)}. TP at 2:1 R:R.",
   "entryPrice": ${livePrice || 0},
-  "stopLoss": 0,
-  "takeProfit": 0
+  "stopLoss": ${proposedDirection === "BUY" ? (livePrice * 0.988).toFixed(5) : (livePrice * 1.012).toFixed(5)},
+  "takeProfit": ${proposedDirection === "BUY" ? (livePrice * 1.02).toFixed(5) : (livePrice * 0.98).toFixed(5)}
 }`;
 
   let aiResponse: { action: string; confidence: number; reasoning: string; entryPrice?: number; stopLoss?: number; takeProfit?: number };
@@ -1694,14 +1763,15 @@ Respond in JSON:
     };
   }
 
-  // Check confidence threshold
+  // ███ ROUND 62: Minimum confidence raised to 70% (from 65%) for higher quality trades
   const finalConfidence = aiResponse.confidence ?? 60;
-  if (finalConfidence < effectiveThreshold) {
+  const minConfidence = Math.max(effectiveThreshold, 70); // Never accept below 70%
+  if (finalConfidence < minConfidence) {
     return {
       instrument,
       action: "HOLD",
       confidence: finalConfidence,
-      reasoning: `[MTF:${instrument}] Signal below threshold (${finalConfidence}% < ${effectiveThreshold}%): ${aiResponse.reasoning}`,
+      reasoning: `[MTF:${instrument}] Signal below threshold (${finalConfidence}% < ${minConfidence}%): ${aiResponse.reasoning}`,
     };
   }
 

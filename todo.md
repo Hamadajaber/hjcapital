@@ -631,3 +631,20 @@
 - [x] تحسين error logging: full stack traces في كل catch blocks
 - [x] TypeScript: 0 أخطاء | 115/115 اختبار ✅
 - [x] Checkpoint + GitHub
+
+## Round 62 — تحسينات استراتيجية احترافية شاملة (Professional Strategy Overhaul)
+
+- [x] إصلاح ATR mismatch: توحيد SL distance = ATR × 2.5 في calculateATRPositionSize
+- [x] إضافة Daily Bias Filter: EMA200 على الـ Daily chart يحدد الاتجاه العام
+- [x] إضافة Session Filter صارم: لا تداول EURUSD/GBPUSD في الجلسة الآسيوية (00:00-07:00 UTC)
+- [x] إيقاف ETHUSD وUS500 مؤقتاً (Profit Factor < 0.65)
+- [x] نظام هجين: قواعد صارمة أولاً (Daily Bias + Session + Volatility) ثم LLM للتأكيد
+- [x] تحسين analyzeInstrument: 3 pre-filters يرفضون الصفقات قبل الوصول للـ LLM
+- [x] تحسين LLM prompt: إضافة Daily Bias + Session context كشرط إلزامي
+- [x] إضافة Volatility Filter: رفض الصفقات عند ATR > 2× المتوسط (سوق متقلب جداً)
+- [x] رفع confidence threshold إلى 70% (من 65%)
+- [x] تحسين واجهة المستخدم: تبويب "🛡 Filters" يعرض حالة الفلاتر الأربعة في الوقت الحقيقي
+- [x] تحديث Risk Parameters card: Min AI Confidence = 70%, Active Instruments = 3
+- [x] كتابة 20 اختبار جديد: getDailyBias، isTradeAlignedWithDailyBias، isInstrumentTradableInSession، checkVolatilityFilter
+- [x] TypeScript: 0 أخطاء ✅ | 135/135 اختبار ✅
+- [x] Checkpoint + GitHub

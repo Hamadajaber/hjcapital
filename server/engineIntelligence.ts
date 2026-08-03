@@ -1,15 +1,17 @@
 /**
  * HJ Capital — Engine Intelligence Module
  * ─────────────────────────────────────────────────────────────────────────────
- * Implements all 7 strategic intelligence systems:
+ * Implements all 9 strategic intelligence systems:
  *
  * 1. Learning Memory System     — AI evaluates each closed trade, stores lessons
  * 2. Dynamic Confidence         — Threshold auto-adjusts based on 7-day win rate
  * 3. Market Regime Detection    — Classify market: Trending/Ranging/Volatile
- * 4. Adaptive ATR Stop Loss     — SL = entry ± (ATR × 1.5), trailing stop logic
+ * 4. Adaptive ATR Stop Loss     — SL = entry ± (ATR × 2.5), trailing stop logic
  * 5. Client Sentiment           — Capital.com contrarian signal (>75% = reverse)
  * 6. Economic Calendar Filter   — Block trading near high-impact events
- * 7. Ensemble Decision Making   — 3 AI models vote with weighted consensus
+ * 7. Ensemble Decision Making   — 2 AI models vote with weighted consensus
+ * 8. Daily Bias Filter          — EMA200 on Daily chart determines trend direction
+ * 9. Session Filter             — Block low-liquidity sessions per instrument
  */
 
 import { invokeLLM } from "./_core/llm";
@@ -455,8 +457,11 @@ export function calculateATRPositionSize(
   }
   const atr = atrSum / 14;
 
-  // Stop loss distance = 1.5 × ATR
-  const slDistance = atr * 1.5;
+  // ███ ROUND 62 — ATR MISMATCH FIX ███
+  // Previously used ATR × 1.5 here but ATR × 2.5 in calculateATRStopLoss.
+  // This caused the engine to risk 1.67× more than intended per trade.
+  // Now unified: BOTH functions use ATR × 2.5 so position size = exactly 1% of balance.
+  const slDistance = atr * 2.5;
 
   if (slDistance <= 0) {
     return { size: 1, atr: 0, riskAmount };
@@ -516,6 +521,180 @@ export function calculateTrailingStop(
 
   // No change
   return { newSL: originalSL, reason: "No trailing stop adjustment needed" };
+}
+
+// ─── 8. Daily Bias Filter ────────────────────────────────────────────────────
+
+/**
+ * Determines the daily trend bias using EMA200 on daily candles.
+ * This is the PRIMARY filter — no trade should go against the daily trend.
+ *
+ * Returns:
+ *   "bullish"  → price above EMA200 → only BUY signals allowed
+ *   "bearish"  → price below EMA200 → only SELL signals allowed
+ *   "neutral"  → price within 0.3% of EMA200 → both directions allowed
+ *   "unknown"  → insufficient data → both directions allowed
+ */
+export function getDailyBias(
+  dailyCandles: Candle[]
+): { bias: "bullish" | "bearish" | "neutral" | "unknown"; ema200: number; currentPrice: number; description: string } {
+  if (dailyCandles.length < 20) {
+    return { bias: "unknown", ema200: 0, currentPrice: 0, description: "Insufficient daily data for bias calculation" };
+  }
+
+  const closes = dailyCandles.map((c) => c.close);
+  const currentPrice = closes[closes.length - 1];
+
+  // Calculate EMA200 (or EMA of available data if < 200 candles)
+  const period = Math.min(200, closes.length);
+  const k = 2 / (period + 1);
+  let ema = closes.slice(0, period).reduce((s, v) => s + v, 0) / period;
+  for (let i = period; i < closes.length; i++) {
+    ema = closes[i] * k + ema * (1 - k);
+  }
+
+  const pctFromEma = ((currentPrice - ema) / ema) * 100;
+  const NEUTRAL_ZONE = 0.3; // within 0.3% = neutral
+
+  let bias: "bullish" | "bearish" | "neutral";
+  let description: string;
+
+  if (Math.abs(pctFromEma) <= NEUTRAL_ZONE) {
+    bias = "neutral";
+    description = `Price ${currentPrice.toFixed(5)} is within ${NEUTRAL_ZONE}% of EMA${period} (${ema.toFixed(5)}) — neutral zone, both directions valid`;
+  } else if (pctFromEma > 0) {
+    bias = "bullish";
+    description = `Price ${currentPrice.toFixed(5)} is ${pctFromEma.toFixed(2)}% ABOVE EMA${period} (${ema.toFixed(5)}) — BULLISH bias, prefer BUY only`;
+  } else {
+    bias = "bearish";
+    description = `Price ${currentPrice.toFixed(5)} is ${Math.abs(pctFromEma).toFixed(2)}% BELOW EMA${period} (${ema.toFixed(5)}) — BEARISH bias, prefer SELL only`;
+  }
+
+  return { bias, ema200: Math.round(ema * 100000) / 100000, currentPrice, description };
+}
+
+/**
+ * Check if a proposed trade direction aligns with the daily bias.
+ * Returns true if the trade is allowed, false if it should be blocked.
+ */
+export function isTradeAlignedWithDailyBias(
+  direction: "BUY" | "SELL",
+  bias: "bullish" | "bearish" | "neutral" | "unknown"
+): { allowed: boolean; reason: string } {
+  if (bias === "neutral" || bias === "unknown") {
+    return { allowed: true, reason: `Daily bias is ${bias} — both directions allowed` };
+  }
+  if (bias === "bullish" && direction === "BUY") {
+    return { allowed: true, reason: "BUY aligned with bullish daily trend ✅" };
+  }
+  if (bias === "bearish" && direction === "SELL") {
+    return { allowed: true, reason: "SELL aligned with bearish daily trend ✅" };
+  }
+  return {
+    allowed: false,
+    reason: `${direction} BLOCKED — daily bias is ${bias.toUpperCase()}, trade goes against the trend ❌`,
+  };
+}
+
+/**
+ * Format daily bias for AI prompt injection.
+ */
+export function formatDailyBiasForPrompt(instrument: string, biasData: ReturnType<typeof getDailyBias>): string {
+  const emoji = biasData.bias === "bullish" ? "📈" : biasData.bias === "bearish" ? "📉" : "➡️";
+  return `DAILY BIAS [${instrument}]: ${emoji} ${biasData.bias.toUpperCase()} — ${biasData.description}`;
+}
+
+// ─── 9. Session Filter ────────────────────────────────────────────────────────
+
+/**
+ * Determines the current trading session based on UTC hour.
+ * Returns session name and quality rating.
+ */
+export function getCurrentTradingSession(): {
+  session: "london" | "newyork" | "overlap" | "asian" | "dead";
+  quality: "excellent" | "good" | "poor" | "avoid";
+  utcHour: number;
+  description: string;
+} {
+  const utcHour = new Date().getUTCHours();
+
+  if (utcHour >= 7 && utcHour < 9) {
+    return { session: "london", quality: "good", utcHour, description: "London open (07:00-09:00 UTC) — building momentum" };
+  } else if (utcHour >= 9 && utcHour < 13) {
+    return { session: "london", quality: "excellent", utcHour, description: "London prime (09:00-13:00 UTC) — highest liquidity" };
+  } else if (utcHour >= 13 && utcHour < 16) {
+    return { session: "overlap", quality: "excellent", utcHour, description: "London/NY overlap (13:00-16:00 UTC) — peak volatility and liquidity" };
+  } else if (utcHour >= 16 && utcHour < 20) {
+    return { session: "newyork", quality: "good", utcHour, description: "New York prime (16:00-20:00 UTC) — strong USD moves" };
+  } else if (utcHour >= 20 && utcHour < 22) {
+    return { session: "newyork", quality: "poor", utcHour, description: "NY close (20:00-22:00 UTC) — fading volume, avoid new entries" };
+  } else if (utcHour >= 22 || utcHour < 2) {
+    return { session: "dead", quality: "avoid", utcHour, description: "Dead zone (22:00-02:00 UTC) — no liquidity, wide spreads" };
+  } else if (utcHour >= 2 && utcHour < 5) {
+    return { session: "asian", quality: "poor", utcHour, description: "Asian session (02:00-05:00 UTC) — low volatility for forex" };
+  } else {
+    return { session: "asian", quality: "poor", utcHour, description: "Pre-London (05:00-07:00 UTC) — building up" };
+  }
+}
+
+/**
+ * Check if a specific instrument should be traded in the current session.
+ * Returns true if trading is allowed, false if it should be skipped.
+ *
+ * Rules:
+ *   - Forex pairs (EURUSD, GBPUSD, AUDUSD, USDCAD, EURGBP, USDJPY):
+ *       Block during Asian session (00:00-07:00 UTC) — low liquidity, wide spreads
+ *   - GOLD/XAGUSD: Block during dead zone (22:00-02:00 UTC)
+ *   - Indices (GER40, US500, NASDAQ): Only trade during their primary session
+ *   - ETHUSD/BTCUSD: 24/7 but prefer London/NY sessions
+ */
+export function isInstrumentTradableInSession(
+  instrument: string,
+  sessionInfo: ReturnType<typeof getCurrentTradingSession>
+): { tradable: boolean; reason: string } {
+  const { session, quality, utcHour } = sessionInfo;
+
+  const FOREX_PAIRS = ["EURUSD", "GBPUSD", "AUDUSD", "USDCAD", "EURGBP", "USDJPY"];
+  const METALS = ["GOLD", "XAUUSD", "XAGUSD"];
+  const EU_INDICES = ["GER40"];
+  const US_INDICES = ["US500", "NASDAQ", "US100"];
+  const CRYPTO = ["ETHUSD", "BTCUSD"];
+
+  // Dead zone — block everything except crypto
+  if (quality === "avoid" && !CRYPTO.includes(instrument)) {
+    return { tradable: false, reason: `Dead zone (${utcHour}:00 UTC) — no liquidity for ${instrument}` };
+  }
+
+  // Forex: block Asian session
+  if (FOREX_PAIRS.includes(instrument) && (utcHour < 7 || utcHour >= 20)) {
+    if (utcHour < 7) {
+      return { tradable: false, reason: `${instrument} blocked: Asian/pre-London session (${utcHour}:00 UTC) — low liquidity and wide spreads for forex` };
+    }
+    if (utcHour >= 20) {
+      return { tradable: false, reason: `${instrument} blocked: NY close/overnight (${utcHour}:00 UTC) — fading liquidity` };
+    }
+  }
+
+  // EU Indices: only during London session
+  if (EU_INDICES.includes(instrument)) {
+    if (utcHour < 7 || utcHour >= 20) {
+      return { tradable: false, reason: `${instrument} blocked: outside European trading hours (${utcHour}:00 UTC)` };
+    }
+  }
+
+  // US Indices: only during NY session
+  if (US_INDICES.includes(instrument)) {
+    if (utcHour < 13 || utcHour >= 20) {
+      return { tradable: false, reason: `${instrument} blocked: outside US trading hours (${utcHour}:00 UTC) — needs 13:00-20:00 UTC` };
+    }
+  }
+
+  // Metals: block dead zone
+  if (METALS.includes(instrument) && (utcHour >= 22 || utcHour < 2)) {
+    return { tradable: false, reason: `${instrument} blocked: metals dead zone (${utcHour}:00 UTC)` };
+  }
+
+  return { tradable: true, reason: `${instrument} tradable in current session (${session}, ${utcHour}:00 UTC)` };
 }
 
 // ─── 5. Client Sentiment (Contrarian Signal) ──────────────────────────────────
@@ -848,4 +1027,66 @@ export function getEnsembleSizeMultiplier(result: EnsembleResult): number {
 
   // BUY or SELL split with very low confidence → 0.4x (still trade, just smaller)
   return 0.4;
+}
+
+// ─── 10. Volatility Filter ────────────────────────────────────────────────────
+
+/**
+ * ███ ROUND 62: Volatility Filter
+ *
+ * Rejects trades when the market is abnormally volatile (ATR > 2× its 14-period average).
+ * Abnormal volatility = erratic price action = unpredictable SL hits.
+ *
+ * Returns:
+ *   tradable: true  → volatility is normal, proceed
+ *   tradable: false → volatility is too high, skip this cycle
+ */
+export function checkVolatilityFilter(
+  candles: Candle[],
+  instrument: string
+): { tradable: boolean; atr: number; avgAtr: number; ratio: number; reason: string } {
+  if (candles.length < 28) {
+    return { tradable: true, atr: 0, avgAtr: 0, ratio: 1, reason: "Insufficient data for volatility check — proceeding" };
+  }
+
+  // Calculate ATR for each of the last 28 candles (14-period ATR × 2 lookback)
+  const atrs: number[] = [];
+  for (let i = 1; i < candles.length; i++) {
+    const high = candles[i].high;
+    const low = candles[i].low;
+    const prevClose = candles[i - 1].close;
+    const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+    atrs.push(tr);
+  }
+
+  // Current ATR = average of last 14 true ranges
+  const currentAtrs = atrs.slice(-14);
+  const currentAtr = currentAtrs.reduce((s, v) => s + v, 0) / currentAtrs.length;
+
+  // Average ATR = average of the 14 true ranges BEFORE the current period (baseline)
+  const baselineAtrs = atrs.slice(-28, -14);
+  const avgAtr = baselineAtrs.length > 0
+    ? baselineAtrs.reduce((s, v) => s + v, 0) / baselineAtrs.length
+    : currentAtr;
+
+  const ratio = avgAtr > 0 ? currentAtr / avgAtr : 1;
+  const VOLATILITY_THRESHOLD = 2.0; // Block if current ATR > 2× baseline
+
+  if (ratio > VOLATILITY_THRESHOLD) {
+    return {
+      tradable: false,
+      atr: Math.round(currentAtr * 100000) / 100000,
+      avgAtr: Math.round(avgAtr * 100000) / 100000,
+      ratio: Math.round(ratio * 100) / 100,
+      reason: `[Volatility Filter] ${instrument} ATR is ${ratio.toFixed(2)}× normal — abnormal volatility, skipping cycle`,
+    };
+  }
+
+  return {
+    tradable: true,
+    atr: Math.round(currentAtr * 100000) / 100000,
+    avgAtr: Math.round(avgAtr * 100000) / 100000,
+    ratio: Math.round(ratio * 100) / 100,
+    reason: `${instrument} volatility normal (ATR ratio: ${ratio.toFixed(2)}×)`,
+  };
 }

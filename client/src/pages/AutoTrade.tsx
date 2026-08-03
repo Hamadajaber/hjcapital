@@ -172,7 +172,7 @@ function ActionTakenBadge({ action }: { action: string }) {
 // ─── Price Alerts Card ───────────────────────────────────────────────────────
 // ─── Intelligence Dashboard Card ─────────────────────────────────────────────
 function IntelligenceDashboardCard() {
-  const [activeTab, setActiveTab] = useState<"lessons" | "threshold" | "calendar" | "streaming">("lessons");
+  const [activeTab, setActiveTab] = useState<"lessons" | "threshold" | "calendar" | "streaming" | "filters">("lessons");
 
   const lessonsQuery = trpc.intelligence.getLessons.useQuery({ limit: 8 }, { refetchInterval: 60000 });
   const thresholdQuery = trpc.intelligence.getDynamicThreshold.useQuery(undefined, { refetchInterval: 30000 });
@@ -181,8 +181,19 @@ function IntelligenceDashboardCard() {
 
   const wsConnected = streamingQuery.data?.websocket.connected ?? false;
 
+  // Round 62: Compute current session info for Filters tab
+  const utcHour = new Date().getUTCHours();
+  const currentSession = utcHour >= 9 && utcHour < 13 ? { name: "London Prime", quality: "excellent", color: "var(--color-profit)" }
+    : utcHour >= 13 && utcHour < 16 ? { name: "London/NY Overlap", quality: "excellent", color: "var(--color-profit)" }
+    : utcHour >= 7 && utcHour < 9 ? { name: "London Open", quality: "good", color: "var(--color-gold)" }
+    : utcHour >= 16 && utcHour < 20 ? { name: "New York Prime", quality: "good", color: "var(--color-gold)" }
+    : utcHour >= 20 && utcHour < 22 ? { name: "NY Close", quality: "poor", color: "var(--color-loss)" }
+    : utcHour >= 22 || utcHour < 2 ? { name: "Dead Zone", quality: "avoid", color: "var(--color-loss)" }
+    : { name: "Asian Session", quality: "poor", color: "#f59e0b" };
+
   const tabs = [
     { id: "lessons" as const, label: "AI Lessons" },
+    { id: "filters" as const, label: "🛡 Filters" },
     { id: "threshold" as const, label: "Confidence" },
     { id: "calendar" as const, label: "Calendar" },
     { id: "streaming" as const, label: wsConnected ? "WS Live" : "Polling" },
@@ -334,6 +345,81 @@ function IntelligenceDashboardCard() {
               ))}
             </>
           )}
+        </div>
+      )}
+
+      {/* Filters Status Tab — Round 62 */}
+      {activeTab === "filters" && (
+        <div className="space-y-3">
+          <p className="text-xs mb-3" style={{ color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>
+            Active pre-filters that run before every trade signal is evaluated by AI.
+          </p>
+
+          {/* Filter 1: Session Filter */}
+          <div className="p-3 rounded" style={{ background: "var(--color-bg-secondary)", border: "1px solid var(--color-border-subtle)" }}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold" style={{ color: "var(--color-text-primary)", fontFamily: "var(--font-sans)" }}>🕐 Session Filter</span>
+              <span className="text-xs px-2 py-0.5 rounded font-semibold" style={{
+                fontFamily: "var(--font-sans)",
+                background: currentSession.quality === "excellent" ? "rgba(34,197,94,0.15)" : currentSession.quality === "good" ? "rgba(251,191,36,0.15)" : "rgba(239,68,68,0.15)",
+                color: currentSession.color,
+              }}>{currentSession.quality.toUpperCase()}</span>
+            </div>
+            <p className="text-xs" style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)" }}>
+              Current: <strong style={{ color: currentSession.color }}>{currentSession.name}</strong> ({utcHour}:00 UTC)
+            </p>
+            <p className="text-xs mt-1" style={{ color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>
+              Blocks forex outside 07:00-20:00 UTC · Blocks metals in dead zone · Blocks indices outside primary hours
+            </p>
+          </div>
+
+          {/* Filter 2: Daily Bias Filter */}
+          <div className="p-3 rounded" style={{ background: "var(--color-bg-secondary)", border: "1px solid var(--color-border-subtle)" }}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold" style={{ color: "var(--color-text-primary)", fontFamily: "var(--font-sans)" }}>📈 Daily Bias Filter</span>
+              <span className="text-xs px-2 py-0.5 rounded font-semibold" style={{ fontFamily: "var(--font-sans)", background: "rgba(34,197,94,0.15)", color: "var(--color-profit)" }}>ACTIVE</span>
+            </div>
+            <p className="text-xs" style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)" }}>
+              EMA200 on Daily chart determines allowed trade direction.
+            </p>
+            <p className="text-xs mt-1" style={{ color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>
+              Price above EMA200 → BUY only · Price below EMA200 → SELL only · Within 0.3% → both allowed
+            </p>
+          </div>
+
+          {/* Filter 3: Volatility Filter */}
+          <div className="p-3 rounded" style={{ background: "var(--color-bg-secondary)", border: "1px solid var(--color-border-subtle)" }}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold" style={{ color: "var(--color-text-primary)", fontFamily: "var(--font-sans)" }}>⚡ Volatility Filter</span>
+              <span className="text-xs px-2 py-0.5 rounded font-semibold" style={{ fontFamily: "var(--font-sans)", background: "rgba(34,197,94,0.15)", color: "var(--color-profit)" }}>ACTIVE</span>
+            </div>
+            <p className="text-xs" style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)" }}>
+              Blocks trades when ATR &gt; 2× baseline (abnormal volatility).
+            </p>
+            <p className="text-xs mt-1" style={{ color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>
+              Prevents SL hits during news spikes and flash crashes
+            </p>
+          </div>
+
+          {/* Filter 4: EMA Gap Filter */}
+          <div className="p-3 rounded" style={{ background: "var(--color-bg-secondary)", border: "1px solid var(--color-border-subtle)" }}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold" style={{ color: "var(--color-text-primary)", fontFamily: "var(--font-sans)" }}>📊 EMA Gap Filter</span>
+              <span className="text-xs px-2 py-0.5 rounded font-semibold" style={{ fontFamily: "var(--font-sans)", background: "rgba(34,197,94,0.15)", color: "var(--color-profit)" }}>ACTIVE</span>
+            </div>
+            <p className="text-xs" style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)" }}>
+              Requires EMA50/EMA200 gap ≥ 0.20% on 4H chart.
+            </p>
+            <p className="text-xs mt-1" style={{ color: "var(--color-text-tertiary)", fontFamily: "var(--font-sans)" }}>
+              Prevents trading in flat/ranging markets with no clear trend
+            </p>
+          </div>
+
+          {/* Min Confidence */}
+          <div className="flex items-center justify-between py-2" style={{ borderTop: "1px solid var(--color-border-subtle)" }}>
+            <span className="text-xs" style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)" }}>Min AI Confidence (Round 62)</span>
+            <span className="text-sm font-bold" style={{ fontFamily: "var(--font-serif)", color: "var(--color-accent)" }}>70%</span>
+          </div>
         </div>
       )}
 
@@ -884,8 +970,9 @@ export default function AutoTrade() {
                 { label: "Daily Loss Limit",  value: "$7.50",  color: "var(--color-loss)" },
                 { label: "Daily Profit Lock", value: "$10.00", color: "var(--color-profit)" },
                 { label: "Max Risk / Trade",  value: "1%",     color: "var(--color-gold)" },
-                { label: "Min AI Confidence", value: "55%",    color: "var(--color-accent)" },
+                { label: "Min AI Confidence", value: "70%",    color: "var(--color-accent)" },
                 { label: "Max Open Positions",value: "3",      color: "var(--color-text-secondary)" },
+                { label: "Active Instruments", value: "3",     color: "var(--color-text-secondary)" },
               ].map((r) => (
                 <div
                   key={r.label}

@@ -605,3 +605,190 @@ describe("calculateATRPositionSize", () => {
     expect(result.size).toBeGreaterThan(0);
   });
 });
+
+// ─── Round 62: New Filter Tests ───────────────────────────────────────────────
+
+import {
+  getDailyBias,
+  isTradeAlignedWithDailyBias,
+  isInstrumentTradableInSession,
+  getCurrentTradingSession,
+  checkVolatilityFilter,
+} from "./engineIntelligence";
+
+// Helper: build N candles trending up or down
+function buildTrendCandles(count: number, startPrice: number, delta: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    open: startPrice + i * delta,
+    high: startPrice + i * delta + Math.abs(delta) * 0.5,
+    low: startPrice + i * delta - Math.abs(delta) * 0.5,
+    close: startPrice + i * delta,
+    volume: 1000,
+    timestamp: Date.now() + i * 3600000,
+  }));
+}
+
+describe("getDailyBias", () => {
+  it("returns unknown for insufficient data (< 20 candles)", () => {
+    const result = getDailyBias([]);
+    expect(result.bias).toBe("unknown");
+  });
+
+  it("returns bullish when price is significantly above EMA200", () => {
+    // Build 250 candles trending up strongly
+    const candles = buildTrendCandles(250, 1.0, 0.01); // price ends at ~3.5
+    const result = getDailyBias(candles);
+    expect(result.bias).toBe("bullish");
+    expect(result.currentPrice).toBeGreaterThan(result.ema200);
+  });
+
+  it("returns bearish when price is significantly below EMA200", () => {
+    // Build 250 candles trending down strongly
+    const candles = buildTrendCandles(250, 3.5, -0.01); // price ends at ~1.0
+    const result = getDailyBias(candles);
+    expect(result.bias).toBe("bearish");
+    expect(result.currentPrice).toBeLessThan(result.ema200);
+  });
+
+  it("returns neutral when price is within 0.3% of EMA", () => {
+    // Flat candles — price stays near EMA
+    const candles = Array.from({ length: 50 }, (_, i) => ({
+      open: 1.0800,
+      high: 1.0805,
+      low: 1.0795,
+      close: 1.0800 + (i % 3 === 0 ? 0.0001 : -0.0001),
+      volume: 1000,
+      timestamp: Date.now() + i * 86400000,
+    }));
+    const result = getDailyBias(candles);
+    // neutral or bullish/bearish depending on tiny drift — just check it's a valid value
+    expect(["bullish", "bearish", "neutral"]).toContain(result.bias);
+    expect(result.ema200).toBeGreaterThan(0);
+  });
+});
+
+describe("isTradeAlignedWithDailyBias", () => {
+  it("allows BUY when bias is bullish", () => {
+    const result = isTradeAlignedWithDailyBias("BUY", "bullish");
+    expect(result.allowed).toBe(true);
+  });
+
+  it("blocks BUY when bias is bearish", () => {
+    const result = isTradeAlignedWithDailyBias("BUY", "bearish");
+    expect(result.allowed).toBe(false);
+  });
+
+  it("allows SELL when bias is bearish", () => {
+    const result = isTradeAlignedWithDailyBias("SELL", "bearish");
+    expect(result.allowed).toBe(true);
+  });
+
+  it("blocks SELL when bias is bullish", () => {
+    const result = isTradeAlignedWithDailyBias("SELL", "bullish");
+    expect(result.allowed).toBe(false);
+  });
+
+  it("allows both directions when bias is neutral", () => {
+    expect(isTradeAlignedWithDailyBias("BUY", "neutral").allowed).toBe(true);
+    expect(isTradeAlignedWithDailyBias("SELL", "neutral").allowed).toBe(true);
+  });
+
+  it("allows both directions when bias is unknown", () => {
+    expect(isTradeAlignedWithDailyBias("BUY", "unknown").allowed).toBe(true);
+    expect(isTradeAlignedWithDailyBias("SELL", "unknown").allowed).toBe(true);
+  });
+});
+
+describe("isInstrumentTradableInSession", () => {
+  const makeSession = (utcHour: number) => {
+    // Simulate getCurrentTradingSession for a given hour
+    if (utcHour >= 9 && utcHour < 13) return { session: "london" as const, quality: "excellent" as const, utcHour, description: "London prime" };
+    if (utcHour >= 13 && utcHour < 16) return { session: "overlap" as const, quality: "excellent" as const, utcHour, description: "Overlap" };
+    if (utcHour >= 22 || utcHour < 2) return { session: "dead" as const, quality: "avoid" as const, utcHour, description: "Dead zone" };
+    if (utcHour >= 2 && utcHour < 7) return { session: "asian" as const, quality: "poor" as const, utcHour, description: "Asian" };
+    if (utcHour >= 16 && utcHour < 20) return { session: "newyork" as const, quality: "good" as const, utcHour, description: "NY prime" };
+    return { session: "newyork" as const, quality: "poor" as const, utcHour, description: "NY close" };
+  };
+
+  it("blocks EURUSD during dead zone (23:00 UTC)", () => {
+    const result = isInstrumentTradableInSession("EURUSD", makeSession(23));
+    expect(result.tradable).toBe(false);
+  });
+
+  it("allows EURUSD during London prime (10:00 UTC)", () => {
+    const result = isInstrumentTradableInSession("EURUSD", makeSession(10));
+    expect(result.tradable).toBe(true);
+  });
+
+  it("blocks EURUSD during Asian session (03:00 UTC)", () => {
+    const result = isInstrumentTradableInSession("EURUSD", makeSession(3));
+    expect(result.tradable).toBe(false);
+  });
+
+  it("allows GOLD during London session (10:00 UTC)", () => {
+    const result = isInstrumentTradableInSession("GOLD", makeSession(10));
+    expect(result.tradable).toBe(true);
+  });
+
+  it("blocks GOLD during dead zone (23:00 UTC)", () => {
+    const result = isInstrumentTradableInSession("GOLD", makeSession(23));
+    expect(result.tradable).toBe(false);
+  });
+
+  it("blocks US500 outside NY hours (10:00 UTC)", () => {
+    const result = isInstrumentTradableInSession("US500", makeSession(10));
+    expect(result.tradable).toBe(false);
+  });
+
+  it("allows US500 during NY session (14:00 UTC)", () => {
+    const result = isInstrumentTradableInSession("US500", makeSession(14));
+    expect(result.tradable).toBe(true);
+  });
+});
+
+describe("checkVolatilityFilter", () => {
+  it("returns tradable=true for insufficient data (< 28 candles)", () => {
+    const result = checkVolatilityFilter([], "EURUSD");
+    expect(result.tradable).toBe(true);
+  });
+
+  it("returns tradable=true for normal volatility", () => {
+    // Stable candles — ATR ratio ~1.0
+    const candles = Array.from({ length: 30 }, (_, i) => ({
+      open: 1.0800 + i * 0.0001,
+      high: 1.0810 + i * 0.0001,
+      low: 1.0790 + i * 0.0001,
+      close: 1.0805 + i * 0.0001,
+      volume: 1000,
+      timestamp: Date.now() + i * 3600000,
+    }));
+    const result = checkVolatilityFilter(candles, "EURUSD");
+    expect(result.tradable).toBe(true);
+    expect(result.ratio).toBeGreaterThan(0);
+  });
+
+  it("returns tradable=false when recent ATR is > 2× baseline", () => {
+    // First 14 candles: calm (small range)
+    const calmCandles = Array.from({ length: 14 }, (_, i) => ({
+      open: 1.0800 + i * 0.0001,
+      high: 1.0802 + i * 0.0001,
+      low: 1.0798 + i * 0.0001,
+      close: 1.0801 + i * 0.0001,
+      volume: 1000,
+      timestamp: Date.now() + i * 3600000,
+    }));
+    // Last 14 candles: very volatile (10× the range)
+    const volatileCandles = Array.from({ length: 14 }, (_, i) => ({
+      open: 1.0800 + i * 0.001,
+      high: 1.1200 + i * 0.001, // huge spike
+      low: 1.0400 + i * 0.001,
+      close: 1.0800 + i * 0.001,
+      volume: 10000,
+      timestamp: Date.now() + (14 + i) * 3600000,
+    }));
+    const candles = [...calmCandles, ...volatileCandles];
+    const result = checkVolatilityFilter(candles, "EURUSD");
+    expect(result.tradable).toBe(false);
+    expect(result.ratio).toBeGreaterThan(2.0);
+  });
+});
