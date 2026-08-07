@@ -24,34 +24,49 @@ async function getSession(): Promise<CapitalSession> {
     return _session;
   }
 
-  const response = await fetch(`${BASE_URL}/api/v1/session`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-CAP-API-KEY": ENV.capitalApiKey,
-    },
-    body: JSON.stringify({
-      identifier: ENV.capitalEmail,
-      password: ENV.capitalPassword,
-    }),
-  });
+  // ███ ROUND 63: Retry auth up to 3 times with exponential backoff
+  // Incapsula 403 blocks are transient — a short wait usually resolves them
+  const MAX_AUTH_RETRIES = 3;
+  let lastAuthError = "";
+  for (let attempt = 0; attempt < MAX_AUTH_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const waitMs = attempt * 3000; // 3s, 6s
+      console.warn(`[CapitalCom] Auth retry ${attempt}/${MAX_AUTH_RETRIES - 1} after ${waitMs}ms...`);
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
+    const response = await fetch(`${BASE_URL}/api/v1/session`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CAP-API-KEY": ENV.capitalApiKey,
+      },
+      body: JSON.stringify({
+        identifier: ENV.capitalEmail,
+        password: ENV.capitalPassword,
+      }),
+    });
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Capital.com auth failed: ${response.status} — ${text}`);
+    if (!response.ok) {
+      const text = await response.text();
+      lastAuthError = `Capital.com auth failed: ${response.status} — ${text.slice(0, 200)}`;
+      console.warn(`[CapitalCom] Auth attempt ${attempt + 1} failed: ${response.status}`);
+      continue;
+    }
+
+    const cst = response.headers.get("CST") ?? "";
+    const securityToken = response.headers.get("X-SECURITY-TOKEN") ?? "";
+
+    _session = {
+      cst,
+      securityToken,
+      // Capital.com sessions last 10 minutes; we refresh after 8 min to stay ahead of expiry
+      expiresAt: Date.now() + 8 * 60 * 1000,
+    };
+
+    return _session;
   }
 
-  const cst = response.headers.get("CST") ?? "";
-  const securityToken = response.headers.get("X-SECURITY-TOKEN") ?? "";
-
-  _session = {
-    cst,
-    securityToken,
-    // Capital.com sessions last 10 minutes; we refresh after 8 min to stay ahead of expiry
-    expiresAt: Date.now() + 8 * 60 * 1000,
-  };
-
-  return _session;
+  throw new Error(lastAuthError || "Capital.com auth failed after 3 attempts");
 }
 
 /**

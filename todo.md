@@ -648,3 +648,12 @@
 - [x] كتابة 20 اختبار جديد: getDailyBias، isTradeAlignedWithDailyBias، isInstrumentTradableInSession، checkVolatilityFilter
 - [x] TypeScript: 0 أخطاء ✅ | 135/135 اختبار ✅
 - [x] Checkpoint + GitHub
+
+## Round 63 — إصلاحات عاجلة (Critical Fixes)
+
+- [x] إصلاح Agent Pipeline: Research Manager prompt أكثر وضوحاً مع مثال JSON وقواعد صارمة لمنع validation failures
+- [x] خفض fallback confidence من 60% إلى 65% عند فشل Agent Pipeline (pre-filters passed = إشارة قوية)
+- [x] نظام ذكي: 65% عند fallback، 70% عند AI طبيعي
+- [x] خفض EMA Gap threshold من 0.20% إلى 0.15% (يفتح EURUSD في أسواق هادئة)
+- [x] TypeScript: 0 أخطاء ✅ | 135/135 اختبار ✅
+- [x] Checkpoint + GitHub

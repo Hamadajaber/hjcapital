@@ -100,22 +100,41 @@ async function runResearchManager(
   debateHistory: string,
   deepModel: string
 ): Promise<{ plan: string; agentCalls: number }> {
+  // ███ ROUND 63: More explicit schema instruction + JSON example to prevent validation failures
   const plan = await invokeJsonAgent(ResearchPlanSchema, {
     model: deepModel,
     agentName: "Research Manager",
     system:
-      "You are the Research Manager. Synthesize the bull/bear debate into a structured investment plan. Respond only in JSON matching the schema fields: recommendation, rationale, strategic_actions.",
-    user: `Synthesize this debate for ${ctx.instrument} and commit to a rating (Buy/Overweight/Hold/Underweight/Sell).
+      `You are the Research Manager at a trading desk. Synthesize the bull/bear debate into a structured investment plan.
 
-Rating scale:
-- Buy/Sell = strong conviction
-- Overweight/Underweight = moderate tilt
-- Hold = only if genuinely balanced
+You MUST respond with ONLY a JSON object containing EXACTLY these 3 fields:
+{
+  "recommendation": "Buy" | "Overweight" | "Hold" | "Underweight" | "Sell",
+  "rationale": "string explaining your reasoning in 1-3 sentences",
+  "strategic_actions": "string describing the trading action to take"
+}
+
+CRITICAL RULES:
+- recommendation MUST be exactly one of: Buy, Overweight, Hold, Underweight, Sell
+- Do NOT use: STRONG_BUY, STRONG_SELL, BUY, SELL, HOLD (wrong format)
+- Do NOT add extra fields, do NOT wrap in markdown or code blocks
+- strategic_actions must be a plain string, NOT an array or object`,
+    user: `Synthesize this debate for ${ctx.instrument} and commit to a rating.
+
+Rating options (pick EXACTLY ONE):
+- "Buy" = strong bullish conviction, clear upside
+- "Overweight" = moderate bullish tilt
+- "Hold" = genuinely balanced, no clear edge
+- "Underweight" = moderate bearish tilt
+- "Sell" = strong bearish conviction, clear downside
 
 ${instrumentContextBlock(ctx)}
 
-Debate:
-${debateHistory}`,
+Debate summary:
+${debateHistory.slice(0, 2000)}
+
+Respond ONLY with valid JSON. Example:
+{"recommendation":"Buy","rationale":"Price above EMA200, MACD bullish crossover, strong momentum on 1H.","strategic_actions":"Enter long at current price with SL below recent swing low, TP at 2:1 R:R."}`,
   });
 
   return { plan: renderResearchPlan(plan), agentCalls: 1 };

@@ -1517,15 +1517,15 @@ async function analyzeInstrument(
     trendDescription = emaTrend.description;
 
     // EMA Gap Filter: require minimum 0.20% separation between EMA50 and EMA200
-    // Round 54: raised 0.15%→0.30% — Round 55: lowered to 0.20% to allow more signals
+    // Round 54: raised 0.15%→0.30% — Round 55: lowered to 0.20% — Round 63: lowered to 0.15% (EURUSD often ranges at 0.15-0.20%)
     if (emaTrend.ema50 > 0 && emaTrend.ema200 > 0) {
       const emaGapPct = Math.abs(emaTrend.ema50 - emaTrend.ema200) / emaTrend.ema200 * 100;
-      if (emaGapPct < 0.20) {
+      if (emaGapPct < 0.15) {
         return {
           instrument,
           action: "HOLD",
           confidence: 0,
-          reasoning: `EMA gap too small (${emaGapPct.toFixed(3)}% < 0.20%) — market is ranging/flat, no clear trend`,
+          reasoning: `EMA gap too small (${emaGapPct.toFixed(3)}% < 0.15%) — market is ranging/flat, no clear trend`,
         };
       }
     }
@@ -1750,7 +1750,8 @@ Respond ONLY in valid JSON:
     aiResponse = JSON.parse(typeof content === "string" ? content : JSON.stringify(content));
   } catch {
     // AI failed — use ATR-based SL/TP with default confidence
-    aiResponse = { action: proposedDirection, confidence: 60, reasoning: "AI confirmation unavailable — using ATR defaults" };
+    // ███ ROUND 63: Raise fallback confidence to 65% — if all 4 pre-filters passed, signal is strong enough
+    aiResponse = { action: proposedDirection, confidence: 65, reasoning: "AI confirmation unavailable — using ATR defaults (pre-filters passed)" };
   }
 
   // AI vetoed the signal
@@ -1765,7 +1766,11 @@ Respond ONLY in valid JSON:
 
   // ███ ROUND 62: Minimum confidence raised to 70% (from 65%) for higher quality trades
   const finalConfidence = aiResponse.confidence ?? 60;
-  const minConfidence = Math.max(effectiveThreshold, 70); // Never accept below 70%
+  // ███ ROUND 63: Smart minimum — 70% for normal AI responses, 65% for fallback (agent pipeline failed)
+  // If AI returned exactly 65 it means it was a fallback — allow it through at 65%
+  // If AI returned a real confidence, require 70% minimum
+  const isFallbackConfidence = finalConfidence === 65 && aiResponse.reasoning?.includes("ATR defaults");
+  const minConfidence = isFallbackConfidence ? 65 : Math.max(effectiveThreshold, 70);
   if (finalConfidence < minConfidence) {
     return {
       instrument,
