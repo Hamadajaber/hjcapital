@@ -650,10 +650,29 @@
 - [x] Checkpoint + GitHub
 
 ## Round 63 — إصلاحات عاجلة (Critical Fixes)
-
 - [x] إصلاح Agent Pipeline: Research Manager prompt أكثر وضوحاً مع مثال JSON وقواعد صارمة لمنع validation failures
 - [x] خفض fallback confidence من 60% إلى 65% عند فشل Agent Pipeline (pre-filters passed = إشارة قوية)
 - [x] نظام ذكي: 65% عند fallback، 70% عند AI طبيعي
 - [x] خفض EMA Gap threshold من 0.20% إلى 0.15% (يفتح EURUSD في أسواق هادئة)
 - [x] TypeScript: 0 أخطاء ✅ | 135/135 اختبار ✅
 - [x] Checkpoint + GitHub
+
+## Round 64 — تشخيص توقف التداول (Trading-Stall Diagnosis)
+- [x] قياس عدد الدورات والإشارات والصفقات المرفوضة حسب السبب منذ آخر صفقة
+- [x] تحديد الخلل الجذري في Agent Pipeline وعتبة الثقة الاحتياطية
+- [x] تقييم توازن الفلاتر وتقديم نطاقات ضبط آمنة قبل أي تعديل حي
+- [x] تنفيذ الإصلاحات المعتمدة واختبارها ثم حفظ checkpoint
+
+## Round 65 — إعادة تأهيل المحرك الذكي (Autonomous Trading Recovery)
+- [x] إصلاح مسار فشل Agent Pipeline بحيث لا يحول الإشارة المؤهلة إلى رفض غير مبرر
+- [x] توحيد مصدر agentPipelineMode وإضافة وضع استعادة light قابل للتتبع
+- [x] إنهاء جلسات auto_trade_session اليتيمة ومنع تكرار الجلسات الفعالة
+- [x] تسجيل أسباب رفض الإشارات ونتائج الـ Pipeline لكل دورة
+- [x] إضافة اختبارات لمسار fallback ولحماية الجلسات
+- [x] تفعيل الاستعادة للتداول الحي بموافقة المستخدم: فلاتر أربعة + مراجعة AI متفقة + مخاطرة قصوى 1%
+- [x] التحقق من TypeScript والاختبارات ثم حفظ checkpoint ورفع GitHub
+
+## Round 65b — مواءمة واجهة المالك مع الحالة الحية
+- [x] تشخيص سبب عرض Paper Trading ورصيد $250 رغم تشغيل المحرك الحي
+- [x] تصحيح مصدر بيانات الرصيد ووضع التداول في Dashboard وHJLayout
+- [x] إضافة اختبار يضمن عرض الحالة الحية عند وجود جلسة Live نشطة

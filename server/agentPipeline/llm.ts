@@ -1,6 +1,92 @@
 import { invokeLLM } from "../_core/llm";
 import type { z } from "zod";
 
+type JsonRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): JsonRecord | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as JsonRecord)
+    : null;
+}
+
+function readAlias(source: JsonRecord, aliases: string[]): unknown {
+  const match = Object.keys(source).find((key) =>
+    aliases.some((alias) => alias.toLowerCase() === key.toLowerCase())
+  );
+  return match ? source[match] : undefined;
+}
+
+function normalizePortfolioRating(value: unknown): string | undefined {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (typeof raw !== "string") return undefined;
+
+  const canonical = raw.trim().toLowerCase().replace(/[_-]+/g, " ");
+  if (canonical.includes("overweight")) return "Overweight";
+  if (canonical.includes("underweight")) return "Underweight";
+  if (canonical.includes("strong buy") || canonical.includes("buy") || canonical.includes("bullish") || canonical.includes("long")) return "Buy";
+  if (canonical.includes("strong sell") || canonical.includes("sell") || canonical.includes("bearish") || canonical.includes("short")) return "Sell";
+  if (canonical.includes("hold") || canonical.includes("neutral") || canonical.includes("mixed")) return "Hold";
+  return "Hold";
+}
+
+/**
+ * Makes common LLM JSON variations conform to the pipeline schemas before Zod validates.
+ * The function intentionally preserves unknown fields; Zod handles schema-specific stripping.
+ */
+export function normalizeAgentOutput(input: unknown): unknown {
+  const root = asRecord(input);
+  if (!root) return input;
+
+  const normalized: JsonRecord = { ...root };
+  const nestedSources = ["analysis", "decision", "plan", "research_plan", "researchPlan"]
+    .map((key) => asRecord(root[key]))
+    .filter((value): value is JsonRecord => value !== null);
+  const sources = [root, ...nestedSources];
+  const pick = (aliases: string[]) => {
+    for (const source of sources) {
+      const value = readAlias(source, aliases);
+      if (value !== undefined && value !== null) return value;
+    }
+    return undefined;
+  };
+
+  const recommendation = normalizePortfolioRating(pick(["recommendation", "recommendation_rating", "recommendationRating"]));
+  if (recommendation) normalized.recommendation = recommendation;
+
+  const rating = normalizePortfolioRating(pick(["rating", "portfolio_rating", "portfolioRating"]));
+  if (rating) normalized.rating = rating;
+
+  const action = pick(["action", "trade_action", "tradeAction"]);
+  if (typeof action === "string") {
+    const actionText = action.trim().toLowerCase();
+    normalized.action = actionText.includes("buy") || actionText.includes("long")
+      ? "Buy"
+      : actionText.includes("sell") || actionText.includes("short")
+        ? "Sell"
+        : "Hold";
+  }
+
+  const strategicActions = pick(["strategic_actions", "strategicActions", "strategic_action", "actions"]);
+  if (strategicActions !== undefined) {
+    normalized.strategic_actions = Array.isArray(strategicActions)
+      ? strategicActions.map(String)
+      : typeof strategicActions === "object"
+        ? JSON.stringify(strategicActions)
+        : String(strategicActions);
+  }
+
+  const rationale = pick(["rationale", "reasoning", "summary", "analysis"]);
+  if (rationale !== undefined) normalized.rationale = typeof rationale === "string" ? rationale : JSON.stringify(rationale);
+
+  const executiveSummary = pick(["executive_summary", "executiveSummary", "summary"]);
+  if (executiveSummary !== undefined) normalized.executive_summary = String(executiveSummary);
+
+  const thesis = pick(["investment_thesis", "investmentThesis", "thesis", "rationale"]);
+  if (thesis !== undefined) normalized.investment_thesis = String(thesis);
+
+  return normalized;
+}
+
 /**
  * Retry invokeJsonAgent up to maxRetries times with an escalating repair prompt.
  * On each failure the raw LLM output is fed back so the model can self-correct.
@@ -59,6 +145,7 @@ export async function invokeJsonAgent<T extends z.ZodType>(
     }
 
     // Normalize common LLM deviations before validation
+    parsed = normalizeAgentOutput(parsed);
     if (parsed && typeof parsed === "object") {
       const obj = parsed as Record<string, unknown>;
 
@@ -83,7 +170,26 @@ export async function invokeJsonAgent<T extends z.ZodType>(
           overweight: "Overweight",
           underweight: "Underweight",
         };
-        obj.recommendation = recMap[rec] ?? rec;
+        // ███ ROUND 63 FIX: More aggressive normalization — fuzzy match if exact map fails
+        const mapped = recMap[rec];
+        if (mapped) {
+          obj.recommendation = mapped;
+        } else {
+          // Fuzzy: check if rec contains a known keyword
+          const recLower = rec.toLowerCase();
+          if (recLower.includes("strong buy") || recLower.includes("strongly buy")) obj.recommendation = "Buy";
+          else if (recLower.includes("strong sell") || recLower.includes("strongly sell")) obj.recommendation = "Sell";
+          else if (recLower.includes("overweight")) obj.recommendation = "Overweight";
+          else if (recLower.includes("underweight")) obj.recommendation = "Underweight";
+          else if (recLower.includes("buy")) obj.recommendation = "Buy";
+          else if (recLower.includes("sell")) obj.recommendation = "Sell";
+          else if (recLower.includes("hold") || recLower.includes("neutral")) obj.recommendation = "Hold";
+          else {
+            // Last resort: log the bad value and default to Hold
+            console.warn(`[${params.agentName}] Unrecognized recommendation value: "${rec}" — defaulting to Hold`);
+            obj.recommendation = "Hold";
+          }
+        }
       }
 
       // Fix strategic_actions: ensure it's a string or array

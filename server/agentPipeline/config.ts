@@ -31,7 +31,6 @@ export async function resolveAgentPipelineConfig(): Promise<AgentPipelineConfig>
     return cached.config;
   }
 
-  const envMode = parseMode(process.env.HJ_AGENT_PIPELINE_MODE);
   let dbMode: AgentPipelineMode = "off";
 
   try {
@@ -43,7 +42,10 @@ export async function resolveAgentPipelineConfig(): Promise<AgentPipelineConfig>
     // Column may not exist yet — defaults to off
   }
 
-  const mode = envMode !== "off" ? envMode : dbMode;
+  // Engine intelligence is the sole operational authority. Previously an
+  // environment variable could silently override the dashboard/DB setting,
+  // making a production "full" pipeline appear when the UI said otherwise.
+  const mode = dbMode;
 
   const config: AgentPipelineConfig = {
     enabled: mode !== "off",

@@ -586,8 +586,9 @@ export async function get7DayWinRate(): Promise<{ winRate: number; totalTrades: 
 export async function ensureAgentPipelineColumn(): Promise<void> {
   const db = await getDb();
   if (!db) return;
-  // Try both tables — suppress duplicate column errors silently
-  for (const table of ["engine_intelligence", "risk_settings"]) {
+  // The pipeline mode belongs solely to engine_intelligence. Older deployments
+  // may retain an unused risk_settings column, but it is no longer maintained.
+  for (const table of ["engine_intelligence"]) {
     try {
       await db.execute(sql.raw(`
         ALTER TABLE ${table}

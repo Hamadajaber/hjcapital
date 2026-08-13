@@ -10,6 +10,7 @@ import {
   Users, Clock, Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { resolveDisplayTradingMode } from "@/lib/tradingDisplay";
 import { toast } from "sonner";
 
 function generateBalanceHistory(currentBalance: number) {
@@ -103,6 +104,10 @@ export default function Dashboard() {
     refetchInterval: 60000,
     retry: false,
   });
+  const engineStatusQuery = trpc.autoTrade.status.useQuery(undefined, {
+    refetchInterval: 30000,
+    retry: false,
+  });
 
   const generateAllMutation = trpc.signals.generateAll.useMutation({
     onSuccess: () => { signalsQuery.refetch(); toast.success("AI signals refreshed"); },
@@ -118,7 +123,7 @@ export default function Dashboard() {
   const initialBal    = parseFloat(portfolioQuery.data?.initialBalance ?? "1000");
   const totalReturn   = balance - initialBal;
   const totalReturnPct = ((totalReturn / initialBal) * 100).toFixed(2);
-  const mode          = portfolioQuery.data?.mode ?? "paper";
+  const mode          = resolveDisplayTradingMode(portfolioQuery.data?.mode, engineStatusQuery.data);
   const stats         = dailyStatsQuery.data;
   const overall       = overallStatsQuery.data;
   const winRate       = stats && stats.tradeCount > 0

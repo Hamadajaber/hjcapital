@@ -79,6 +79,9 @@ import {
   checkVolatilityFilter,
 } from "./engineIntelligence";
 import { runAgentPipeline, resolveAgentPipelineConfig } from "./agentPipeline";
+import { assessPipelineRecovery } from "./agentPipeline/recovery";
+import { getOrphanedActiveSessionIds, ORPHANED_SESSION_STOP_REASON } from "./engineSessionRecovery";
+import { classifyTradingDecisionReason } from "./tradingDiagnostics";
 import { analyzeClosedTrade } from "./learningEngine";
 import { runGovernanceCycle } from "./selfGovernanceEngine";
 import { getRelevantKnowledge, extractTradeKnowledge } from "./knowledgeEngine";
@@ -90,7 +93,7 @@ import {
   riskSettings,
   portfolio,
 } from "../drizzle/schema";
-import { eq, and, gte, desc } from "drizzle-orm";
+import { eq, and, gte, desc, inArray } from "drizzle-orm";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -192,6 +195,23 @@ export async function startAutoTrade(mode: "paper" | "live", cycleIntervalMinute
 
   // Create session record
   const db = dbConn;
+
+  // ███ ROUND 65: An app restart loses _engineState but historically left the
+  // previous DB sessions marked active. Reconcile those orphans before issuing
+  // a new live session so the dashboard and session limits stay trustworthy.
+  const activeSessions = await db
+    .select({ id: autoTradeSession.id, status: autoTradeSession.status })
+    .from(autoTradeSession)
+    .where(eq(autoTradeSession.status, "active"));
+  const orphanedSessionIds = getOrphanedActiveSessionIds(activeSessions);
+  if (orphanedSessionIds.length > 0) {
+    await db
+      .update(autoTradeSession)
+      .set({ status: "stopped", stoppedAt: new Date(), stopReason: ORPHANED_SESSION_STOP_REASON })
+      .where(inArray(autoTradeSession.id, orphanedSessionIds));
+    console.warn(`[AutoTrade] Closed ${orphanedSessionIds.length} orphaned session(s) before start`);
+  }
+
   const [session] = await db.insert(autoTradeSession).values({
     status: "active",
     mode,
@@ -910,6 +930,13 @@ async function runCycle() {
               console.log(`[AutoTrade] Rejected ${inst} ${d.action} @ 0% confidence — AI uncertain, treating as HOLD`);
             } else {
               console.log(`[AutoTrade] No opportunity on ${inst}: ${d.reasoning?.slice(0, 80)}`);
+              const reasonCode = classifyTradingDecisionReason(d.reasoning ?? "");
+              await logDecision(
+                _engineState.sessionId,
+                d,
+                "skipped",
+                `reason_code=${reasonCode}; ${d.reasoning}`
+              );
             }
           } else {
             console.error(`[AutoTrade] Analysis failed for ${inst}:`, result.reason);
@@ -1640,6 +1667,7 @@ async function analyzeInstrument(
 
   // ─── TRADINGAGENTS PIPELINE (optional) ───────────────────────────────────────────────
   const agentConfig = await resolveAgentPipelineConfig();
+  let pipelineFailure: unknown = null;
   if (agentConfig.enabled) {
     try {
       const candles1hForPipeline =
@@ -1686,6 +1714,7 @@ async function analyzeInstrument(
 
       return pipelineResult.decision;
     } catch (pipelineErr) {
+      pipelineFailure = pipelineErr;
       console.warn(
         `[AutoTrade] Agent pipeline failed for ${instrument}, falling back to single-model confirmation:`,
         pipelineErr
@@ -1737,6 +1766,7 @@ Respond ONLY in valid JSON:
 }`;
 
   let aiResponse: { action: string; confidence: number; reasoning: string; entryPrice?: number; stopLoss?: number; takeProfit?: number };
+  let usedPipelineRecovery = false;
   try {
     const response = await invokeLLM({
       model: "claude-sonnet-4-5",
@@ -1748,10 +1778,45 @@ Respond ONLY in valid JSON:
     });
     const content = response.choices?.[0]?.message?.content ?? "{}";
     aiResponse = JSON.parse(typeof content === "string" ? content : JSON.stringify(content));
-  } catch {
-    // AI failed — use ATR-based SL/TP with default confidence
-    // ███ ROUND 63: Raise fallback confidence to 65% — if all 4 pre-filters passed, signal is strong enough
-    aiResponse = { action: proposedDirection, confidence: 65, reasoning: "AI confirmation unavailable — using ATR defaults (pre-filters passed)" };
+  } catch (reviewError) {
+    // A technical setup is not sufficient for live execution without the
+    // independent AI review required by the recovery policy.
+    console.warn(`[AutoTrade] Independent AI review unavailable for ${instrument}:`, reviewError);
+    aiResponse = {
+      action: "HOLD",
+      confidence: 0,
+      reasoning: "Independent AI review unavailable — live execution safely vetoed",
+    };
+  }
+
+  // ███ ROUND 65: A structurally failed multi-agent run must not silently turn
+  // a qualified technical signal into a 70% threshold rejection. The user-approved
+  // recovery path permits an order only when the independent review agrees with
+  // the technical direction at >=55%; all existing risk, sizing, and broker checks remain.
+  if (pipelineFailure) {
+    const recovery = assessPipelineRecovery({
+      proposedDirection,
+      reviewerAction: aiResponse.action,
+      reviewerConfidence: aiResponse.confidence,
+      reviewerReasoning: aiResponse.reasoning,
+    });
+    if (recovery.allowed) {
+      usedPipelineRecovery = true;
+      aiResponse = {
+        ...aiResponse,
+        action: proposedDirection,
+        confidence: recovery.executionConfidence,
+        reasoning: `${aiResponse.reasoning} | ${recovery.reason}`,
+      };
+      console.log(`[AutoTrade] ${instrument} ${proposedDirection} accepted through guarded pipeline recovery`);
+    } else {
+      aiResponse = {
+        ...aiResponse,
+        action: "HOLD",
+        confidence: 0,
+        reasoning: `[Pipeline recovery veto] ${recovery.reason} | ${aiResponse.reasoning}`,
+      };
+    }
   }
 
   // AI vetoed the signal
@@ -1764,13 +1829,10 @@ Respond ONLY in valid JSON:
     };
   }
 
-  // ███ ROUND 62: Minimum confidence raised to 70% (from 65%) for higher quality trades
+  // ███ ROUND 65: Recovery path carries its own 65% execution confidence after
+  // explicit independent confirmation; normal decisions still require 70%.
   const finalConfidence = aiResponse.confidence ?? 60;
-  // ███ ROUND 63: Smart minimum — 70% for normal AI responses, 65% for fallback (agent pipeline failed)
-  // If AI returned exactly 65 it means it was a fallback — allow it through at 65%
-  // If AI returned a real confidence, require 70% minimum
-  const isFallbackConfidence = finalConfidence === 65 && aiResponse.reasoning?.includes("ATR defaults");
-  const minConfidence = isFallbackConfidence ? 65 : Math.max(effectiveThreshold, 70);
+  const minConfidence = usedPipelineRecovery ? 65 : Math.max(effectiveThreshold, 70);
   if (finalConfidence < minConfidence) {
     return {
       instrument,

@@ -20,6 +20,7 @@ import {
   Lightbulb,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { resolveDisplayTradingMode } from "@/lib/tradingDisplay";
 import { toast } from "sonner";
 
 const NAV_ITEMS = [
@@ -57,7 +58,11 @@ export default function HJLayout({ children }: { children: React.ReactNode }) {
     refetchInterval: 60000,
     retry: false,
   });
-  const mode    = portfolioQuery.data?.mode    ?? "paper";
+  const engineStatusQuery = trpc.autoTrade.status.useQuery(undefined, {
+    refetchInterval: 30000,
+    retry: false,
+  });
+  const mode = resolveDisplayTradingMode(portfolioQuery.data?.mode, engineStatusQuery.data);
   const balance = portfolioQuery.data?.balance ?? "250.00";
 
   const setModeMutation = trpc.portfolio.setMode.useMutation({
