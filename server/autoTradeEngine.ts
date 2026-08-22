@@ -82,6 +82,8 @@ import { runAgentPipeline, resolveAgentPipelineConfig } from "./agentPipeline";
 import { assessPipelineRecovery } from "./agentPipeline/recovery";
 import { getOrphanedActiveSessionIds, ORPHANED_SESSION_STOP_REASON } from "./engineSessionRecovery";
 import { classifyTradingDecisionReason } from "./tradingDiagnostics";
+import { normalizeTradeConfirmation } from "./tradeConfirmation";
+import { hasValidFiveMinuteTrigger } from "./mtfSignalPolicy";
 import { analyzeClosedTrade } from "./learningEngine";
 import { runGovernanceCycle } from "./selfGovernanceEngine";
 import { getRelevantKnowledge, extractTradeKnowledge } from "./knowledgeEngine";
@@ -1601,8 +1603,8 @@ async function analyzeInstrument(
     const allBearishPatterns = summary5m.patterns.filter((p) =>
       p.type === "bearish" || p.name.toLowerCase().includes("shooting") || p.name.toLowerCase().includes("doji")
     );
-    trigger5mBullish = allBullishPatterns.length > 0 || rsi5m < 48;
-    trigger5mBearish = allBearishPatterns.length > 0 || rsi5m > 52;
+    trigger5mBullish = hasValidFiveMinuteTrigger("BUY", rsi5m, allBullishPatterns.length > 0);
+    trigger5mBearish = hasValidFiveMinuteTrigger("SELL", rsi5m, allBearishPatterns.length > 0);
     const patternNames = summary5m.patterns.map((p) => p.name).join(", ") || "none";
     triggerDescription = `RSI5m=${rsi5m.toFixed(1)}, patterns=[${patternNames}]`;
   }
@@ -1777,7 +1779,8 @@ Respond ONLY in valid JSON:
       response_format: { type: "json_object" } as any,
     });
     const content = response.choices?.[0]?.message?.content ?? "{}";
-    aiResponse = JSON.parse(typeof content === "string" ? content : JSON.stringify(content));
+    const parsed = JSON.parse(typeof content === "string" ? content : JSON.stringify(content));
+    aiResponse = normalizeTradeConfirmation(parsed);
   } catch (reviewError) {
     // A technical setup is not sufficient for live execution without the
     // independent AI review required by the recovery policy.
@@ -1829,10 +1832,13 @@ Respond ONLY in valid JSON:
     };
   }
 
-  // ███ ROUND 65: Recovery path carries its own 65% execution confidence after
-  // explicit independent confirmation; normal decisions still require 70%.
+  // ███ ROUND 67: Light pipeline and its independent recovery review are both
+  // confirmation layers after the technical filters. A second 70% floor was
+  // redundant and silently blocked valid 65% decisions; full mode stays stricter.
   const finalConfidence = aiResponse.confidence ?? 60;
-  const minConfidence = usedPipelineRecovery ? 65 : Math.max(effectiveThreshold, 70);
+  const minConfidence = agentConfig.mode === "full" && !usedPipelineRecovery
+    ? Math.max(effectiveThreshold, 70)
+    : Math.max(effectiveThreshold, 65);
   if (finalConfidence < minConfidence) {
     return {
       instrument,

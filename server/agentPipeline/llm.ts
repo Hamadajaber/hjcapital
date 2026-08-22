@@ -9,6 +9,39 @@ function asRecord(value: unknown): JsonRecord | null {
     : null;
 }
 
+function parseEmbeddedJson(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const text = value.trim();
+  if (!text) return value;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return value;
+  }
+}
+
+/** Some providers wrap JSON in content/data/output/result transport fields. */
+function unwrapAgentPayload(input: unknown): unknown {
+  if (Array.isArray(input)) {
+    for (const item of input) {
+      const record = asRecord(item);
+      if (!record) continue;
+      const candidate = record.text ?? record.content ?? record.value ?? record.output;
+      const unwrapped = parseEmbeddedJson(candidate);
+      if (asRecord(unwrapped)) return unwrapped;
+    }
+    return input;
+  }
+
+  const root = asRecord(input);
+  if (!root) return input;
+  for (const key of ["data", "output", "result", "response", "content"]) {
+    const unwrapped = parseEmbeddedJson(root[key]);
+    if (asRecord(unwrapped)) return unwrapped;
+  }
+  return input;
+}
+
 function readAlias(source: JsonRecord, aliases: string[]): unknown {
   const match = Object.keys(source).find((key) =>
     aliases.some((alias) => alias.toLowerCase() === key.toLowerCase())
@@ -34,7 +67,7 @@ function normalizePortfolioRating(value: unknown): string | undefined {
  * The function intentionally preserves unknown fields; Zod handles schema-specific stripping.
  */
 export function normalizeAgentOutput(input: unknown): unknown {
-  const root = asRecord(input);
+  const root = asRecord(unwrapAgentPayload(input));
   if (!root) return input;
 
   const normalized: JsonRecord = { ...root };
@@ -262,6 +295,10 @@ export async function invokeJsonAgent<T extends z.ZodType>(
     }
 
     lastError = result.error.message;
+    console.warn(
+      `[${params.agentName}] Schema mismatch on attempt ${attempt + 1}: ` +
+        result.error.issues.map((issue) => `${issue.path.join(".") || "root"}: ${issue.message}`).join("; ")
+    );
   }
 
   throw new Error(

@@ -76,6 +76,20 @@ describe("agentPipeline/schemas", () => {
     }));
     expect(parsed.rating).toBe("Buy");
   });
+
+  it("unwraps provider content arrays before validating a research plan", () => {
+    const parsed = ResearchPlanSchema.parse(normalizeAgentOutput([
+      {
+        type: "text",
+        text: JSON.stringify({
+          recommendation: "BUY",
+          rationale: "Momentum and trend align.",
+          strategic_actions: "Enter only after confirmation.",
+        }),
+      },
+    ]));
+    expect(parsed.recommendation).toBe("Buy");
+  });
 });
 
 describe("agentPipeline/contextBuilder", () => {
