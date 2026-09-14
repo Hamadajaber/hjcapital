@@ -723,6 +723,7 @@ export async function getTransactionHistory(from?: string, to?: string, maxResul
     transactions: Array<{
       date: string;
       type: string;
+      transactionType?: string;
       reference: string;
       openLevel?: string;
       closeLevel?: string;
@@ -735,7 +736,7 @@ export async function getTransactionHistory(from?: string, to?: string, maxResul
   }>(`/api/v1/history/transactions?${params.toString()}`);
   return (data.transactions ?? []).map((t) => ({
     date: t.date,
-    type: t.type,
+    type: t.transactionType ?? t.type ?? "",
     reference: t.reference,
     openLevel: t.openLevel ? parseFloat(t.openLevel) : undefined,
     closeLevel: t.closeLevel ? parseFloat(t.closeLevel) : undefined,

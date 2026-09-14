@@ -101,6 +101,10 @@ export const riskSettings = mysqlTable("risk_settings", {
   trailingDrawdownPct: decimal("trailingDrawdownPct", { precision: 5, scale: 2 }).notNull().default("5.00"),
   // Peak balance tracker — updated every cycle when current balance exceeds previous peak
   peakBalance: decimal("peakBalance", { precision: 12, scale: 2 }).notNull().default("1000.00"),
+  // Last broker cash movement already applied to the risk baseline. This prevents a withdrawal
+  // or deposit from being mistaken for trading drawdown on every future engine cycle.
+  lastExternalCashReference: varchar("lastExternalCashReference", { length: 128 }),
+  lastExternalCashAt: timestamp("lastExternalCashAt"),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 export type RiskSettings = typeof riskSettings.$inferSelect;

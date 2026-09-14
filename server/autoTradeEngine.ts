@@ -84,6 +84,7 @@ import { getOrphanedActiveSessionIds, ORPHANED_SESSION_STOP_REASON } from "./eng
 import { classifyTradingDecisionReason } from "./tradingDiagnostics";
 import { normalizeTradeConfirmation } from "./tradeConfirmation";
 import { hasValidFiveMinuteTrigger } from "./mtfSignalPolicy";
+import { getUnappliedExternalCashMovement } from "./riskBaseline";
 import { analyzeClosedTrade } from "./learningEngine";
 import { runGovernanceCycle } from "./selfGovernanceEngine";
 import { getRelevantKnowledge, extractTradeKnowledge } from "./knowledgeEngine";
@@ -348,6 +349,36 @@ async function runCycle() {
             }
             // Sync DB balance to broker truth
             await updatePortfolioBalance(liveBal.balance.toFixed(2));
+
+            // A deposit or withdrawal changes account equity but is not trading P&L.
+            // Apply each broker cash movement once, then reset the drawdown baseline to the
+            // confirmed balance so the trailing stop continues to protect actual losses.
+            const riskRows = await db.select().from(riskSettings).limit(1);
+            const currentRisk = riskRows[0];
+            if (currentRisk) {
+              const toTime = new Date().toISOString().slice(0, 19);
+              const fromTime = new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString().slice(0, 19);
+              const transactions = await getTransactionHistory(fromTime, toTime, 100).catch(() => []);
+              const externalCashMovement = getUnappliedExternalCashMovement(
+                transactions,
+                currentRisk.lastExternalCashReference
+              );
+              if (externalCashMovement) {
+                await db.update(riskSettings).set({
+                  peakBalance: liveBal.balance.toFixed(2),
+                  lastExternalCashReference: externalCashMovement.reference,
+                  lastExternalCashAt: new Date(externalCashMovement.date),
+                });
+                console.warn(
+                  `[AutoTrade] External cash movement ${externalCashMovement.reference} detected — ` +
+                  `drawdown baseline reset to verified broker balance $${liveBal.balance.toFixed(2)}`
+                );
+                await notifyRiskAlert(
+                  `💰 حركة نقدية خارجية مكتشفة\nتم تحديث خط أساس المخاطر إلى $${liveBal.balance.toFixed(2)}.\n` +
+                  `لن تُعامل الحركة كخسارة تداول.`
+                ).catch(() => {});
+              }
+            }
           }
         }
       } catch (balSyncErr) {
